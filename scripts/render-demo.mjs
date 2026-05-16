@@ -8,7 +8,7 @@ const root = resolve(__dirname, "..");
 const view = process.argv[2] ?? "week";
 
 const DAY_NAMES_DE = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
-const WEEKDAYS_DE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+const WEEKDAYS_DE_SUN_FIRST = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const MONTH_NAMES_DE_FULL = [
   "Januar", "Februar", "März", "April", "Mai", "Juni",
   "Juli", "August", "September", "Oktober", "November", "Dezember",
@@ -84,16 +84,30 @@ function hexToRgba(hex, alpha) {
 function renderEvent(ev) {
   const m = MEMBERS.find((x) => x.id === ev.memberId);
   const accent = m?.color ?? "#8E8E93";
-  const bg = hexToRgba(accent, 0.16);
+  const gradient = `linear-gradient(135deg, ${hexToRgba(accent, 0.28)} 0%, ${hexToRgba(accent, 0.08)} 100%)`;
+  const avatarGradient = `linear-gradient(135deg, ${accent} 0%, ${shadeColor(accent, -30)} 100%)`;
   const timeLabel = ev.allDay ? "Ganztägig" : `${fmtTime(ev.start)} – ${fmtTime(ev.end)}`;
-  return `<div class="event" style="background:${bg};">
-    <div class="event__bar" style="background:${accent};"></div>
+  return `<div class="event" style="background:${gradient};">
+    <div class="event__bar" style="background:${avatarGradient};"></div>
     <div class="event__content">
       <span class="event__title">${ev.summary}</span>
       <span class="event__time">${timeLabel}</span>
     </div>
-    <div class="event__avatar" style="background:${accent};">${m?.initial ?? "?"}</div>
+    <div class="event__avatar" style="background:${avatarGradient};">${m?.initial ?? "?"}</div>
   </div>`;
+}
+
+function shadeColor(hex, percent) {
+  const m = hex.match(/^#([0-9a-f]{6})$/i);
+  if (!m) return hex;
+  const num = parseInt(m[1], 16);
+  let r = (num >> 16) & 0xff;
+  let g = (num >> 8) & 0xff;
+  let b = num & 0xff;
+  r = Math.max(0, Math.min(255, r + Math.round((255 * percent) / 100)));
+  g = Math.max(0, Math.min(255, g + Math.round((255 * percent) / 100)));
+  b = Math.max(0, Math.min(255, b + Math.round((255 * percent) / 100)));
+  return `rgb(${r}, ${g}, ${b})`;
 }
 
 function toolbarBtn(icon, label) {
@@ -141,15 +155,10 @@ function renderWeekView() {
   `;
 }
 
-function renderMonthView() {
-  const monthStart = startOfMonth(today);
+function renderMonthBlock(monthStart, opts = {}) {
   const monthLabel = `${MONTH_NAMES_DE_FULL[monthStart.getMonth()]} ${monthStart.getFullYear()}`;
-
   const firstWeekday = monthStart.getDay();
-  const offset = firstWeekday === 0 ? 6 : firstWeekday - 1;
-  const gridStart = addDays(monthStart, -offset);
-
-  const weekdayHeader = WEEKDAYS_DE.map((d) => `<div class="month-weekdays__day">${d}</div>`).join("");
+  const gridStart = addDays(monthStart, -firstWeekday);
 
   const rows = [];
   for (let w = 0; w < 6; w++) {
@@ -164,17 +173,33 @@ function renderMonthView() {
       const eventsHtml = events.map((ev) => {
         const m = MEMBERS.find((x) => x.id === ev.memberId);
         const color = m?.color ?? "#8E8E93";
-        return `<div class="month-cell__event" style="background:${hexToRgba(color, 0.85)};">${ev.summary}</div>`;
+        const grad = `linear-gradient(135deg, ${color} 0%, ${shadeColor(color, -25)} 100%)`;
+        return `<div class="month-cell__event" style="background:${grad};">${ev.summary}</div>`;
       }).join("");
       cells.push(`<div class="month-cell ${isOther ? "month-cell--other-month" : ""} ${isToday ? "month-cell--today" : ""}">
         <span class="month-cell__number">${date.getDate()}</span>
         ${eventsHtml}
       </div>`);
     }
-    if (hasCurrentMonth || w === 0) {
+    if (hasCurrentMonth || w < 2) {
       rows.push(`<div class="month-row">${cells.join("")}</div>`);
     }
   }
+
+  const titleHtml = opts.showTitle ? `<div class="month-block__title">${monthLabel}</div>` : "";
+
+  return `<section class="month-block">
+    ${titleHtml}
+    <div class="month-grid">${rows.join("")}</div>
+  </section>`;
+}
+
+function renderMonthView() {
+  const monthStart = startOfMonth(today);
+  const monthLabel = `${MONTH_NAMES_DE_FULL[monthStart.getMonth()]} ${monthStart.getFullYear()}`;
+  const prevMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() - 1, 1);
+  const nextMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
+  const weekdayHeader = WEEKDAYS_DE_SUN_FIRST.map((d) => `<div class="month-weekdays__day">${d}</div>`).join("");
 
   return `
     <header class="header">
@@ -189,9 +214,11 @@ function renderMonthView() {
       ${toolbarBtn("⊘", "Filter")}
       ${toolbarBtn("⌕", "Suche")}
     </nav>
-    <div class="month-grid">
-      <div class="month-weekdays">${weekdayHeader}</div>
-      ${rows.join("")}
+    <div class="month-weekdays">${weekdayHeader}</div>
+    <div class="month-scroll">
+      ${renderMonthBlock(prevMonth, { showTitle: true })}
+      ${renderMonthBlock(monthStart, { showTitle: false })}
+      ${renderMonthBlock(nextMonth, { showTitle: true })}
     </div>
     <button class="fab">+</button>
   `;
