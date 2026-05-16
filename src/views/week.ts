@@ -90,7 +90,7 @@ function renderEvent(event: CalendarEvent, member?: FamilyMember): string {
   const bg = `linear-gradient(135deg,${hexToRgba(accent, 0.28)} 0%,${hexToRgba(accent, 0.08)} 100%)`;
   const avatarGrad = `linear-gradient(135deg,${accent} 0%,${shade(accent, -30)} 100%)`;
   const timeLabel = event.allDay ? "Ganztägig" : `${fmtTime(event.start)} – ${fmtTime(event.end)}`;
-  return `<div class="event" style="background:${bg};">
+  return `<div class="event" data-action="event-detail" data-uid="${event.uid}" style="background:${bg};">
     <div class="event__bar" style="background:${avatarGrad};"></div>
     <div class="event__content">
       <span class="event__title">${escapeHtml(event.summary)}</span>
@@ -140,6 +140,7 @@ export function renderWeekView(viewState: WeekViewState): string {
     <header class="header">
       <button class="header__back" data-action="nav-prev">${ICONS.back}</button>
       <h1 class="header__title">${title}</h1>
+      <button class="header__action" data-action="view-month">${ICONS.month}</button>
     </header>
     <nav class="toolbar">
       ${toolbarBtn("back", "Zurück", "nav-prev")}

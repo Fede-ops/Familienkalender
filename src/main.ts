@@ -229,6 +229,14 @@ function bindEvents(): void {
         if (!state.modal) return;
         state.modal.memberId = el.dataset.memberId ?? state.modal.memberId;
         render();
+      } else if (action === "event-detail") {
+        const uid = el.dataset.uid;
+        const ev = state.events.find((x) => x.uid === uid);
+        if (ev) showEventDetail(ev);
+
+      } else if (action === "close-detail") {
+        document.getElementById("event-detail-sheet")?.remove();
+
       } else if (action === "save-event") {
         e.stopPropagation();
         syncModalForm();
@@ -304,6 +312,57 @@ function addTodoItem(): void {
   render();
   const input = document.getElementById("list-input") as HTMLInputElement | null;
   input?.focus();
+}
+
+// ── Event detail sheet ─────────────────────────────────────────────────────
+
+function showEventDetail(ev: CalendarEvent): void {
+  const member = state.members.find((m) => m.id === ev.memberId);
+  const color = member?.color ?? "#8E8E93";
+  const grad = `linear-gradient(135deg,${color} 0%,${color}88 100%)`;
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const fmtDate = (d: Date) =>
+    `${d.getDate()}. ${["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"][d.getMonth()]} ${d.getFullYear()}`;
+  const fmtTime = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+  const when = ev.allDay
+    ? fmtDate(ev.start)
+    : `${fmtDate(ev.start)}, ${fmtTime(ev.start)} – ${fmtTime(ev.end)}`;
+
+  const html = `<div id="event-detail-sheet" class="detail-backdrop" data-action="close-detail">
+    <div class="detail-sheet" data-stop-propagation>
+      <div class="detail-handle"></div>
+      <div class="detail-bar" style="background:${grad};"></div>
+      <div class="detail-body">
+        <p class="detail-title">${ev.summary}</p>
+        <p class="detail-meta">${when}</p>
+        ${member ? `<div class="detail-member"><span class="detail-avatar" style="background:${grad};">${member.initial}</span><span class="detail-member-name">${member.name}</span></div>` : ""}
+        ${ev.location ? `<p class="detail-location">📍 ${ev.location}</p>` : ""}
+        ${ev.description ? `<p class="detail-notes">${ev.description}</p>` : ""}
+      </div>
+      <button class="detail-close" data-action="close-detail">Schließen</button>
+    </div>
+  </div>`;
+
+  const el = document.createElement("div");
+  el.innerHTML = html;
+  document.body.appendChild(el.firstElementChild!);
+
+  // bind close actions on the new element
+  document.getElementById("event-detail-sheet")!
+    .querySelectorAll<HTMLElement>("[data-action]")
+    .forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        if (btn.dataset.action === "close-detail") {
+          document.getElementById("event-detail-sheet")?.remove();
+        }
+        if (btn.dataset["stopPropagation"] !== undefined) e.stopPropagation();
+      });
+    });
+  document.getElementById("event-detail-sheet")!
+    .querySelectorAll<HTMLElement>("[data-stop-propagation]")
+    .forEach((el) => el.addEventListener("click", (e) => e.stopPropagation()));
 }
 
 // ── Save calendar event ────────────────────────────────────────────────────

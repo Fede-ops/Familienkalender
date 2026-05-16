@@ -116,6 +116,7 @@ export function renderMonthView(viewState: MonthViewState): string {
     <header class="header">
       <button class="header__back" data-action="nav-month-prev">${ICONS.back}</button>
       <h1 class="header__title">${label}</h1>
+      <button class="header__action" data-action="view-week">${ICONS.week}</button>
     </header>
     <nav class="toolbar">
       ${toolbarBtn("back", "Zurück", "nav-month-prev")}
