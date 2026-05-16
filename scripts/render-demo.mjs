@@ -110,7 +110,19 @@ function shadeColor(hex, percent) {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
-function toolbarBtn(icon, label) {
+const ICONS = {
+  back: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>`,
+  next: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`,
+  today: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 10h18"/><path d="M8 2v4M16 2v4"/><circle cx="12" cy="16" r="1.5" fill="currentColor"/></svg>`,
+  month: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 10h18M9 4v18M15 4v18M3 16h18"/></svg>`,
+  week: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>`,
+  filter: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18M6 12h12M10 19h4"/></svg>`,
+  search: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>`,
+  plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>`,
+};
+
+function toolbarBtn(iconKey, label) {
+  const icon = ICONS[iconKey] ?? "";
   return `<button class="toolbar__button"><span class="toolbar__icon">${icon}</span><span class="toolbar__label">${label}</span></button>`;
 }
 
@@ -139,19 +151,19 @@ function renderWeekView() {
 
   return `
     <header class="header">
-      <button class="header__back">‹</button>
+      <button class="header__back">${ICONS.back}</button>
       <h1 class="header__title">${title}</h1>
     </header>
     <nav class="toolbar">
-      ${toolbarBtn("‹", "Zurück")}
-      ${toolbarBtn("●", "Heute")}
-      ${toolbarBtn("›", "Weiter")}
-      ${toolbarBtn("▦", "Monat")}
-      ${toolbarBtn("⊘", "Filter")}
-      ${toolbarBtn("⌕", "Suche")}
+      ${toolbarBtn("back", "Zurück")}
+      ${toolbarBtn("today", "Heute")}
+      ${toolbarBtn("next", "Weiter")}
+      ${toolbarBtn("month", "Monat")}
+      ${toolbarBtn("filter", "Filter")}
+      ${toolbarBtn("search", "Suche")}
     </nav>
     <main class="week-list">${rows}</main>
-    <button class="fab">+</button>
+    <button class="fab">${ICONS.plus}</button>
   `;
 }
 
@@ -201,22 +213,22 @@ function renderMonthView() {
 
   return `
     <header class="header">
-      <button class="header__back">‹</button>
+      <button class="header__back">${ICONS.back}</button>
       <h1 class="header__title">${monthLabel}</h1>
     </header>
     <nav class="toolbar">
-      ${toolbarBtn("‹", "Zurück")}
-      ${toolbarBtn("●", "Heute")}
-      ${toolbarBtn("›", "Weiter")}
-      ${toolbarBtn("≡", "Woche")}
-      ${toolbarBtn("⊘", "Filter")}
-      ${toolbarBtn("⌕", "Suche")}
+      ${toolbarBtn("back", "Zurück")}
+      ${toolbarBtn("today", "Heute")}
+      ${toolbarBtn("next", "Weiter")}
+      ${toolbarBtn("week", "Woche")}
+      ${toolbarBtn("filter", "Filter")}
+      ${toolbarBtn("search", "Suche")}
     </nav>
     <div class="month-weekdays">${weekdayHeader}</div>
     <div class="month-scroll">
       ${renderMonthBlock(monthStart, { showTitle: false })}
     </div>
-    <button class="fab">+</button>
+    <button class="fab">${ICONS.plus}</button>
   `;
 }
 

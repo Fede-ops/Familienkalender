@@ -56,10 +56,16 @@ body {
   background: none;
   border: none;
   color: var(--text);
-  font-size: 24px;
-  font-weight: 300;
   cursor: pointer;
   padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header__back svg {
+  width: 28px;
+  height: 28px;
 }
 
 .header__title {
@@ -97,10 +103,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 17px;
-  font-weight: 400;
   color: var(--text);
   transition: background 0.15s ease;
+}
+
+.toolbar__icon svg {
+  width: 20px;
+  height: 20px;
 }
 
 .toolbar__button:active .toolbar__icon {
@@ -263,13 +272,16 @@ body {
   background: linear-gradient(135deg, #0a84ff 0%, #5e5ce6 100%);
   color: #fff;
   border: none;
-  font-size: 28px;
-  font-weight: 300;
   cursor: pointer;
   box-shadow: 0 6px 20px rgba(10, 132, 255, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.fab svg {
+  width: 26px;
+  height: 26px;
 }
 
 .fab:active {
@@ -288,11 +300,10 @@ body {
 }
 
 .month-grid {
-  display: flex;
-  flex-direction: column;
-  background-color: #5a5a5e;
-  gap: 1px;
-  padding: 1px 0;
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .month-weekdays {
@@ -311,23 +322,17 @@ body {
 }
 
 .month-row {
-  display: flex;
-  min-height: 84px;
-  background-color: #5a5a5e;
+  display: table-row;
 }
 
 .month-cell {
-  flex: 1 1 0;
-  display: flex;
-  flex-direction: column;
-  padding: 6px 4px 4px;
-  min-width: 0;
+  display: table-cell;
+  width: calc(100% / 7);
+  vertical-align: top;
+  padding: 6px 6px 8px;
   background-color: #000000;
-  margin-left: 1px;
-}
-
-.month-cell:first-child {
-  margin-left: 0;
+  border: 1px solid rgba(120, 120, 128, 0.55);
+  height: 84px;
 }
 
 .month-cell__number + .month-cell__event,
@@ -336,13 +341,15 @@ body {
 }
 
 .month-cell__number {
+  display: block;
   font-size: 14px;
   font-weight: 500;
   color: var(--text);
   text-align: left;
-  padding-left: 4px;
+  padding-left: 2px;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
+  margin-bottom: 4px;
 }
 
 .month-cell--other-month .month-cell__number {
@@ -355,15 +362,14 @@ body {
 }
 
 .month-cell--today .month-cell__number {
-  display: inline-flex;
-  align-self: flex-start;
+  display: inline-block;
   background: linear-gradient(135deg, var(--accent) 0%, #ff8a5c 100%);
   color: #fff;
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  align-items: center;
-  justify-content: center;
+  text-align: center;
+  line-height: 24px;
   font-weight: 600;
   font-size: 13px;
   padding: 0;
@@ -371,6 +377,7 @@ body {
 }
 
 .month-cell__event {
+  display: block;
   font-size: 10px;
   font-weight: 500;
   padding: 2px 6px;
@@ -379,6 +386,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   color: #fff;
+  margin-top: 3px;
   line-height: 1.4;
   letter-spacing: -0.01em;
 }
