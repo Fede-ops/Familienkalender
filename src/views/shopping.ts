@@ -14,6 +14,7 @@ export const SHOPPING_CATEGORIES = [
       "apple", "pear", "grape", "strawberry", "blueberry", "cherry", "plum", "pineapple", "lemon", "lime", "peach", "apricot", "cucumber", "eggplant", "aubergine", "carrot", "celery", "leek", "onion", "garlic", "potato", "broccoli", "cauliflower", "cabbage", "spinach", "lettuce", "arugula", "mushroom", "ginger", "peas", "beans", "corn", "pepper", "zucchini", "beet", "radish", "asparagus", "artichoke", "fennel",
       // Español
       "manzana", "pera", "uva", "fresa", "frambuesa", "cereza", "ciruela", "piña", "limón", "lima", "melocotón", "durazno", "albaricoque", "pepino", "berenjena", "zanahoria", "apio", "puerro", "cebolla", "ajo", "patata", "papa", "brócoli", "coliflor", "repollo", "espinaca", "lechuga", "rúcula", "champiñón", "jengibre", "guisante", "judía", "maíz", "pimiento", "calabacín", "remolacha", "rábano", "espárrago", "alcachofa", "hinojo",
+      "platano", "plátano", "platanos", "plátanos", "mandarina", "pomelo", "coco", "sandía", "melón", "higo", "dátil", "mora", "arándano", "tomate", "brote", "verdura", "fruta", "vegetal", "ensalada",
     ],
   },
   {
