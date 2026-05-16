@@ -9,6 +9,7 @@ export interface ModalState {
   memberId: string;
   location: string;
   notes: string;
+  editUid?: string;
 }
 
 export function defaultModalState(members: FamilyMember[]): ModalState {
@@ -132,8 +133,8 @@ export function renderEventModal(state: ModalState, members: FamilyMember[]): st
       <div class="modal-handle"></div>
       <div class="modal-header">
         <button class="modal-header__close" data-action="close-modal">Abbrechen</button>
-        <span class="modal-header__title">Neues Event</span>
-        <button class="modal-header__action" data-action="save-event">Speichern</button>
+        <span class="modal-header__title">${state.editUid ? "Event bearbeiten" : "Neues Event"}</span>
+        <button class="modal-header__action" data-action="save-event">${state.editUid ? "Aktualisieren" : "Speichern"}</button>
       </div>
       <div class="modal-title-block">
         <input class="modal-title-input" id="modal-summary" placeholder="Beschreibung des Events…" value="${state.summary}" autocomplete="off" />

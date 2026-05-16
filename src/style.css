@@ -1262,6 +1262,38 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   margin-top: 4px;
 }
 
+.detail-actions {
+  display: flex;
+  gap: 8px;
+  padding: 8px 20px 16px;
+}
+
+.detail-edit,
+.detail-delete {
+  flex: 1;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: -0.01em;
+}
+
+.detail-edit {
+  background: var(--accent-blue);
+  color: #fff;
+}
+
+.detail-delete {
+  background: rgba(255, 45, 85, 0.15);
+  color: #ff2d55;
+}
+
+.detail-edit:active { opacity: 0.8; }
+.detail-delete:active { opacity: 0.8; }
+
 .detail-close {
   margin: 12px 20px 16px;
   background: var(--bg-elev-2);

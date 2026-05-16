@@ -445,28 +445,41 @@ function showEventDetail(ev: CalendarEvent): void {
         ${ev.location ? `<p class="detail-location">📍 ${ev.location}</p>` : ""}
         ${ev.description ? `<p class="detail-notes">${ev.description}</p>` : ""}
       </div>
-      <button class="detail-close" data-action="close-detail">Schließen</button>
+      <div class="detail-actions">
+        <button class="detail-edit" data-action="edit-event-from-detail">Bearbeiten</button>
+        <button class="detail-delete" data-action="delete-event-from-detail">Löschen</button>
+      </div>
     </div>
   </div>`;
 
-  const el = document.createElement("div");
-  el.innerHTML = html;
-  document.body.appendChild(el.firstElementChild!);
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = html;
+  const sheet = wrapper.firstElementChild as HTMLElement;
+  document.body.appendChild(sheet);
 
-  // bind close actions on the new element
-  document.getElementById("event-detail-sheet")!
-    .querySelectorAll<HTMLElement>("[data-action]")
-    .forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        if (btn.dataset.action === "close-detail") {
-          document.getElementById("event-detail-sheet")?.remove();
-        }
-        if (btn.dataset["stopPropagation"] !== undefined) e.stopPropagation();
-      });
-    });
-  document.getElementById("event-detail-sheet")!
-    .querySelectorAll<HTMLElement>("[data-stop-propagation]")
-    .forEach((el) => el.addEventListener("click", (e) => e.stopPropagation()));
+  sheet.querySelector<HTMLElement>("[data-action='close-detail']")
+    ?.addEventListener("click", () => sheet.remove());
+  sheet.querySelector<HTMLElement>("[data-stop-propagation]")
+    ?.addEventListener("click", (e) => e.stopPropagation());
+  sheet.querySelector<HTMLElement>("[data-action='edit-event-from-detail']")
+    ?.addEventListener("click", () => { sheet.remove(); openEditModal(ev); });
+  sheet.querySelector<HTMLElement>("[data-action='delete-event-from-detail']")
+    ?.addEventListener("click", () => { sheet.remove(); void deleteEvent(ev); });
+}
+
+function openEditModal(ev: CalendarEvent): void {
+  state.modal = {
+    tab: "datum",
+    summary: ev.summary,
+    startDate: new Date(ev.start),
+    endDate: new Date(ev.end),
+    allDay: ev.allDay,
+    memberId: ev.memberId ?? state.members[0]?.id ?? "",
+    location: ev.location ?? "",
+    notes: ev.description ?? "",
+    editUid: ev.uid,
+  };
+  render();
 }
 
 // ── Save calendar event ────────────────────────────────────────────────────
@@ -485,27 +498,26 @@ async function saveEvent(): Promise<void> {
   }
 
   const config = loadConfig();
+  const { editUid } = state.modal;
   let savedToHA = false;
-  if (config) {
-    if (!navigator.onLine) {
-      enqueue({
-        entityId: memberId,
-        summary: summary.trim(),
-        start: startDate.toISOString(),
-        end: endDate.toISOString(),
-        allDay,
-        location: location || undefined,
-        description: notes || undefined,
-      });
-    } else {
-      try {
-        const client = new HAClient(config);
+
+  if (config && navigator.onLine) {
+    try {
+      const client = new HAClient(config);
+      if (editUid && !editUid.startsWith("local-")) {
+        await client.updateEvent(memberId, editUid, summary.trim(), startDate, endDate, allDay, {
+          location: location || undefined,
+          description: notes || undefined,
+        });
+      } else {
         await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, {
           location: location || undefined,
           description: notes || undefined,
         });
-        savedToHA = true;
-      } catch {
+      }
+      savedToHA = true;
+    } catch {
+      if (!editUid) {
         enqueue({
           entityId: memberId,
           summary: summary.trim(),
@@ -517,23 +529,68 @@ async function saveEvent(): Promise<void> {
         });
       }
     }
+  } else if (config && !editUid) {
+    enqueue({
+      entityId: memberId,
+      summary: summary.trim(),
+      start: startDate.toISOString(),
+      end: endDate.toISOString(),
+      allDay,
+      location: location || undefined,
+      description: notes || undefined,
+    });
   }
 
-  state.events.push({
-    uid: `local-${Date.now()}`,
-    summary: summary.trim(),
-    start: startDate,
-    end: endDate,
-    allDay,
-    memberId,
-    location: location || undefined,
-    description: notes || undefined,
-  });
+  if (editUid) {
+    const idx = state.events.findIndex((e) => e.uid === editUid);
+    const updated: CalendarEvent = {
+      uid: editUid,
+      summary: summary.trim(),
+      start: startDate,
+      end: endDate,
+      allDay,
+      memberId,
+      location: location || undefined,
+      description: notes || undefined,
+    };
+    if (idx >= 0) state.events[idx] = updated;
+    else state.events.push(updated);
+  } else {
+    state.events.push({
+      uid: `local-${Date.now()}`,
+      summary: summary.trim(),
+      start: startDate,
+      end: endDate,
+      allDay,
+      memberId,
+      location: location || undefined,
+      description: notes || undefined,
+    });
+  }
   state.events.sort((a, b) => a.start.getTime() - b.start.getTime());
   saveCachedEvents(state.events);
   state.modal = null;
   render();
   if (savedToHA) void refreshEvents();
+}
+
+// ── Delete calendar event ──────────────────────────────────────────────────
+
+async function deleteEvent(ev: CalendarEvent): Promise<void> {
+  state.events = state.events.filter((e) => e.uid !== ev.uid);
+  saveCachedEvents(state.events);
+  render();
+
+  const config = loadConfig();
+  if (config && !ev.uid.startsWith("local-") && navigator.onLine) {
+    try {
+      const client = new HAClient(config);
+      await client.deleteEvent(ev.memberId ?? "", ev.uid);
+    } catch (err) {
+      console.error("Failed to delete event from HA:", err);
+    }
+    void refreshEvents();
+  }
 }
 
 // ── HA data refresh ────────────────────────────────────────────────────────

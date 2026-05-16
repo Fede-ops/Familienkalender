@@ -93,6 +93,55 @@ export class HAClient {
     });
     if (!res.ok) throw new Error(`HA create_event failed: ${res.status}`);
   }
+
+  async updateEvent(
+    entityId: string,
+    uid: string,
+    summary: string,
+    start: Date,
+    end: Date,
+    allDay: boolean,
+    opts?: { location?: string; description?: string },
+  ): Promise<void> {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const fmtDate = (d: Date) =>
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const fmtDateTime = (d: Date) =>
+      `${fmtDate(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+
+    const body: Record<string, string> = { entity_id: entityId, uid, summary };
+    if (allDay) {
+      body.start_date = fmtDate(start);
+      body.end_date = fmtDate(end);
+    } else {
+      body.start_date_time = fmtDateTime(start);
+      body.end_date_time = fmtDateTime(end);
+    }
+    if (opts?.location) body.location = opts.location;
+    if (opts?.description) body.description = opts.description;
+
+    const res = await fetch(`${this.config.baseUrl}/api/services/calendar/update_event`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.config.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`HA update_event failed: ${res.status}`);
+  }
+
+  async deleteEvent(entityId: string, uid: string): Promise<void> {
+    const res = await fetch(`${this.config.baseUrl}/api/services/calendar/delete_event`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.config.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ entity_id: entityId, uid }),
+    });
+    if (!res.ok) throw new Error(`HA delete_event failed: ${res.status}`);
+  }
 }
 
 interface RawHAEvent {
