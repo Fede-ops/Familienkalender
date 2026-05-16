@@ -31,6 +31,7 @@ interface QueuedEvent {
   allDay: boolean;
   location?: string;
   description?: string;
+  attempts: number;
 }
 
 function loadQueue(): QueuedEvent[] {
@@ -45,9 +46,9 @@ function saveQueue(q: QueuedEvent[]): void {
   localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
 }
 
-function enqueue(ev: Omit<QueuedEvent, "id">): void {
+function enqueue(ev: Omit<QueuedEvent, "id" | "attempts">): void {
   const q = loadQueue();
-  q.push({ id: `q-${Date.now()}`, ...ev });
+  q.push({ id: `q-${Date.now()}`, attempts: 0, ...ev });
   saveQueue(q);
   updateQueueBadge();
 }
@@ -59,11 +60,19 @@ function updateQueueBadge(): void {
     existing?.remove();
     return;
   }
-  const el = existing ?? document.createElement("div");
-  el.id = "offline-badge";
-  el.className = "offline-badge";
-  el.textContent = `${q.length} Termin${q.length > 1 ? "e" : ""} werden gesendet sobald du online bist`;
-  if (!existing) document.body.appendChild(el);
+  const el = existing ?? (() => {
+    const div = document.createElement("div");
+    div.id = "offline-badge";
+    div.className = "offline-badge";
+    // Tap to clear stuck events
+    div.addEventListener("click", () => {
+      saveQueue([]);
+      div.remove();
+    });
+    document.body.appendChild(div);
+    return div;
+  })();
+  el.textContent = `${q.length} Termin${q.length > 1 ? "e ausstehend" : " ausstehend"} · Tippen zum Leeren`;
 }
 
 async function processQueue(): Promise<void> {
@@ -71,9 +80,6 @@ async function processQueue(): Promise<void> {
   if (!config || !navigator.onLine) return;
   const q = loadQueue();
   if (q.length === 0) return;
-
-  const badge = document.getElementById("offline-badge");
-  if (badge) badge.textContent = `Sende ${q.length} ausstehende Termine…`;
 
   const client = new HAClient(config);
   const remaining: QueuedEvent[] = [];
@@ -89,7 +95,9 @@ async function processQueue(): Promise<void> {
         { location: item.location, description: item.description },
       );
     } catch {
-      remaining.push(item);
+      const updated = { ...item, attempts: (item.attempts ?? 0) + 1 };
+      if (updated.attempts < 5) remaining.push(updated);
+      // silently drop after 5 failed attempts
     }
   }
 
@@ -299,6 +307,7 @@ function activateDrag(): void {
   document.body.appendChild(ghost);
   drag.ghost = ghost;
   el.style.opacity = "0.25";
+  document.body.classList.add("is-dragging");
 
   document.addEventListener("touchmove", onDragMove, { passive: false });
   document.addEventListener("touchend", onDragEnd, { once: true });
@@ -332,6 +341,7 @@ function onDragEnd(e: TouchEvent): void {
   row?.classList.remove("week-row--drop-target");
   drag.ghost?.remove();
   drag.originalEl.style.opacity = "";
+  document.body.classList.remove("is-dragging");
 
   const uid = drag.uid;
   const dateStr = row?.dataset.date;
@@ -348,6 +358,7 @@ function cancelDrag(): void {
   document.removeEventListener("touchend", onDragEnd);
   if (drag.ghost) drag.ghost.remove();
   drag.originalEl.style.opacity = "";
+  document.body.classList.remove("is-dragging");
   drag.currentTarget?.classList.remove("week-row--drop-target");
   drag = null;
 }
@@ -771,6 +782,8 @@ async function refreshEvents(): Promise<void> {
     saveCachedEvents(fresh);
     dismissHAError();
     if (state.activeTab === "kalender") render();
+    // HA is reachable → try flushing queued events
+    void processQueue();
   } catch (err) {
     console.error("Failed to load events from HA:", err);
     showHAError();

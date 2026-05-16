@@ -95,7 +95,7 @@ export function renderMonthView(viewState: MonthViewState): string {
       const eventPills = dayEvents.map((ev) => {
         const m = members.find((x) => x.id === ev.memberId);
         const color = m?.color ?? "#8E8E93";
-        const grad = `linear-gradient(135deg,${color} 0%,${shade(color, -25)} 100%)`;
+        const grad = `linear-gradient(135deg,${shade(color, 40)} 0%,${color} 55%,${shade(color, -35)} 100%)`;
         return `<div class="month-cell__event" style="background:${grad};">${ev.summary}</div>`;
       }).join("");
 

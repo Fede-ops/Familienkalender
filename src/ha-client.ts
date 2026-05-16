@@ -52,10 +52,17 @@ export class HAClient {
   }
 
   async getAllEvents(start: Date, end: Date): Promise<CalendarEvent[]> {
-    const results = await Promise.all(
+    const results = await Promise.allSettled(
       this.config.calendarEntities.map((entityId) => this.getEvents(entityId, start, end)),
     );
-    return results.flat().sort((a, b) => a.start.getTime() - b.start.getTime());
+    const events: CalendarEvent[] = [];
+    let anyFailed = false;
+    for (const r of results) {
+      if (r.status === "fulfilled") events.push(...r.value);
+      else anyFailed = true;
+    }
+    if (anyFailed && events.length === 0) throw new Error("All calendars failed");
+    return events.sort((a, b) => a.start.getTime() - b.start.getTime());
   }
 
   async createEvent(
