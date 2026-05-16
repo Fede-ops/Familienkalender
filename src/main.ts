@@ -117,10 +117,32 @@ function renderConfig(): void {
   });
 }
 
+const demoMode = new URLSearchParams(window.location.search).has("demo");
 const config = loadConfig();
-if (!config) {
+if (demoMode) {
+  state.events = buildDemoWeek(state.weekStart);
+  render();
+} else if (!config) {
   renderConfig();
 } else {
   render();
   void refreshEvents();
+}
+
+function buildDemoWeek(weekStart: Date): CalendarEvent[] {
+  const day = (offset: number, h: number, m: number): Date => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + offset);
+    d.setHours(h, m, 0, 0);
+    return d;
+  };
+  return [
+    { uid: "d1", summary: "Fede Sport", start: day(0, 7, 0), end: day(0, 8, 0), allDay: false, memberId: "calendar.fede" },
+    { uid: "d2", summary: "Bebos Schule", start: day(0, 8, 30), end: day(0, 14, 0), allDay: false, memberId: "calendar.bebos" },
+    { uid: "d3", summary: "Pita Yoga", start: day(1, 19, 0), end: day(1, 20, 30), allDay: false, memberId: "calendar.pita" },
+    { uid: "d4", summary: "Fede Trabajo Meeting", start: day(2, 10, 0), end: day(2, 11, 30), allDay: false, memberId: "calendar.fede_trabajo" },
+    { uid: "d5", summary: "Bebos Geburtstag", start: day(3, 0, 0), end: day(4, 0, 0), allDay: true, memberId: "calendar.bebos" },
+    { uid: "d6", summary: "Pita Abendessen", start: day(4, 22, 0), end: day(4, 23, 0), allDay: false, memberId: "calendar.pita" },
+    { uid: "d7", summary: "Familie Wochenende", start: day(5, 12, 0), end: day(5, 18, 0), allDay: false, memberId: "calendar.fede" },
+  ];
 }
