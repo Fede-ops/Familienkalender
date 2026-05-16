@@ -1,6 +1,7 @@
 import "./style.css";
 import { HAClient, loadConfig, saveConfig } from "./ha-client.ts";
 import { addDays, renderWeekView, startOfWeek } from "./views/week.ts";
+import { renderMonthView } from "./views/month.ts";
 import { defaultModalState, renderEventModal } from "./views/event-modal.ts";
 import type { ModalState } from "./views/event-modal.ts";
 import {
@@ -28,7 +29,9 @@ const DEFAULT_MEMBERS: FamilyMember[] = [
 
 interface AppState {
   activeTab: TabKey;
+  viewMode: "week" | "month";
   weekStart: Date;
+  monthStart: Date;
   events: CalendarEvent[];
   members: FamilyMember[];
   modal: ModalState | null;
@@ -36,10 +39,20 @@ interface AppState {
   todos: TodoItem[];
 }
 
+function startOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function addMonths(date: Date, n: number): Date {
+  return new Date(date.getFullYear(), date.getMonth() + n, 1);
+}
+
 const app = document.getElementById("app")!;
 const state: AppState = {
   activeTab: "kalender",
+  viewMode: "week",
   weekStart: startOfWeek(new Date()),
+  monthStart: startOfMonth(new Date()),
   events: [],
   members: DEFAULT_MEMBERS,
   modal: null,
@@ -55,6 +68,14 @@ function render(): void {
     html = renderShoppingView(state.shopping);
   } else if (state.activeTab === "todo") {
     html = renderTodoView(state.todos);
+  } else if (state.viewMode === "month") {
+    html = renderMonthView({
+      monthStart: state.monthStart,
+      events: state.events,
+      members: state.members,
+      today: new Date(),
+    });
+    if (state.modal) html += renderEventModal(state.modal, state.members);
   } else {
     html = renderWeekView({
       weekStart: state.weekStart,
@@ -135,6 +156,17 @@ function bindEvents(): void {
         state.activeTab = "einkauf";
         render();
 
+      // ── View switching ───────────────────────────────────────────────────
+      } else if (action === "view-month") {
+        state.viewMode = "month";
+        state.monthStart = startOfMonth(state.weekStart);
+        render();
+        void refreshEvents();
+      } else if (action === "view-week") {
+        state.viewMode = "week";
+        render();
+        void refreshEvents();
+
       // ── Calendar navigation ──────────────────────────────────────────────
       } else if (action === "nav-prev") {
         state.weekStart = addDays(state.weekStart, -7);
@@ -148,6 +180,29 @@ function bindEvents(): void {
         state.weekStart = startOfWeek(new Date());
         render();
         void refreshEvents();
+
+      // ── Month navigation ─────────────────────────────────────────────────
+      } else if (action === "nav-month-prev") {
+        state.monthStart = addMonths(state.monthStart, -1);
+        render();
+        void refreshEvents();
+      } else if (action === "nav-month-next") {
+        state.monthStart = addMonths(state.monthStart, 1);
+        render();
+        void refreshEvents();
+      } else if (action === "nav-month-today") {
+        state.monthStart = startOfMonth(new Date());
+        render();
+        void refreshEvents();
+      } else if (action === "day-tap") {
+        const dateStr = el.dataset.date;
+        if (dateStr) {
+          const tapped = new Date(dateStr);
+          state.viewMode = "week";
+          state.weekStart = startOfWeek(tapped);
+          render();
+          void refreshEvents();
+        }
 
       // ── Event modal ──────────────────────────────────────────────────────
       } else if (action === "add-event") {
@@ -302,8 +357,16 @@ async function refreshEvents(): Promise<void> {
   if (!config) return;
   try {
     const client = new HAClient(config);
-    const end = addDays(state.weekStart, 7);
-    state.events = await client.getAllEvents(state.weekStart, end);
+    let rangeStart: Date;
+    let rangeEnd: Date;
+    if (state.viewMode === "month") {
+      rangeStart = state.monthStart;
+      rangeEnd = addMonths(state.monthStart, 1);
+    } else {
+      rangeStart = state.weekStart;
+      rangeEnd = addDays(state.weekStart, 7);
+    }
+    state.events = await client.getAllEvents(rangeStart, rangeEnd);
     if (state.activeTab === "kalender") render();
   } catch (err) {
     console.error("Failed to load events from HA:", err);
