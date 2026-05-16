@@ -6,6 +6,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 
 const view = process.argv[2] ?? "week";
+const modalTab = process.argv[3] ?? "detail";
 
 const DAY_NAMES_DE = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const WEEKDAYS_DE_SUN_FIRST = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
@@ -16,10 +17,10 @@ const MONTH_NAMES_DE_FULL = [
 const MONTH_NAMES_DE_SHORT = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
 const MEMBERS = [
-  { id: "calendar.fede", initial: "F", color: "#0A84FF" },
-  { id: "calendar.pita", initial: "P", color: "#30D158" },
-  { id: "calendar.bebos", initial: "B", color: "#FF9F0A" },
-  { id: "calendar.fede_trabajo", initial: "T", color: "#BF5AF2" },
+  { id: "calendar.fede", name: "Fede", initial: "F", color: "#0A84FF" },
+  { id: "calendar.pita", name: "Pita", initial: "P", color: "#30D158" },
+  { id: "calendar.bebos", name: "Bebos", initial: "B", color: "#FF9F0A" },
+  { id: "calendar.fede_trabajo", name: "Trabajo", initial: "T", color: "#BF5AF2" },
 ];
 
 const today = new Date();
@@ -232,9 +233,121 @@ function renderMonthView() {
   `;
 }
 
-const body = view === "month" ? renderMonthView() : renderWeekView();
+function renderEventModalBackdrop() {
+  const selectedMember = MEMBERS[1];
+  const tabs = [
+    { key: "datum", label: "Datum" },
+    { key: "detail", label: "Detail" },
+    { key: "erinnerung", label: "Erinnerung" },
+  ];
+  const tabsHtml = tabs.map((t) =>
+    `<button class="modal-tab ${t.key === modalTab ? "modal-tab--active" : ""}">${t.label}</button>`
+  ).join("");
+
+  const membersHtml = MEMBERS.map((m) => {
+    const grad = `linear-gradient(135deg, ${m.color} 0%, ${shadeColor(m.color, -30)} 100%)`;
+    const active = m.id === selectedMember.id ? "member-chip--active" : "";
+    return `<button class="member-chip ${active}">
+      <span class="member-chip__avatar" style="background:${grad};">${m.initial}</span>
+      <span class="member-chip__name">${m.name}</span>
+    </button>`;
+  }).join("");
+
+  let tabBody = "";
+  if (modalTab === "datum") {
+    tabBody = `
+      <div class="field-group">
+        <div class="field field--toggle">
+          <span class="field__label">Ganztägig</span>
+          <span class="field__value"></span>
+        </div>
+      </div>
+      <div class="field-group">
+        <div class="field">
+          <span class="field__label">Beginnt</span>
+          <span class="field__value field__value--accent">Fr. 15. Mai · 19:30</span>
+        </div>
+        <div class="field">
+          <span class="field__label">Endet</span>
+          <span class="field__value">Fr. 15. Mai · 21:00</span>
+        </div>
+      </div>
+      <div class="field-group">
+        <div class="field">
+          <span class="field__label">Wiederholen</span>
+          <span class="field__value">Nie ›</span>
+        </div>
+      </div>
+    `;
+  } else if (modalTab === "detail") {
+    tabBody = `
+      <div class="field-group">
+        <div class="field field--column">
+          <input class="field__input" placeholder="Titel" value="Abendessen Familie" />
+        </div>
+        <div class="field field--column">
+          <input class="field__input" placeholder="Ort" value="Zuhause" />
+        </div>
+      </div>
+      <div class="section-label">Kalender</div>
+      <div class="member-picker">${membersHtml}</div>
+      <div class="field-group">
+        <div class="field field--column">
+          <input class="field__input" placeholder="Notizen hinzufügen..." />
+        </div>
+      </div>
+    `;
+  } else if (modalTab === "erinnerung") {
+    tabBody = `
+      <div class="field-group">
+        <div class="field">
+          <span class="field__label">Erinnerung</span>
+          <span class="field__value">15 Minuten vorher ›</span>
+        </div>
+        <div class="field">
+          <span class="field__label">Zweite Erinnerung</span>
+          <span class="field__value">Keine ›</span>
+        </div>
+      </div>
+      <div class="field-group">
+        <div class="field">
+          <span class="field__label">Benachrichtigen via</span>
+          <span class="field__value">Push, WhatsApp ›</span>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="modal-sheet modal-sheet--standalone">
+      <div class="modal-handle"></div>
+      <div class="modal-header">
+        <button class="modal-header__close">Abbrechen</button>
+        <span class="modal-header__title">Neues Event</span>
+        <button class="modal-header__action">Speichern</button>
+      </div>
+      <div class="modal-tabs">${tabsHtml}</div>
+      <div class="modal-body">${tabBody}</div>
+    </div>
+  `;
+}
+
+let body;
+if (view === "modal") {
+  body = `<div class="modal-demo-wrap">${renderEventModalBackdrop()}</div>`;
+} else if (view === "month") {
+  body = renderMonthView();
+} else {
+  body = renderWeekView();
+}
 const css = readFileSync(resolve(root, "src/style.css"), "utf8");
-const filename = view === "month" ? "demo-month.html" : "demo-week.html";
+const filename = view === "modal" ? `demo-modal-${modalTab}.html` : view === "month" ? "demo-month.html" : "demo-week.html";
+
+const extraCss = view === "modal" ? `
+  body { background: #0a0a0a; padding-top: 40px; }
+  .modal-demo-wrap { background: transparent; }
+  .modal-sheet--standalone { position: relative; width: 100%; max-height: none; border-radius: 18px 18px 0 0; }
+` : "";
 
 const html = `<!DOCTYPE html>
 <html lang="de">
@@ -242,7 +355,7 @@ const html = `<!DOCTYPE html>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Familienkalender Demo</title>
-  <style>${css}</style>
+  <style>${css}${extraCss}</style>
 </head>
 <body>
   <div id="app">${body}</div>
