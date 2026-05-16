@@ -1346,6 +1346,25 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   z-index: 200;
   cursor: pointer;
   letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ha-error-reconnect {
+  background: rgba(255,204,0,0.2);
+  border: 1px solid rgba(255,204,0,0.5);
+  color: #ffcc00;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 
 .offline-badge {

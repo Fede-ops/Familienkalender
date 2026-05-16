@@ -801,10 +801,16 @@ function showHAError(detail?: string): void {
   const el = document.createElement("div");
   el.id = "ha-error-banner";
   el.className = "ha-error-banner";
-  el.textContent = detail ? `HA-Fehler: ${detail}  ✕` : "HA nicht erreichbar  ✕";
+  el.innerHTML = `<span>${detail ?? "HA nicht erreichbar"}</span><button class="ha-error-reconnect">Neu verbinden</button><span style="margin-left:8px;opacity:.7">✕</span>`;
+  el.querySelector(".ha-error-reconnect")!.addEventListener("click", (e) => {
+    e.stopPropagation();
+    el.remove();
+    localStorage.removeItem("ha-config");
+    renderConfig();
+  });
   el.addEventListener("click", () => el.remove());
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 12000);
+  setTimeout(() => el.remove(), 20000);
 }
 
 function dismissHAError(): void {

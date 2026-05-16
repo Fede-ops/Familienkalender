@@ -56,12 +56,12 @@ export class HAClient {
       this.config.calendarEntities.map((entityId) => this.getEvents(entityId, start, end)),
     );
     const events: CalendarEvent[] = [];
-    let anyFailed = false;
+    const errors: string[] = [];
     for (const r of results) {
       if (r.status === "fulfilled") events.push(...r.value);
-      else anyFailed = true;
+      else errors.push(r.reason instanceof Error ? r.reason.message : String(r.reason));
     }
-    if (anyFailed && events.length === 0) throw new Error("All calendars failed");
+    if (errors.length > 0 && events.length === 0) throw new Error(errors[0]);
     return events.sort((a, b) => a.start.getTime() - b.start.getTime());
   }
 
