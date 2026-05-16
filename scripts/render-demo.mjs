@@ -120,11 +120,33 @@ const ICONS = {
   filter: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18M6 12h12M10 19h4"/></svg>`,
   search: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>`,
   plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>`,
+  home: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>`,
+  todo: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l2 2 4-4M4 14l2 2 4-4M12 7h8M12 15h8"/></svg>`,
+  cart: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.4 12.5a2 2 0 0 0 2 1.5h8.4a2 2 0 0 0 2-1.5L22 7H6"/></svg>`,
+  check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+  haLogo: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 12h3v8h6v-6h2v6h6v-8h3L12 2zm0 4.5l5 5V18h-2v-6H9v6H7v-6.5l5-5z"/></svg>`,
+  whatsapp: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 14.4c-.3-.1-1.7-.8-2-.9-.3-.1-.5-.2-.7.2-.2.3-.8.9-1 1.1-.2.2-.4.2-.7.1-.3-.2-1.3-.5-2.4-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.7.1-.1.3-.4.4-.5.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5 0-.1-.7-1.7-.9-2.3-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.4 0 1.4 1 2.8 1.2 3 .1.2 2 3 4.8 4.2.7.3 1.2.5 1.6.6.7.2 1.3.2 1.8.1.5-.1 1.7-.7 1.9-1.4.2-.7.2-1.2.2-1.4-.1-.1-.3-.2-.6-.3zM12 2C6.5 2 2 6.5 2 12c0 1.8.5 3.5 1.3 5L2 22l5.2-1.4c1.5.8 3.1 1.2 4.8 1.2 5.5 0 10-4.5 10-10S17.5 2 12 2z"/></svg>`,
+  signal: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12c0 2 .6 3.9 1.6 5.5L2 22l4.5-1.6C8.1 21.4 10 22 12 22c5.5 0 10-4.5 10-10S17.5 2 12 2zm0 18c-1.7 0-3.3-.5-4.7-1.4l-.3-.2-2.8 1 1-2.8-.2-.3C4.5 15.3 4 13.7 4 12c0-4.4 3.6-8 8-8s8 3.6 8 8-3.6 8-8 8z"/></svg>`,
 };
 
 function toolbarBtn(iconKey, label) {
   const icon = ICONS[iconKey] ?? "";
   return `<button class="toolbar__button"><span class="toolbar__icon">${icon}</span><span class="toolbar__label">${label}</span></button>`;
+}
+
+function tabBar(activeKey = "kalender") {
+  const items = [
+    { key: "kalender", icon: "home", label: "Kalender" },
+    { key: "todo", icon: "todo", label: "To-Do" },
+    { key: "einkauf", icon: "cart", label: "Einkauf" },
+  ];
+  const itemsHtml = items.map((it) =>
+    `<button class="tab-bar__item ${it.key === activeKey ? "tab-bar__item--active" : ""}">
+      <span class="tab-bar__icon">${ICONS[it.icon]}</span>
+      <span class="tab-bar__label">${it.label}</span>
+    </button>`
+  ).join("");
+  return `<nav class="tab-bar">${itemsHtml}</nav>`;
 }
 
 function renderWeekView() {
@@ -165,6 +187,7 @@ function renderWeekView() {
     </nav>
     <main class="week-list">${rows}</main>
     <button class="fab">${ICONS.plus}</button>
+    ${tabBar("kalender")}
   `;
 }
 
@@ -230,6 +253,7 @@ function renderMonthView() {
       ${renderMonthBlock(monthStart, { showTitle: false })}
     </div>
     <button class="fab">${ICONS.plus}</button>
+    ${tabBar("kalender")}
   `;
 }
 
@@ -281,17 +305,12 @@ function renderEventModalBackdrop() {
     `;
   } else if (modalTab === "detail") {
     tabBody = `
-      <div class="field-group">
-        <div class="field field--column">
-          <input class="field__input" placeholder="Titel" value="Abendessen Familie" />
-        </div>
-        <div class="field field--column">
-          <input class="field__input" placeholder="Ort" value="Zuhause" />
-        </div>
-      </div>
       <div class="section-label">Kalender</div>
       <div class="member-picker">${membersHtml}</div>
       <div class="field-group">
+        <div class="field field--column">
+          <input class="field__input" placeholder="Ort" value="Zuhause" />
+        </div>
         <div class="field field--column">
           <input class="field__input" placeholder="Notizen hinzufügen..." />
         </div>
@@ -302,17 +321,29 @@ function renderEventModalBackdrop() {
       <div class="field-group">
         <div class="field">
           <span class="field__label">Erinnerung</span>
-          <span class="field__value">15 Minuten vorher ›</span>
+          <span class="field__value field__value--accent">15 Minuten vorher ›</span>
         </div>
         <div class="field">
           <span class="field__label">Zweite Erinnerung</span>
           <span class="field__value">Keine ›</span>
         </div>
       </div>
-      <div class="field-group">
-        <div class="field">
-          <span class="field__label">Benachrichtigen via</span>
-          <span class="field__value">Push, WhatsApp ›</span>
+      <div class="section-label">Benachrichtigen via</div>
+      <div class="channel-list">
+        <div class="channel-item channel-item--active">
+          <span class="channel-item__icon channel-item__icon--ha">${ICONS.haLogo}</span>
+          <span class="channel-item__label">Home Assistant Push</span>
+          <span class="channel-item__check">${ICONS.check}</span>
+        </div>
+        <div class="channel-item channel-item--active">
+          <span class="channel-item__icon channel-item__icon--whatsapp">${ICONS.whatsapp}</span>
+          <span class="channel-item__label">WhatsApp</span>
+          <span class="channel-item__check">${ICONS.check}</span>
+        </div>
+        <div class="channel-item">
+          <span class="channel-item__icon channel-item__icon--signal">${ICONS.signal}</span>
+          <span class="channel-item__label">Signal</span>
+          <span class="channel-item__check"></span>
         </div>
       </div>
     `;
@@ -325,6 +356,9 @@ function renderEventModalBackdrop() {
         <button class="modal-header__close">Abbrechen</button>
         <span class="modal-header__title">Neues Event</span>
         <button class="modal-header__action">Speichern</button>
+      </div>
+      <div class="modal-title-block">
+        <input class="modal-title-input" placeholder="Beschreibung des Events..." value="Abendessen Familie" />
       </div>
       <div class="modal-tabs">${tabsHtml}</div>
       <div class="modal-body">${tabBody}</div>
