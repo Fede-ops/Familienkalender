@@ -823,6 +823,242 @@ body {
   color: #fff;
 }
 
+/* ── List views (shopping + todo) ─────────────────────────────────────── */
+
+.list-header {
+  padding-bottom: 0;
+}
+
+.header__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #0a84ff 0%, #5e5ce6 100%);
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  padding: 0 6px;
+  vertical-align: middle;
+  margin-left: 6px;
+  letter-spacing: 0;
+}
+
+.list-add {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px 16px;
+}
+
+.list-add__input {
+  flex: 1;
+  background: #1c1c1e;
+  border: none;
+  border-radius: 14px;
+  padding: 13px 16px;
+  color: var(--text);
+  font-size: 16px;
+  font-family: inherit;
+  letter-spacing: -0.01em;
+  outline: none;
+  caret-color: var(--accent-blue);
+}
+
+.list-add__input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.list-add__btn {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0a84ff 0%, #5e5ce6 100%);
+  border: none;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px rgba(10, 132, 255, 0.45);
+}
+
+.list-add__btn svg {
+  width: 22px;
+  height: 22px;
+}
+
+.list-add__btn:active {
+  transform: scale(0.94);
+}
+
+.list-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 110px;
+}
+
+.category-group {
+  margin-bottom: 6px;
+}
+
+.category-group--done {
+  margin-top: 16px;
+}
+
+.category-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px 6px;
+}
+
+.category-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.category-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  flex: 1;
+}
+
+.category-label--muted {
+  color: var(--text-tertiary);
+  text-transform: none;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.category-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.category-clear {
+  font-size: 13px;
+  font-weight: 500;
+  color: #ff453a;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.list-items {
+  background: #1c1c1e;
+  margin: 0 16px;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.list-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 0.5px solid rgba(120, 120, 128, 0.18);
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font-family: inherit;
+  transition: background 0.12s ease;
+}
+
+.list-item:last-child {
+  border-bottom: none;
+}
+
+.list-item:active {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.list-item__check {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid rgba(120, 120, 128, 0.45);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.list-item__check--done {
+  background: linear-gradient(135deg, #30d158 0%, #28a745 100%);
+  border-color: transparent;
+}
+
+.list-item__check--done svg {
+  width: 13px;
+  height: 13px;
+  color: #fff;
+}
+
+.list-item__name {
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  flex: 1;
+}
+
+.list-item--checked .list-item__name {
+  text-decoration: line-through;
+  color: var(--text-tertiary);
+}
+
+.list-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 80px 32px 32px;
+  gap: 10px;
+}
+
+.list-empty__icon {
+  width: 48px;
+  height: 48px;
+  color: var(--text-tertiary);
+  margin-bottom: 6px;
+}
+
+.list-empty__icon svg {
+  width: 48px;
+  height: 48px;
+}
+
+.list-empty__text {
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.list-empty__hint {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
 .config-screen {
   padding: 32px 24px;
   display: flex;

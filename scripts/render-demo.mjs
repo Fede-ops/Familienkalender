@@ -368,16 +368,186 @@ function renderEventModalBackdrop() {
   `;
 }
 
+// ── Shopping demo ──────────────────────────────────────────────────────────
+
+function renderShoppingDemo() {
+  const items = [
+    { id: "1", name: "Äpfel", category: "obst", checked: false },
+    { id: "2", name: "Bananen", category: "obst", checked: false },
+    { id: "3", name: "Spinat", category: "obst", checked: false },
+    { id: "4", name: "Milch", category: "milch", checked: false },
+    { id: "5", name: "Butter", category: "milch", checked: true },
+    { id: "6", name: "Mozzarella", category: "milch", checked: false },
+    { id: "7", name: "Hähnchen", category: "fleisch", checked: false },
+    { id: "8", name: "Lachs", category: "fleisch", checked: false },
+    { id: "9", name: "Brot", category: "backwaren", checked: false },
+    { id: "10", name: "Pasta", category: "backwaren", checked: true },
+    { id: "11", name: "Mineralwasser", category: "getraenke", checked: false },
+    { id: "12", name: "Orangensaft", category: "getraenke", checked: false },
+    { id: "13", name: "Spülmittel", category: "haushalt", checked: false },
+  ];
+
+  const SHOPPING_CATEGORIES = [
+    { key: "obst", label: "Obst & Gemüse", color: "#30D158" },
+    { key: "milch", label: "Milch & Kühlwaren", color: "#64D2FF" },
+    { key: "fleisch", label: "Fleisch & Fisch", color: "#FF9F0A" },
+    { key: "backwaren", label: "Backwaren & Nudeln", color: "#FF6B47" },
+    { key: "getraenke", label: "Getränke", color: "#BF5AF2" },
+    { key: "haushalt", label: "Haushalt & Pflege", color: "#8E8E93" },
+    { key: "sonstiges", label: "Sonstiges", color: "#636366" },
+  ];
+
+  const plusIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>`;
+  const checkIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+
+  const active = items.filter(i => !i.checked);
+  const done = items.filter(i => i.checked);
+  const totalActive = active.length;
+
+  let bodyHtml = "";
+  for (const cat of SHOPPING_CATEGORIES) {
+    const groupItems = active.filter(i => i.category === cat.key);
+    if (!groupItems.length) continue;
+    const rows = groupItems.map(item => `
+      <button class="list-item">
+        <span class="list-item__check"></span>
+        <span class="list-item__name">${item.name}</span>
+      </button>`).join("");
+    bodyHtml += `
+      <div class="category-group">
+        <div class="category-header">
+          <span class="category-dot" style="background:${cat.color};box-shadow:0 0 6px ${cat.color}55;"></span>
+          <span class="category-label">${cat.label}</span>
+          <span class="category-count">${groupItems.length}</span>
+        </div>
+        <div class="list-items">${rows}</div>
+      </div>`;
+  }
+  if (done.length) {
+    const rows = done.map(item => `
+      <button class="list-item list-item--checked">
+        <span class="list-item__check list-item__check--done">${checkIcon}</span>
+        <span class="list-item__name">${item.name}</span>
+      </button>`).join("");
+    bodyHtml += `
+      <div class="category-group category-group--done">
+        <div class="category-header">
+          <span class="category-label category-label--muted">Erledigt (${done.length})</span>
+          <button class="category-clear">Löschen</button>
+        </div>
+        <div class="list-items">${rows}</div>
+      </div>`;
+  }
+
+  return `
+    <header class="header list-header">
+      <h1 class="header__title">Einkauf <span class="header__badge">${totalActive}</span></h1>
+    </header>
+    <div class="list-add">
+      <input class="list-add__input" placeholder="Artikel hinzufügen…" />
+      <button class="list-add__btn">${plusIcon}</button>
+    </div>
+    <div class="list-body">${bodyHtml}</div>
+    ${tabBar("einkauf")}
+  `;
+}
+
+// ── To-Do demo ─────────────────────────────────────────────────────────────
+
+function renderTodoDemo() {
+  const items = [
+    { id: "1", title: "Kinderarzt Termin", category: "familie", completed: false },
+    { id: "2", title: "Geburtstagsfeier planen", category: "familie", completed: false },
+    { id: "3", title: "Küche putzen", category: "haushalt", completed: false },
+    { id: "4", title: "Wäsche waschen", category: "haushalt", completed: true },
+    { id: "5", title: "Kundenmeeting vorbereiten", category: "arbeit", completed: false },
+    { id: "6", title: "Rechnung senden", category: "arbeit", completed: false },
+    { id: "7", title: "Bücher zurückgeben", category: "sonstiges", completed: false },
+  ];
+
+  const TODO_CATEGORIES = [
+    { key: "familie", label: "Familie", color: "#FF9F0A" },
+    { key: "haushalt", label: "Haushalt", color: "#30D158" },
+    { key: "arbeit", label: "Arbeit", color: "#0A84FF" },
+    { key: "sonstiges", label: "Sonstiges", color: "#636366" },
+  ];
+
+  const plusIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>`;
+  const checkIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+
+  const open = items.filter(i => !i.completed);
+  const done = items.filter(i => i.completed);
+  const totalOpen = open.length;
+
+  let bodyHtml = "";
+  for (const cat of TODO_CATEGORIES) {
+    const groupItems = open.filter(i => i.category === cat.key);
+    if (!groupItems.length) continue;
+    const rows = groupItems.map(item => `
+      <button class="list-item">
+        <span class="list-item__check"></span>
+        <span class="list-item__name">${item.title}</span>
+      </button>`).join("");
+    bodyHtml += `
+      <div class="category-group">
+        <div class="category-header">
+          <span class="category-dot" style="background:${cat.color};box-shadow:0 0 6px ${cat.color}55;"></span>
+          <span class="category-label">${cat.label}</span>
+          <span class="category-count">${groupItems.length}</span>
+        </div>
+        <div class="list-items">${rows}</div>
+      </div>`;
+  }
+  if (done.length) {
+    const rows = done.map(item => `
+      <button class="list-item list-item--checked">
+        <span class="list-item__check list-item__check--done">${checkIcon}</span>
+        <span class="list-item__name">${item.title}</span>
+      </button>`).join("");
+    bodyHtml += `
+      <div class="category-group category-group--done">
+        <div class="category-header">
+          <span class="category-label category-label--muted">Erledigt (${done.length})</span>
+          <button class="category-clear">Löschen</button>
+        </div>
+        <div class="list-items">${rows}</div>
+      </div>`;
+  }
+
+  return `
+    <header class="header list-header">
+      <h1 class="header__title">To-Do <span class="header__badge">${totalOpen}</span></h1>
+    </header>
+    <div class="list-add">
+      <input class="list-add__input" placeholder="Aufgabe hinzufügen…" />
+      <button class="list-add__btn">${plusIcon}</button>
+    </div>
+    <div class="list-body">${bodyHtml}</div>
+    ${tabBar("todo")}
+  `;
+}
+
+// ── Main ───────────────────────────────────────────────────────────────────
+
 let body;
 if (view === "modal") {
   body = `<div class="modal-demo-wrap">${renderEventModalBackdrop()}</div>`;
 } else if (view === "month") {
   body = renderMonthView();
+} else if (view === "shopping") {
+  body = renderShoppingDemo();
+} else if (view === "todo") {
+  body = renderTodoDemo();
 } else {
   body = renderWeekView();
 }
 const css = readFileSync(resolve(root, "src/style.css"), "utf8");
-const filename = view === "modal" ? `demo-modal-${modalTab}.html` : view === "month" ? "demo-month.html" : "demo-week.html";
+const filename =
+  view === "modal" ? `demo-modal-${modalTab}.html` :
+  view === "month" ? "demo-month.html" :
+  view === "shopping" ? "demo-shopping.html" :
+  view === "todo" ? "demo-todo.html" :
+  "demo-week.html";
 
 const extraCss = view === "modal" ? `
   body { background: #0a0a0a; padding-top: 40px; }

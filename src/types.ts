@@ -17,3 +17,20 @@ export interface CalendarEvent {
 }
 
 export type ViewMode = "week" | "month";
+
+export type TabKey = "kalender" | "todo" | "einkauf";
+
+export interface ShoppingItem {
+  id: string;
+  name: string;
+  category: string;
+  checked: boolean;
+}
+
+export interface TodoItem {
+  id: string;
+  title: string;
+  category: string;
+  completed: boolean;
+  createdAt: number;
+}

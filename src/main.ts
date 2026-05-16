@@ -3,7 +3,19 @@ import { HAClient, loadConfig, saveConfig } from "./ha-client.ts";
 import { addDays, renderWeekView, startOfWeek } from "./views/week.ts";
 import { defaultModalState, renderEventModal } from "./views/event-modal.ts";
 import type { ModalState } from "./views/event-modal.ts";
-import type { CalendarEvent, FamilyMember } from "./types.ts";
+import {
+  categorizeShoppingItem,
+  loadShoppingItems,
+  renderShoppingView,
+  saveShoppingItems,
+} from "./views/shopping.ts";
+import {
+  categorizeTodoItem,
+  loadTodoItems,
+  renderTodoView,
+  saveTodoItems,
+} from "./views/todo.ts";
+import type { CalendarEvent, FamilyMember, ShoppingItem, TabKey, TodoItem } from "./types.ts";
 
 const DEFAULT_MEMBERS: FamilyMember[] = [
   { id: "calendar.fede", name: "Fede", initial: "F", color: "#0A84FF" },
@@ -15,49 +27,61 @@ const DEFAULT_MEMBERS: FamilyMember[] = [
 ];
 
 interface AppState {
+  activeTab: TabKey;
   weekStart: Date;
   events: CalendarEvent[];
   members: FamilyMember[];
   modal: ModalState | null;
+  shopping: ShoppingItem[];
+  todos: TodoItem[];
 }
 
 const app = document.getElementById("app")!;
 const state: AppState = {
+  activeTab: "kalender",
   weekStart: startOfWeek(new Date()),
   events: [],
   members: DEFAULT_MEMBERS,
   modal: null,
+  shopping: loadShoppingItems(),
+  todos: loadTodoItems(),
 };
 
 // ── Rendering ──────────────────────────────────────────────────────────────
 
 function render(): void {
-  const weekHtml = renderWeekView({
-    weekStart: state.weekStart,
-    events: state.events,
-    members: state.members,
-    today: new Date(),
-  });
-  const modalHtml = state.modal ? renderEventModal(state.modal, state.members) : "";
-  app.innerHTML = weekHtml + modalHtml;
+  let html = "";
+  if (state.activeTab === "einkauf") {
+    html = renderShoppingView(state.shopping);
+  } else if (state.activeTab === "todo") {
+    html = renderTodoView(state.todos);
+  } else {
+    html = renderWeekView({
+      weekStart: state.weekStart,
+      events: state.events,
+      members: state.members,
+      today: new Date(),
+    });
+    if (state.modal) html += renderEventModal(state.modal, state.members);
+  }
+  app.innerHTML = html;
   bindEvents();
-  if (state.modal) {
-    document.getElementById("modal-summary")?.focus();
+  if (state.modal) document.getElementById("modal-summary")?.focus();
+  if (state.activeTab !== "kalender") {
+    document.getElementById("list-input")?.focus();
   }
 }
 
-// ── Read form values before switching tabs / saving ────────────────────────
+// ── Sync modal form to state before tab switch / save ──────────────────────
 
-function syncFormToState(): void {
+function syncModalForm(): void {
   if (!state.modal) return;
-  const get = <T extends HTMLElement>(id: string) =>
-    document.getElementById(id) as T | null;
+  const get = <T extends HTMLElement>(id: string) => document.getElementById(id) as T | null;
   const summaryEl = get<HTMLInputElement>("modal-summary");
   const startEl = get<HTMLInputElement>("modal-start");
   const endEl = get<HTMLInputElement>("modal-end");
   const locationEl = get<HTMLInputElement>("modal-location");
   const notesEl = get<HTMLTextAreaElement>("modal-notes");
-
   if (summaryEl) state.modal.summary = summaryEl.value;
   if (startEl?.value) state.modal.startDate = new Date(startEl.value);
   if (endEl?.value) state.modal.endDate = new Date(endEl.value);
@@ -65,19 +89,54 @@ function syncFormToState(): void {
   if (notesEl) state.modal.notes = notesEl.value;
 }
 
+// ── Read list input ────────────────────────────────────────────────────────
+
+function readListInput(): string {
+  const el = document.getElementById("list-input") as HTMLInputElement | null;
+  return el?.value.trim() ?? "";
+}
+
+function clearListInput(): void {
+  const el = document.getElementById("list-input") as HTMLInputElement | null;
+  if (el) el.value = "";
+}
+
 // ── Event binding ──────────────────────────────────────────────────────────
 
 function bindEvents(): void {
-  // Stop clicks inside modal sheet from bubbling to backdrop
+  // Prevent modal sheet clicks from bubbling to backdrop
   app.querySelectorAll<HTMLElement>("[data-stop-propagation]").forEach((el) => {
     el.addEventListener("click", (e) => e.stopPropagation());
   });
+
+  // Enter key on list input → add item
+  const listInput = document.getElementById("list-input") as HTMLInputElement | null;
+  if (listInput) {
+    listInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        if (state.activeTab === "einkauf") addShoppingItem();
+        if (state.activeTab === "todo") addTodoItem();
+      }
+    });
+  }
 
   app.querySelectorAll<HTMLElement>("[data-action]").forEach((el) => {
     el.addEventListener("click", (e) => {
       const action = el.dataset.action;
 
-      if (action === "nav-prev") {
+      // ── Tab bar ──────────────────────────────────────────────────────────
+      if (action === "tab-kalender") {
+        state.activeTab = "kalender";
+        render();
+      } else if (action === "tab-todo") {
+        state.activeTab = "todo";
+        render();
+      } else if (action === "tab-einkauf") {
+        state.activeTab = "einkauf";
+        render();
+
+      // ── Calendar navigation ──────────────────────────────────────────────
+      } else if (action === "nav-prev") {
         state.weekStart = addDays(state.weekStart, -7);
         render();
         void refreshEvents();
@@ -89,6 +148,8 @@ function bindEvents(): void {
         state.weekStart = startOfWeek(new Date());
         render();
         void refreshEvents();
+
+      // ── Event modal ──────────────────────────────────────────────────────
       } else if (action === "add-event") {
         state.modal = defaultModalState(state.members);
         render();
@@ -97,12 +158,12 @@ function bindEvents(): void {
         render();
       } else if (action === "modal-tab") {
         if (!state.modal) return;
-        syncFormToState();
+        syncModalForm();
         state.modal.tab = el.dataset.tab as ModalState["tab"];
         render();
       } else if (action === "toggle-allday") {
         if (!state.modal) return;
-        syncFormToState();
+        syncModalForm();
         state.modal.allDay = !state.modal.allDay;
         if (state.modal.allDay) {
           state.modal.startDate.setHours(0, 0, 0, 0);
@@ -115,14 +176,82 @@ function bindEvents(): void {
         render();
       } else if (action === "save-event") {
         e.stopPropagation();
-        syncFormToState();
+        syncModalForm();
         void saveEvent();
+
+      // ── Shopping list ────────────────────────────────────────────────────
+      } else if (action === "add-item") {
+        addShoppingItem();
+      } else if (action === "toggle-item") {
+        const id = el.dataset.id;
+        if (!id) return;
+        const item = state.shopping.find((i) => i.id === id);
+        if (item) {
+          item.checked = !item.checked;
+          saveShoppingItems(state.shopping);
+          render();
+        }
+      } else if (action === "clear-checked") {
+        state.shopping = state.shopping.filter((i) => !i.checked);
+        saveShoppingItems(state.shopping);
+        render();
+
+      // ── Todo list ────────────────────────────────────────────────────────
+      } else if (action === "add-todo") {
+        addTodoItem();
+      } else if (action === "complete-todo") {
+        const id = el.dataset.id;
+        if (!id) return;
+        const item = state.todos.find((i) => i.id === id);
+        if (item) {
+          item.completed = !item.completed;
+          saveTodoItems(state.todos);
+          render();
+        }
+      } else if (action === "clear-done-todos") {
+        state.todos = state.todos.filter((i) => !i.completed);
+        saveTodoItems(state.todos);
+        render();
       }
     });
   });
 }
 
-// ── Save event ─────────────────────────────────────────────────────────────
+function addShoppingItem(): void {
+  const name = readListInput();
+  if (!name) return;
+  state.shopping.push({
+    id: `s-${Date.now()}`,
+    name,
+    category: categorizeShoppingItem(name),
+    checked: false,
+  });
+  saveShoppingItems(state.shopping);
+  clearListInput();
+  render();
+  // Re-focus after render
+  const input = document.getElementById("list-input") as HTMLInputElement | null;
+  input?.focus();
+}
+
+function addTodoItem(): void {
+  const title = readListInput();
+  if (!title) return;
+  state.todos.push({
+    id: `t-${Date.now()}`,
+    title,
+    category: categorizeTodoItem(title),
+    completed: false,
+    createdAt: Date.now(),
+  });
+  saveTodoItems(state.todos);
+  clearListInput();
+  render();
+  const input = document.getElementById("list-input") as HTMLInputElement | null;
+  input?.focus();
+}
+
+// ── Save calendar event ────────────────────────────────────────────────────
 
 async function saveEvent(): Promise<void> {
   if (!state.modal) return;
@@ -150,7 +279,6 @@ async function saveEvent(): Promise<void> {
     }
   }
 
-  // Optimistic insert so UI reflects the new event immediately
   state.events.push({
     uid: `local-${Date.now()}`,
     summary: summary.trim(),
@@ -164,7 +292,6 @@ async function saveEvent(): Promise<void> {
   state.events.sort((a, b) => a.start.getTime() - b.start.getTime());
   state.modal = null;
   render();
-
   if (config) void refreshEvents();
 }
 
@@ -175,10 +302,9 @@ async function refreshEvents(): Promise<void> {
   if (!config) return;
   try {
     const client = new HAClient(config);
-    const start = state.weekStart;
-    const end = addDays(start, 7);
-    state.events = await client.getAllEvents(start, end);
-    render();
+    const end = addDays(state.weekStart, 7);
+    state.events = await client.getAllEvents(state.weekStart, end);
+    if (state.activeTab === "kalender") render();
   } catch (err) {
     console.error("Failed to load events from HA:", err);
   }
@@ -206,8 +332,8 @@ function renderConfig(): void {
   document.getElementById("cfg-save")!.addEventListener("click", () => {
     const url = (document.getElementById("cfg-url") as HTMLInputElement).value.trim();
     const token = (document.getElementById("cfg-token") as HTMLInputElement).value.trim();
-    const entitiesRaw = (document.getElementById("cfg-entities") as HTMLTextAreaElement).value;
-    const entities = entitiesRaw.split(",").map((s) => s.trim()).filter(Boolean);
+    const raw = (document.getElementById("cfg-entities") as HTMLTextAreaElement).value;
+    const entities = raw.split(",").map((s) => s.trim()).filter(Boolean);
     if (!url || !token || entities.length === 0) {
       alert("Bitte alle Felder ausfüllen");
       return;
