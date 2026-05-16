@@ -795,9 +795,10 @@ function showHAError(): void {
   const el = document.createElement("div");
   el.id = "ha-error-banner";
   el.className = "ha-error-banner";
-  el.textContent = "⚠️ Home Assistant nicht erreichbar — zeige gespeicherte Daten";
+  el.textContent = "Offline – zeige gespeicherte Termine  ✕";
   el.addEventListener("click", () => el.remove());
   document.body.appendChild(el);
+  setTimeout(() => el.remove(), 8000);
 }
 
 function dismissHAError(): void {
