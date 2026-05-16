@@ -785,20 +785,21 @@ async function refreshEvents(): Promise<void> {
     // HA is reachable → try flushing queued events
     void processQueue();
   } catch (err) {
-    console.error("Failed to load events from HA:", err);
-    showHAError();
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("Failed to load events from HA:", msg);
+    showHAError(msg);
   }
 }
 
-function showHAError(): void {
-  if (document.getElementById("ha-error-banner")) return;
+function showHAError(detail?: string): void {
+  document.getElementById("ha-error-banner")?.remove();
   const el = document.createElement("div");
   el.id = "ha-error-banner";
   el.className = "ha-error-banner";
-  el.textContent = "Offline – zeige gespeicherte Termine  ✕";
+  el.textContent = detail ? `HA-Fehler: ${detail}  ✕` : "HA nicht erreichbar  ✕";
   el.addEventListener("click", () => el.remove());
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 8000);
+  setTimeout(() => el.remove(), 12000);
 }
 
 function dismissHAError(): void {
