@@ -763,9 +763,13 @@ async function deleteEvent(ev: CalendarEvent): Promise<void> {
 
 // ── HA data refresh ────────────────────────────────────────────────────────
 
+let lastFailedAt = 0;
+const RETRY_COOLDOWN_MS = 45_000;
+
 async function refreshEvents(): Promise<void> {
   const config = loadConfig();
   if (!config) return;
+  if (Date.now() - lastFailedAt < RETRY_COOLDOWN_MS) return;
   try {
     const client = new HAClient(config);
     let rangeStart: Date;
@@ -785,6 +789,7 @@ async function refreshEvents(): Promise<void> {
     // HA is reachable → try flushing queued events
     void processQueue();
   } catch (err) {
+    lastFailedAt = Date.now();
     const msg = err instanceof Error ? err.message : String(err);
     console.error("Failed to load events from HA:", msg);
     showHAError(msg);
