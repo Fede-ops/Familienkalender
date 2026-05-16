@@ -3,18 +3,29 @@ import { HAClient, loadConfig, saveConfig } from "./ha-client.ts";
 import { addDays, renderWeekView, startOfWeek } from "./views/week.ts";
 import type { CalendarEvent, FamilyMember } from "./types.ts";
 
-const DEMO_MEMBERS: FamilyMember[] = [
-  { id: "calendar.pita", name: "B", initial: "B", color: "#a83a4a" },
+const DEFAULT_MEMBERS: FamilyMember[] = [
+  { id: "calendar.fede", name: "Fede", initial: "F", color: "#2196f3" },
+  { id: "calendar.pita", name: "Pita", initial: "P", color: "#4caf50" },
+  { id: "calendar.bebos", name: "Bebos", initial: "B", color: "#ff9800" },
+  { id: "calendar.fede_trabajo", name: "Fede Trabajo", initial: "T", color: "#9c27b0" },
 ];
 
 const DEMO_EVENTS: CalendarEvent[] = [
   {
     uid: "demo-pita",
-    summary: "Pita",
+    summary: "Pita Abendessen",
     start: new Date(new Date().setHours(22, 0, 0, 0)),
     end: new Date(new Date().setHours(23, 0, 0, 0)),
     allDay: false,
     memberId: "calendar.pita",
+  },
+  {
+    uid: "demo-fede",
+    summary: "Fede Sport",
+    start: new Date(new Date().setHours(18, 0, 0, 0)),
+    end: new Date(new Date().setHours(19, 30, 0, 0)),
+    allDay: false,
+    memberId: "calendar.fede",
   },
 ];
 
@@ -28,7 +39,7 @@ const app = document.getElementById("app")!;
 const state: AppState = {
   weekStart: startOfWeek(new Date()),
   events: DEMO_EVENTS,
-  members: DEMO_MEMBERS,
+  members: DEFAULT_MEMBERS,
 };
 
 function render(): void {
@@ -75,7 +86,7 @@ function renderConfig(): void {
   app.innerHTML = `
     <div class="config-screen">
       <h1>Verbindung zu Home Assistant</h1>
-      <p>Gib die URL deines HA-Servers, ein Long-Lived Access Token und die Kalender-Entities ein (kommagetrennt, z.B. <code>calendar.familie, calendar.pita</code>).</p>
+      <p>Gib die URL deines HA-Servers, ein Long-Lived Access Token und die Kalender-Entities ein (kommagetrennt). Lege in HA zuvor die Local Calendars für Fede, Pita, Bebos und Fede Trabajo an.</p>
       <label>HA URL
         <input id="cfg-url" type="url" placeholder="http://homeassistant.local:8123" />
       </label>
@@ -83,7 +94,7 @@ function renderConfig(): void {
         <input id="cfg-token" type="password" placeholder="eyJhbGciOi..." />
       </label>
       <label>Kalender-Entities
-        <textarea id="cfg-entities" rows="3" placeholder="calendar.familie, calendar.pita"></textarea>
+        <textarea id="cfg-entities" rows="3">calendar.fede, calendar.pita, calendar.bebos, calendar.fede_trabajo</textarea>
       </label>
       <button id="cfg-save">Speichern und verbinden</button>
     </div>
