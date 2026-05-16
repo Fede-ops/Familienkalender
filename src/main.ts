@@ -151,6 +151,24 @@ function addMonths(date: Date, n: number): Date {
   return new Date(date.getFullYear(), date.getMonth() + n, 1);
 }
 
+// ── Drag-and-drop state (outside AppState to survive renders) ─────────────
+
+interface DragState {
+  uid: string;
+  originalEl: HTMLElement;
+  ghost: HTMLElement | null;
+  timer: ReturnType<typeof setTimeout> | null;
+  startX: number;
+  startY: number;
+  offX: number;
+  offY: number;
+  active: boolean;
+  currentTarget: HTMLElement | null;
+  earlyMove: (e: TouchEvent) => void;
+}
+
+let drag: DragState | null = null;
+
 const app = document.getElementById("app")!;
 const state: AppState = {
   activeTab: "kalender",
@@ -191,6 +209,7 @@ function render(): void {
   }
   app.innerHTML = html;
   bindEvents();
+  setupDragDrop();
   if (state.modal) document.getElementById("modal-summary")?.focus();
   if (state.activeTab !== "kalender") {
     document.getElementById("list-input")?.focus();
@@ -224,6 +243,144 @@ function readListInput(): string {
 function clearListInput(): void {
   const el = document.getElementById("list-input") as HTMLInputElement | null;
   if (el) el.value = "";
+}
+
+// ── Drag-and-drop ──────────────────────────────────────────────────────────
+
+function setupDragDrop(): void {
+  app.querySelectorAll<HTMLElement>("[data-action='event-detail'][data-uid]").forEach((el) => {
+    el.addEventListener("touchstart", (e) => onEventTouchStart(e, el), { passive: true });
+  });
+}
+
+function onEventTouchStart(e: TouchEvent, el: HTMLElement): void {
+  const uid = el.dataset.uid;
+  if (!uid || state.modal) return;
+  const touch = e.touches[0];
+
+  const earlyMove = (ev: TouchEvent) => {
+    if (!drag || drag.active) return;
+    if (Math.abs(ev.touches[0].clientX - drag.startX) > 8 ||
+        Math.abs(ev.touches[0].clientY - drag.startY) > 8) {
+      cancelDrag();
+    }
+  };
+
+  drag = {
+    uid,
+    originalEl: el,
+    ghost: null,
+    timer: setTimeout(() => activateDrag(), 350),
+    startX: touch.clientX,
+    startY: touch.clientY,
+    offX: 0,
+    offY: 0,
+    active: false,
+    currentTarget: null,
+    earlyMove,
+  };
+  document.addEventListener("touchmove", earlyMove, { passive: true });
+}
+
+function activateDrag(): void {
+  if (!drag) return;
+  drag.active = true;
+  document.removeEventListener("touchmove", drag.earlyMove);
+  navigator.vibrate?.(40);
+
+  const el = drag.originalEl;
+  const rect = el.getBoundingClientRect();
+  drag.offX = drag.startX - rect.left;
+  drag.offY = drag.startY - rect.top;
+
+  const ghost = el.cloneNode(true) as HTMLElement;
+  ghost.className = el.className + " event--ghost";
+  ghost.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;pointer-events:none;z-index:1000;`;
+  document.body.appendChild(ghost);
+  drag.ghost = ghost;
+  el.style.opacity = "0.25";
+
+  document.addEventListener("touchmove", onDragMove, { passive: false });
+  document.addEventListener("touchend", onDragEnd, { once: true });
+  document.addEventListener("touchcancel", cancelDrag, { once: true });
+}
+
+function onDragMove(e: TouchEvent): void {
+  if (!drag?.active || !drag.ghost) return;
+  e.preventDefault();
+  const touch = e.touches[0];
+  drag.ghost.style.left = `${touch.clientX - drag.offX}px`;
+  drag.ghost.style.top = `${touch.clientY - drag.offY}px`;
+
+  const row = document.elementFromPoint(touch.clientX, touch.clientY)
+    ?.closest<HTMLElement>(".week-row");
+  if (drag.currentTarget !== row) {
+    drag.currentTarget?.classList.remove("week-row--drop-target");
+    row?.classList.add("week-row--drop-target");
+    drag.currentTarget = row ?? null;
+  }
+}
+
+function onDragEnd(e: TouchEvent): void {
+  if (!drag?.active) return;
+  document.removeEventListener("touchmove", onDragMove);
+  const touch = e.changedTouches[0];
+  const row = document.elementFromPoint(touch.clientX, touch.clientY)
+    ?.closest<HTMLElement>(".week-row");
+
+  drag.currentTarget?.classList.remove("week-row--drop-target");
+  row?.classList.remove("week-row--drop-target");
+  drag.ghost?.remove();
+  drag.originalEl.style.opacity = "";
+
+  const uid = drag.uid;
+  const dateStr = row?.dataset.date;
+  drag = null;
+
+  if (dateStr) void moveEvent(uid, new Date(dateStr));
+}
+
+function cancelDrag(): void {
+  if (!drag) return;
+  if (drag.timer) clearTimeout(drag.timer);
+  document.removeEventListener("touchmove", drag.earlyMove);
+  document.removeEventListener("touchmove", onDragMove);
+  document.removeEventListener("touchend", onDragEnd);
+  if (drag.ghost) drag.ghost.remove();
+  drag.originalEl.style.opacity = "";
+  drag.currentTarget?.classList.remove("week-row--drop-target");
+  drag = null;
+}
+
+async function moveEvent(uid: string, targetDay: Date): Promise<void> {
+  const ev = state.events.find((e) => e.uid === uid);
+  if (!ev) return;
+
+  const newStart = new Date(targetDay);
+  newStart.setHours(ev.start.getHours(), ev.start.getMinutes(), 0, 0);
+  const duration = ev.end.getTime() - ev.start.getTime();
+  const newEnd = new Date(newStart.getTime() + duration);
+
+  const updated: CalendarEvent = { ...ev, start: newStart, end: newEnd };
+  const idx = state.events.findIndex((e) => e.uid === uid);
+  if (idx >= 0) state.events[idx] = updated;
+  state.events.sort((a, b) => a.start.getTime() - b.start.getTime());
+  saveCachedEvents(state.events);
+  render();
+
+  const config = loadConfig();
+  if (config && !uid.startsWith("local-") && navigator.onLine) {
+    try {
+      const client = new HAClient(config);
+      await client.updateEvent(ev.memberId ?? "", uid, ev.summary, newStart, newEnd, ev.allDay, {
+        location: ev.location,
+        description: ev.description,
+      });
+    } catch (err) {
+      console.error("Failed to move event in HA:", err);
+    }
+    void refreshEvents();
+  }
 }
 
 // ── Event binding ──────────────────────────────────────────────────────────

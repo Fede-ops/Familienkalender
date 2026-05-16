@@ -170,6 +170,23 @@ body {
   border-top: none;
 }
 
+.week-row--drop-target {
+  background: rgba(10, 132, 255, 0.07);
+  border-radius: 10px;
+}
+
+.week-row--drop-target .week-row__events {
+  outline: 2px dashed rgba(10, 132, 255, 0.45);
+  border-radius: 8px;
+}
+
+.event--ghost {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  transform: scale(1.04);
+  border-radius: 10px;
+  transition: box-shadow 0.1s;
+}
+
 .week-row__day {
   flex: 0 0 36px;
   display: flex;

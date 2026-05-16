@@ -126,7 +126,7 @@ export function renderWeekView(viewState: WeekViewState): string {
       const eventsHtml = dayEvents.length
         ? dayEvents.map((e) => renderEvent(e, members.find((m) => m.id === e.memberId))).join("")
         : `<div class="event event--empty">Keine Termine</div>`;
-      return `<div class="week-row">
+      return `<div class="week-row" data-date="${day.toISOString()}">
         <div class="week-row__day${isToday ? " week-row__day--today" : ""}">
           <span class="week-row__day-name">${DAY_NAMES_DE[day.getDay()]}</span>
           <span class="week-row__day-number">${day.getDate()}</span>
