@@ -160,6 +160,16 @@ interface RawHAEvent {
   end: { dateTime?: string; date?: string };
 }
 
+function parseDateStr(str: string): Date {
+  // Date-only strings (e.g. "2026-05-23") must be parsed as local midnight,
+  // not UTC midnight — otherwise timezone shifts cause wrong day comparisons.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    const [y, m, d] = str.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }
+  return new Date(str);
+}
+
 function normalizeEvent(raw: RawHAEvent, calendarId: string): CalendarEvent {
   const allDay = Boolean(raw.start.date && !raw.start.dateTime);
   const startStr = raw.start.dateTime ?? raw.start.date!;
@@ -167,8 +177,8 @@ function normalizeEvent(raw: RawHAEvent, calendarId: string): CalendarEvent {
   return {
     uid: raw.uid ?? `${calendarId}-${startStr}-${raw.summary}`,
     summary: raw.summary,
-    start: new Date(startStr),
-    end: new Date(endStr),
+    start: parseDateStr(startStr),
+    end: parseDateStr(endStr),
     allDay,
     description: raw.description,
     location: raw.location,
