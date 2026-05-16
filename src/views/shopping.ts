@@ -7,37 +7,79 @@ export const SHOPPING_CATEGORIES = [
     key: "obst",
     label: "Obst & Gemüse",
     color: "#30D158",
-    keywords: ["apfel", "birne", "banane", "orange", "traube", "erdbeere", "heidelbeere", "kirsche", "pflaume", "mango", "ananas", "melone", "kiwi", "zitrone", "avocado", "tomate", "gurke", "paprika", "zucchini", "aubergine", "karotte", "möhre", "sellerie", "lauch", "zwiebel", "knoblauch", "kartoffel", "brokkoli", "blumenkohl", "kohl", "spinat", "salat", "rucola", "feldsalat", "pilze", "champignon", "ingwer", "erbsen", "bohnen", "mais"],
+    keywords: [
+      // Deutsch
+      "apfel", "birne", "banane", "orange", "traube", "erdbeere", "heidelbeere", "kirsche", "pflaume", "mango", "ananas", "melone", "kiwi", "zitrone", "avocado", "tomate", "gurke", "paprika", "zucchini", "aubergine", "karotte", "möhre", "sellerie", "lauch", "zwiebel", "knoblauch", "kartoffel", "brokkoli", "blumenkohl", "kohl", "spinat", "salat", "rucola", "feldsalat", "pilze", "champignon", "ingwer", "erbsen", "bohnen", "mais",
+      // English
+      "apple", "pear", "grape", "strawberry", "blueberry", "cherry", "plum", "pineapple", "lemon", "lime", "peach", "apricot", "cucumber", "eggplant", "aubergine", "carrot", "celery", "leek", "onion", "garlic", "potato", "broccoli", "cauliflower", "cabbage", "spinach", "lettuce", "arugula", "mushroom", "ginger", "peas", "beans", "corn", "pepper", "zucchini", "beet", "radish", "asparagus", "artichoke", "fennel",
+      // Español
+      "manzana", "pera", "uva", "fresa", "frambuesa", "cereza", "ciruela", "piña", "limón", "lima", "melocotón", "durazno", "albaricoque", "pepino", "berenjena", "zanahoria", "apio", "puerro", "cebolla", "ajo", "patata", "papa", "brócoli", "coliflor", "repollo", "espinaca", "lechuga", "rúcula", "champiñón", "jengibre", "guisante", "judía", "maíz", "pimiento", "calabacín", "remolacha", "rábano", "espárrago", "alcachofa", "hinojo",
+    ],
   },
   {
     key: "milch",
     label: "Milch & Kühlwaren",
     color: "#64D2FF",
-    keywords: ["milch", "butter", "sahne", "joghurt", "quark", "frischkäse", "käse", "mozzarella", "parmesan", "gouda", "cheddar", "brie", "camembert", "ei", "eier", "obers", "schmand", "kefir", "buttermilch", "kühle"],
+    keywords: [
+      // Deutsch
+      "milch", "butter", "sahne", "joghurt", "quark", "frischkäse", "käse", "mozzarella", "parmesan", "gouda", "cheddar", "brie", "camembert", "ei", "eier", "obers", "schmand", "kefir", "buttermilch", "kühle",
+      // English
+      "milk", "cream", "yogurt", "yoghurt", "cheese", "egg", "eggs", "sour cream", "kefir",
+      // Español
+      "leche", "mantequilla", "nata", "crema", "yogur", "queso", "huevo", "huevos", "requesón",
+    ],
   },
   {
     key: "fleisch",
     label: "Fleisch & Fisch",
     color: "#FF9F0A",
-    keywords: ["fleisch", "rind", "schwein", "huhn", "hähnchen", "pute", "lamm", "hack", "hackfleisch", "wurst", "schinken", "speck", "salami", "bratwurst", "schnitzel", "steak", "filet", "fisch", "lachs", "thunfisch", "forelle", "makrele", "garnelen", "shrimps", "meeresfrüchte"],
+    keywords: [
+      // Deutsch
+      "fleisch", "rind", "schwein", "huhn", "hähnchen", "pute", "lamm", "hack", "hackfleisch", "wurst", "schinken", "speck", "salami", "bratwurst", "schnitzel", "steak", "filet", "fisch", "lachs", "thunfisch", "forelle", "makrele", "garnelen", "shrimps", "meeresfrüchte",
+      // English
+      "meat", "beef", "pork", "chicken", "turkey", "lamb", "minced", "sausage", "ham", "bacon", "fish", "salmon", "tuna", "trout", "shrimp", "prawns", "seafood", "cod", "tilapia",
+      // Español
+      "carne", "ternera", "cerdo", "pollo", "pavo", "cordero", "picada", "salchicha", "jamón", "tocino", "pescado", "salmón", "atún", "trucha", "gambas", "camarones", "mariscos", "bacalao",
+    ],
   },
   {
     key: "backwaren",
     label: "Backwaren & Nudeln",
     color: "#FF6B47",
-    keywords: ["brot", "brötchen", "toast", "croissant", "baguette", "semmel", "vollkornbrot", "ciabatta", "kuchen", "muffin", "keks", "mehl", "hefe", "pasta", "nudeln", "spaghetti", "penne", "reis", "vollkorn"],
+    keywords: [
+      // Deutsch
+      "brot", "brötchen", "toast", "croissant", "baguette", "semmel", "vollkornbrot", "ciabatta", "kuchen", "muffin", "keks", "mehl", "hefe", "pasta", "nudeln", "spaghetti", "penne", "reis", "vollkorn",
+      // English
+      "bread", "roll", "cake", "cookie", "biscuit", "flour", "yeast", "noodle", "rice", "cereal", "oats", "granola", "cracker",
+      // Español
+      "pan", "bollo", "pastel", "galleta", "harina", "levadura", "arroz", "fideos", "cereal", "avena", "tostada",
+    ],
   },
   {
     key: "getraenke",
     label: "Getränke",
     color: "#BF5AF2",
-    keywords: ["wasser", "saft", "cola", "limo", "limonade", "bier", "wein", "sekt", "kaffee", "tee", "espresso", "kakao", "smoothie", "energy", "mineralwasser", "sprudel"],
+    keywords: [
+      // Deutsch
+      "wasser", "saft", "cola", "limo", "limonade", "bier", "wein", "sekt", "kaffee", "tee", "espresso", "kakao", "smoothie", "energy", "mineralwasser", "sprudel",
+      // English
+      "water", "juice", "beer", "wine", "sparkling", "coffee", "tea", "cocoa", "cider", "lemonade", "soda", "drink",
+      // Español
+      "agua", "jugo", "zumo", "cerveza", "vino", "cava", "café", "té", "cacao", "gaseosa", "refresco", "bebida", "limonada",
+    ],
   },
   {
     key: "haushalt",
     label: "Haushalt & Pflege",
     color: "#8E8E93",
-    keywords: ["putzmittel", "spülmittel", "waschmittel", "toilettenpapier", "klopapier", "küchenpapier", "müllbeutel", "schwamm", "seife", "shampoo", "duschgel", "zahnpasta", "rasierer", "desinfektionsmittel", "wattepads"],
+    keywords: [
+      // Deutsch
+      "putzmittel", "spülmittel", "waschmittel", "toilettenpapier", "klopapier", "küchenpapier", "müllbeutel", "schwamm", "seife", "shampoo", "duschgel", "zahnpasta", "rasierer", "desinfektionsmittel", "wattepads",
+      // English
+      "detergent", "cleaner", "toilet paper", "paper towel", "trash bag", "garbage bag", "sponge", "soap", "conditioner", "toothpaste", "razor", "disinfectant", "cotton pad",
+      // Español
+      "detergente", "limpiador", "papel higiénico", "papel de cocina", "bolsa de basura", "esponja", "jabón", "champú", "gel de ducha", "pasta de dientes", "maquinilla", "desinfectante",
+    ],
   },
   {
     key: "sonstiges",

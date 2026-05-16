@@ -18,6 +18,30 @@ import {
 } from "./views/todo.ts";
 import type { CalendarEvent, FamilyMember, ShoppingItem, TabKey, TodoItem } from "./types.ts";
 
+// ── Event cache (LocalStorage) ─────────────────────────────────────────────
+
+const EVENTS_CACHE_KEY = "calendar-events-v1";
+
+function loadCachedEvents(): CalendarEvent[] {
+  try {
+    const raw = localStorage.getItem(EVENTS_CACHE_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw) as Array<Omit<CalendarEvent, "start" | "end"> & { start: string; end: string }>;
+    return arr.map((e) => ({ ...e, start: new Date(e.start), end: new Date(e.end) }));
+  } catch {
+    return [];
+  }
+}
+
+function saveCachedEvents(events: CalendarEvent[]): void {
+  try {
+    const serialized = events.map((e) => ({ ...e, start: e.start.toISOString(), end: e.end.toISOString() }));
+    localStorage.setItem(EVENTS_CACHE_KEY, JSON.stringify(serialized));
+  } catch {
+    // ignore quota errors
+  }
+}
+
 const DEFAULT_MEMBERS: FamilyMember[] = [
   { id: "calendar.fede", name: "Fede", initial: "F", color: "#0A84FF" },
   { id: "calendar.pita", name: "Pita", initial: "P", color: "#30D158" },
@@ -53,7 +77,7 @@ const state: AppState = {
   viewMode: "week",
   weekStart: startOfWeek(new Date()),
   monthStart: startOfMonth(new Date()),
-  events: [],
+  events: loadCachedEvents(),
   members: DEFAULT_MEMBERS,
   modal: null,
   shopping: loadShoppingItems(),
@@ -404,6 +428,7 @@ async function saveEvent(): Promise<void> {
     description: notes || undefined,
   });
   state.events.sort((a, b) => a.start.getTime() - b.start.getTime());
+  saveCachedEvents(state.events);
   state.modal = null;
   render();
   if (config) void refreshEvents();
@@ -425,11 +450,29 @@ async function refreshEvents(): Promise<void> {
       rangeStart = state.weekStart;
       rangeEnd = addDays(state.weekStart, 7);
     }
-    state.events = await client.getAllEvents(rangeStart, rangeEnd);
+    const fresh = await client.getAllEvents(rangeStart, rangeEnd);
+    state.events = fresh;
+    saveCachedEvents(fresh);
+    dismissHAError();
     if (state.activeTab === "kalender") render();
   } catch (err) {
     console.error("Failed to load events from HA:", err);
+    showHAError();
   }
+}
+
+function showHAError(): void {
+  if (document.getElementById("ha-error-banner")) return;
+  const el = document.createElement("div");
+  el.id = "ha-error-banner";
+  el.className = "ha-error-banner";
+  el.textContent = "⚠️ Home Assistant nicht erreichbar — zeige gespeicherte Daten";
+  el.addEventListener("click", () => el.remove());
+  document.body.appendChild(el);
+}
+
+function dismissHAError(): void {
+  document.getElementById("ha-error-banner")?.remove();
 }
 
 // ── Config screen ──────────────────────────────────────────────────────────

@@ -1275,3 +1275,19 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   font-family: inherit;
   letter-spacing: -0.01em;
 }
+
+.ha-error-banner {
+  position: fixed;
+  top: env(safe-area-inset-top, 0);
+  left: 0;
+  right: 0;
+  background: #3a2a00;
+  color: #ffcc00;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 16px;
+  text-align: center;
+  z-index: 200;
+  cursor: pointer;
+  letter-spacing: -0.01em;
+}

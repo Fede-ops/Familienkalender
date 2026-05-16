@@ -7,19 +7,40 @@ export const TODO_CATEGORIES = [
     key: "familie",
     label: "Familie",
     color: "#FF9F0A",
-    keywords: ["kind", "kinder", "schule", "arzt", "zahnarzt", "termin", "geburtstag", "spielplatz", "kindergarten", "babysitter", "eltern", "oma", "opa", "geburt", "ausflug", "urlaub", "ferien"],
+    keywords: [
+      // Deutsch
+      "kind", "kinder", "schule", "arzt", "zahnarzt", "termin", "geburtstag", "spielplatz", "kindergarten", "babysitter", "eltern", "oma", "opa", "geburt", "ausflug", "urlaub", "ferien",
+      // English
+      "child", "children", "kids", "school", "doctor", "dentist", "appointment", "birthday", "playground", "kindergarten", "parents", "grandma", "grandpa", "birth", "trip", "vacation", "holiday", "family",
+      // Español
+      "niño", "niños", "hijos", "colegio", "médico", "dentista", "cita", "cumpleaños", "parque", "guardería", "padres", "abuela", "abuelo", "nacimiento", "excursión", "vacaciones", "familia",
+    ],
   },
   {
     key: "haushalt",
     label: "Haushalt",
     color: "#30D158",
-    keywords: ["putzen", "waschen", "kochen", "bügeln", "aufräumen", "einkaufen", "reparier", "müll", "abfall", "garten", "blumen", "fenster", "wäsche", "küche", "bad", "staub", "sauger"],
+    keywords: [
+      // Deutsch
+      "putzen", "waschen", "kochen", "bügeln", "aufräumen", "einkaufen", "reparier", "müll", "abfall", "garten", "blumen", "fenster", "wäsche", "küche", "bad", "staub", "sauger",
+      // English
+      "clean", "cleaning", "wash", "cook", "cooking", "iron", "tidy", "grocery", "repair", "fix", "garbage", "trash", "garden", "flowers", "window", "laundry", "kitchen", "vacuum", "dust", "mow",
+      // Español
+      "limpiar", "lavar", "cocinar", "planchar", "ordenar", "comprar", "reparar", "basura", "jardín", "flores", "ventana", "ropa", "cocina", "aspirar", "barrer", "fregar",
+    ],
   },
   {
     key: "arbeit",
     label: "Arbeit",
     color: "#0A84FF",
-    keywords: ["meeting", "email", "präsentation", "bericht", "anruf", "telefon", "kunde", "projekt", "deadline", "rechnung", "steuer", "vertrag", "büro", "kollege", "chef", "liefern"],
+    keywords: [
+      // Deutsch
+      "meeting", "email", "präsentation", "bericht", "anruf", "telefon", "kunde", "projekt", "deadline", "rechnung", "steuer", "vertrag", "büro", "kollege", "chef", "liefern",
+      // English
+      "call", "phone", "client", "project", "invoice", "tax", "contract", "office", "colleague", "boss", "report", "presentation", "deliver", "submit", "proposal", "budget", "review",
+      // Español
+      "reunión", "correo", "presentación", "informe", "llamada", "cliente", "proyecto", "factura", "impuesto", "contrato", "oficina", "colega", "jefe", "entrega", "presupuesto",
+    ],
   },
   {
     key: "sonstiges",
