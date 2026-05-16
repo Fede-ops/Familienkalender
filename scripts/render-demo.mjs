@@ -197,8 +197,6 @@ function renderMonthBlock(monthStart, opts = {}) {
 function renderMonthView() {
   const monthStart = startOfMonth(today);
   const monthLabel = `${MONTH_NAMES_DE_FULL[monthStart.getMonth()]} ${monthStart.getFullYear()}`;
-  const prevMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() - 1, 1);
-  const nextMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
   const weekdayHeader = WEEKDAYS_DE_SUN_FIRST.map((d) => `<div class="month-weekdays__day">${d}</div>`).join("");
 
   return `
@@ -216,9 +214,7 @@ function renderMonthView() {
     </nav>
     <div class="month-weekdays">${weekdayHeader}</div>
     <div class="month-scroll">
-      ${renderMonthBlock(prevMonth, { showTitle: true })}
       ${renderMonthBlock(monthStart, { showTitle: false })}
-      ${renderMonthBlock(nextMonth, { showTitle: true })}
     </div>
     <button class="fab">+</button>
   `;

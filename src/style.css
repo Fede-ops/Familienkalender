@@ -280,21 +280,11 @@ body {
   flex: 1 1 auto;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  scroll-snap-type: y proximity;
-  padding-bottom: 80px;
+  padding-bottom: 100px;
 }
 
 .month-block {
-  padding: 8px 0 24px;
-  scroll-snap-align: start;
-}
-
-.month-block__title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  padding: 16px 20px 8px;
-  letter-spacing: -0.01em;
+  padding: 0;
 }
 
 .month-grid {
