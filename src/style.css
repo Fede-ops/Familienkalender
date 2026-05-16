@@ -618,6 +618,7 @@ body {
   flex: 1;
   letter-spacing: -0.01em;
   margin-left: 12px;
+  color-scheme: dark;
 }
 
 .field__input::placeholder {
@@ -644,6 +645,12 @@ body {
   background: linear-gradient(135deg, #30d158 0%, #28a745 100%);
   position: relative;
   flex-shrink: 0;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.field--toggle-off .field__value {
+  background: rgba(120, 120, 128, 0.32) !important;
 }
 
 .field--toggle .field__value::after {
@@ -656,6 +663,22 @@ body {
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: right 0.2s ease, left 0.2s ease;
+}
+
+.field--toggle-off .field__value::after {
+  right: auto;
+  left: 2px;
+}
+
+.field__textarea {
+  resize: none;
+  min-height: 72px;
+  line-height: 1.5;
+}
+
+.modal-title-input--error {
+  outline: 2px solid #ff453a;
 }
 
 .member-picker {
