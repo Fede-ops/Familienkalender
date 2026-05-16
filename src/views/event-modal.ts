@@ -74,19 +74,19 @@ export function renderEventModal(state: ModalState, members: FamilyMember[]): st
       <div class="field-group">
         ${
           isOn
-            ? `<div class="field">
+            ? `<div class="field field--datetime">
                 <span class="field__label">Datum</span>
                 <input class="field__input" type="date" id="modal-start" value="${fmtDateLocal(state.startDate)}" />
                </div>
-               <div class="field">
+               <div class="field field--datetime">
                 <span class="field__label">Enddatum</span>
                 <input class="field__input" type="date" id="modal-end" value="${fmtDateLocal(state.endDate)}" />
                </div>`
-            : `<div class="field">
+            : `<div class="field field--datetime">
                 <span class="field__label">Beginnt</span>
                 <input class="field__input" type="datetime-local" id="modal-start" value="${fmtDateTimeLocal(state.startDate)}" />
                </div>
-               <div class="field">
+               <div class="field field--datetime">
                 <span class="field__label">Endet</span>
                 <input class="field__input" type="datetime-local" id="modal-end" value="${fmtDateTimeLocal(state.endDate)}" />
                </div>`
