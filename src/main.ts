@@ -18,6 +18,86 @@ import {
 } from "./views/todo.ts";
 import type { CalendarEvent, FamilyMember, ShoppingItem, TabKey, TodoItem } from "./types.ts";
 
+// ── Offline queue ──────────────────────────────────────────────────────────
+
+const QUEUE_KEY = "calendar-offline-queue";
+
+interface QueuedEvent {
+  id: string;
+  entityId: string;
+  summary: string;
+  start: string;
+  end: string;
+  allDay: boolean;
+  location?: string;
+  description?: string;
+}
+
+function loadQueue(): QueuedEvent[] {
+  try {
+    return JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]") as QueuedEvent[];
+  } catch {
+    return [];
+  }
+}
+
+function saveQueue(q: QueuedEvent[]): void {
+  localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+}
+
+function enqueue(ev: Omit<QueuedEvent, "id">): void {
+  const q = loadQueue();
+  q.push({ id: `q-${Date.now()}`, ...ev });
+  saveQueue(q);
+  updateQueueBadge();
+}
+
+function updateQueueBadge(): void {
+  const q = loadQueue();
+  const existing = document.getElementById("offline-badge");
+  if (q.length === 0) {
+    existing?.remove();
+    return;
+  }
+  const el = existing ?? document.createElement("div");
+  el.id = "offline-badge";
+  el.className = "offline-badge";
+  el.textContent = `${q.length} Termin${q.length > 1 ? "e" : ""} werden gesendet sobald du online bist`;
+  if (!existing) document.body.appendChild(el);
+}
+
+async function processQueue(): Promise<void> {
+  const config = loadConfig();
+  if (!config || !navigator.onLine) return;
+  const q = loadQueue();
+  if (q.length === 0) return;
+
+  const badge = document.getElementById("offline-badge");
+  if (badge) badge.textContent = `Sende ${q.length} ausstehende Termine…`;
+
+  const client = new HAClient(config);
+  const remaining: QueuedEvent[] = [];
+
+  for (const item of q) {
+    try {
+      await client.createEvent(
+        item.entityId,
+        item.summary,
+        new Date(item.start),
+        new Date(item.end),
+        item.allDay,
+        { location: item.location, description: item.description },
+      );
+    } catch {
+      remaining.push(item);
+    }
+  }
+
+  saveQueue(remaining);
+  updateQueueBadge();
+  if (remaining.length < q.length) void refreshEvents();
+}
+
 // ── Event cache (LocalStorage) ─────────────────────────────────────────────
 
 const EVENTS_CACHE_KEY = "calendar-events-v1";
@@ -405,15 +485,37 @@ async function saveEvent(): Promise<void> {
   }
 
   const config = loadConfig();
+  let savedToHA = false;
   if (config) {
-    try {
-      const client = new HAClient(config);
-      await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, {
+    if (!navigator.onLine) {
+      enqueue({
+        entityId: memberId,
+        summary: summary.trim(),
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
+        allDay,
         location: location || undefined,
         description: notes || undefined,
       });
-    } catch (err) {
-      console.error("Failed to create event in HA:", err);
+    } else {
+      try {
+        const client = new HAClient(config);
+        await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, {
+          location: location || undefined,
+          description: notes || undefined,
+        });
+        savedToHA = true;
+      } catch {
+        enqueue({
+          entityId: memberId,
+          summary: summary.trim(),
+          start: startDate.toISOString(),
+          end: endDate.toISOString(),
+          allDay,
+          location: location || undefined,
+          description: notes || undefined,
+        });
+      }
     }
   }
 
@@ -431,7 +533,7 @@ async function saveEvent(): Promise<void> {
   saveCachedEvents(state.events);
   state.modal = null;
   render();
-  if (config) void refreshEvents();
+  if (savedToHA) void refreshEvents();
 }
 
 // ── HA data refresh ────────────────────────────────────────────────────────
@@ -542,4 +644,8 @@ if (demoMode) {
 } else {
   render();
   void refreshEvents();
+  void processQueue();
 }
+
+updateQueueBadge();
+window.addEventListener("online", () => void processQueue());
