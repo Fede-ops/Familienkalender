@@ -94,11 +94,15 @@ export type ShoppingCategoryKey = (typeof SHOPPING_CATEGORIES)[number]["key"];
 
 // ── Auto-categorize ────────────────────────────────────────────────────────
 
+// Check drinks before fruit/veg so "Jugo de manzana", "Apfelsaft" etc.
+// don't match fruit keywords before the drink keyword is tested.
+const CATEGORIZATION_PRIORITY = ["getraenke", "milch", "fleisch", "haushalt", "backwaren", "obst"] as const;
+
 export function categorizeShoppingItem(name: string): string {
   const lower = name.toLowerCase();
-  for (const cat of SHOPPING_CATEGORIES) {
-    if (cat.key === "sonstiges") continue;
-    if ((cat.keywords as readonly string[]).some((kw) => lower.includes(kw))) return cat.key;
+  for (const key of CATEGORIZATION_PRIORITY) {
+    const cat = SHOPPING_CATEGORIES.find((c) => c.key === key);
+    if (cat && (cat.keywords as readonly string[]).some((kw) => lower.includes(kw))) return cat.key;
   }
   return "sonstiges";
 }

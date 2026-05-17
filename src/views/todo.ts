@@ -35,11 +35,11 @@ export const TODO_CATEGORIES = [
     color: "#0A84FF",
     keywords: [
       // Deutsch
-      "meeting", "email", "präsentation", "bericht", "anruf", "telefon", "kunde", "projekt", "deadline", "rechnung", "steuer", "vertrag", "büro", "kollege", "chef", "liefern",
+      "meeting", "email", "präsentation", "bericht", "kunde", "projekt", "deadline", "rechnung", "steuer", "vertrag", "büro", "kollege", "chef", "liefern", "konferenz",
       // English
-      "call", "phone", "client", "project", "invoice", "tax", "contract", "office", "colleague", "boss", "report", "presentation", "deliver", "submit", "proposal", "budget", "review",
+      "client", "project", "invoice", "tax", "contract", "office", "colleague", "boss", "report", "presentation", "deliver", "submit", "proposal", "budget", "conference",
       // Español
-      "reunión", "correo", "presentación", "informe", "llamada", "cliente", "proyecto", "factura", "impuesto", "contrato", "oficina", "colega", "jefe", "entrega", "presupuesto",
+      "reunión", "correo", "presentación", "informe", "cliente", "proyecto", "factura", "impuesto", "contrato", "oficina", "colega", "jefe", "entrega", "presupuesto",
     ],
   },
   {

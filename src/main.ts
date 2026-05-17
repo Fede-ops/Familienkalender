@@ -633,6 +633,15 @@ function showEventDetail(ev: CalendarEvent): void {
     ?.addEventListener("click", () => { sheet.remove(); openEditModal(ev); });
   sheet.querySelector<HTMLElement>("[data-action='delete-event-from-detail']")
     ?.addEventListener("click", () => { sheet.remove(); void deleteEvent(ev); });
+
+  // Swipe-down-to-close on the inner panel
+  const panel = sheet.querySelector<HTMLElement>(".detail-sheet")!;
+  let swipeStartY = 0;
+  panel.addEventListener("touchstart", (e) => { swipeStartY = e.touches[0].clientY; }, { passive: true });
+  panel.addEventListener("touchend", (e) => {
+    const dy = e.changedTouches[0].clientY - swipeStartY;
+    if (dy > 60) sheet.remove();
+  }, { passive: true });
 }
 
 function openEditModal(ev: CalendarEvent): void {
@@ -801,11 +810,17 @@ function showHAError(detail?: string): void {
   const el = document.createElement("div");
   el.id = "ha-error-banner";
   el.className = "ha-error-banner";
-  el.innerHTML = `<span>${detail ?? "HA nicht erreichbar"}</span><button class="ha-error-reconnect">Neu verbinden</button><span style="margin-left:8px;opacity:.7">✕</span>`;
+  const gearSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+  el.innerHTML = `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${detail ?? "HA nicht erreichbar"}</span><button class="ha-error-reconnect">Erneut versuchen</button><button class="ha-error-settings" title="Einstellungen">${gearSvg}</button><span style="margin-left:4px;opacity:.7;cursor:pointer;">✕</span>`;
   el.querySelector(".ha-error-reconnect")!.addEventListener("click", (e) => {
     e.stopPropagation();
     el.remove();
-    localStorage.removeItem("ha-config");
+    lastFailedAt = 0;
+    void refreshEvents();
+  });
+  el.querySelector(".ha-error-settings")!.addEventListener("click", (e) => {
+    e.stopPropagation();
+    el.remove();
     renderConfig();
   });
   el.addEventListener("click", () => el.remove());
@@ -820,18 +835,21 @@ function dismissHAError(): void {
 // ── Config screen ──────────────────────────────────────────────────────────
 
 function renderConfig(): void {
+  const existing = loadConfig();
+  const defaultEntities = "calendar.fede, calendar.pita, calendar.bebos, calendar.santi, calendar.fede_trabajo, calendar.pita_trabajo";
+  const escVal = (s: string) => s.replace(/"/g, "&quot;");
   app.innerHTML = `
     <div class="config-screen">
       <h1>Verbindung zu Home Assistant</h1>
       <p>Gib die URL deines HA-Servers, ein Long-Lived Access Token und die Kalender-Entities ein (kommagetrennt).</p>
       <label>HA URL
-        <input id="cfg-url" type="url" placeholder="http://homeassistant.local:8123" />
+        <input id="cfg-url" type="url" value="${escVal(existing?.baseUrl ?? "")}" placeholder="https://xxx.ui.nabu.casa" />
       </label>
       <label>Access Token
-        <input id="cfg-token" type="password" placeholder="eyJhbGciOi…" />
+        <input id="cfg-token" type="password" value="${escVal(existing?.token ?? "")}" placeholder="eyJhbGciOi…" />
       </label>
       <label>Kalender-Entities
-        <textarea id="cfg-entities" rows="3">calendar.fede, calendar.pita, calendar.bebos, calendar.santi, calendar.fede_trabajo, calendar.pita_trabajo</textarea>
+        <textarea id="cfg-entities" rows="3">${existing ? existing.calendarEntities.join(", ") : defaultEntities}</textarea>
       </label>
       <button id="cfg-save">Speichern und verbinden</button>
     </div>

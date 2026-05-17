@@ -1342,15 +1342,12 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   font-size: 13px;
   font-weight: 500;
   padding: 10px 16px;
-  text-align: center;
   z-index: 200;
   cursor: pointer;
   letter-spacing: -0.01em;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .ha-error-reconnect {
@@ -1365,6 +1362,18 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   font-family: inherit;
   letter-spacing: -0.01em;
   white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ha-error-settings {
+  background: none;
+  border: none;
+  color: rgba(255,204,0,0.7);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .offline-badge {
