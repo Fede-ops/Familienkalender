@@ -73,7 +73,7 @@ function updateQueueBadge(): void {
     document.body.appendChild(div);
     return div;
   })();
-  el.textContent = `${q.length} Termin${q.length > 1 ? "e ausstehend" : " ausstehend"} · Tippen zum Leeren`;
+  el.textContent = `✓ Gespeichert · ${q.length} warten auf HA-Sync`;
 }
 
 async function processQueue(): Promise<void> {
@@ -635,13 +635,32 @@ function showEventDetail(ev: CalendarEvent): void {
   sheet.querySelector<HTMLElement>("[data-action='delete-event-from-detail']")
     ?.addEventListener("click", () => { sheet.remove(); void deleteEvent(ev); });
 
-  // Swipe-down-to-close on the inner panel
+  // Swipe-down-to-close: track on touchstart, close on touchend if ≥50px down
   const panel = sheet.querySelector<HTMLElement>(".detail-sheet")!;
   let swipeStartY = 0;
-  panel.addEventListener("touchstart", (e) => { swipeStartY = e.touches[0].clientY; }, { passive: true });
+  let swipeTracking = false;
+  panel.addEventListener("touchstart", (e) => {
+    swipeStartY = e.touches[0].clientY;
+    swipeTracking = true;
+  }, { passive: true });
+  panel.addEventListener("touchmove", (e) => {
+    if (!swipeTracking) return;
+    const dy = e.touches[0].clientY - swipeStartY;
+    if (dy > 0) {
+      panel.style.transform = `translateY(${Math.min(dy, 120)}px)`;
+      panel.style.transition = "none";
+    }
+  }, { passive: true });
   panel.addEventListener("touchend", (e) => {
+    if (!swipeTracking) return;
+    swipeTracking = false;
     const dy = e.changedTouches[0].clientY - swipeStartY;
-    if (dy > 60) sheet.remove();
+    if (dy > 50) {
+      sheet.remove();
+    } else {
+      panel.style.transform = "";
+      panel.style.transition = "transform 0.25s ease";
+    }
   }, { passive: true });
 }
 
