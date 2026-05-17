@@ -635,33 +635,37 @@ function showEventDetail(ev: CalendarEvent): void {
   sheet.querySelector<HTMLElement>("[data-action='delete-event-from-detail']")
     ?.addEventListener("click", () => { sheet.remove(); void deleteEvent(ev); });
 
-  // Swipe-down-to-close: track on touchstart, close on touchend if ≥50px down
+  // Swipe-down-to-close anchored to the handle, then tracked on document
+  // so the finger can move freely without losing the gesture.
   const panel = sheet.querySelector<HTMLElement>(".detail-sheet")!;
+  const handle = sheet.querySelector<HTMLElement>(".detail-handle")!;
   let swipeStartY = 0;
-  let swipeTracking = false;
-  panel.addEventListener("touchstart", (e) => {
-    swipeStartY = e.touches[0].clientY;
-    swipeTracking = true;
-  }, { passive: true });
-  panel.addEventListener("touchmove", (e) => {
-    if (!swipeTracking) return;
+
+  const onMove = (e: TouchEvent) => {
     const dy = e.touches[0].clientY - swipeStartY;
     if (dy > 0) {
-      panel.style.transform = `translateY(${Math.min(dy, 120)}px)`;
-      panel.style.transition = "none";
+      panel.style.cssText += `transform:translateY(${dy}px);transition:none;`;
     }
-  }, { passive: true });
-  panel.addEventListener("touchend", (e) => {
-    if (!swipeTracking) return;
-    swipeTracking = false;
+  };
+  const onEnd = (e: TouchEvent) => {
+    document.removeEventListener("touchmove", onMove);
     const dy = e.changedTouches[0].clientY - swipeStartY;
-    if (dy > 50) {
+    if (dy > 60) {
       sheet.remove();
     } else {
       panel.style.transform = "";
-      panel.style.transition = "transform 0.25s ease";
+      panel.style.transition = "transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)";
     }
+  };
+
+  panel.addEventListener("touchstart", (e) => {
+    // Ignore taps on the action buttons — they have their own handlers
+    if ((e.target as HTMLElement).closest(".detail-actions")) return;
+    swipeStartY = e.touches[0].clientY;
+    document.addEventListener("touchmove", onMove, { passive: true });
+    document.addEventListener("touchend", onEnd, { once: true, passive: true });
   }, { passive: true });
+  handle.style.cursor = "grab";
 }
 
 function openEditModal(ev: CalendarEvent): void {
