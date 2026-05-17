@@ -1292,3 +1292,52 @@ if (demoMode) {
 
 updateQueueBadge();
 window.addEventListener("online", () => void processQueue());
+
+// ── Calendar swipe navigation ──────────────────────────────────────────────
+
+(function setupCalendarSwipe() {
+  let startX = 0;
+  let startY = 0;
+  let tracking = false;
+
+  app.addEventListener("touchstart", (e: TouchEvent) => {
+    if (state.activeTab !== "kalender" || state.modal) return;
+    const target = e.target as HTMLElement;
+    // Don't intercept touches on event chips or interactive controls
+    if (target.closest("[data-action='event-detail']") || target.closest("button")) return;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    tracking = true;
+  }, { passive: true });
+
+  app.addEventListener("touchmove", (e: TouchEvent) => {
+    if (!tracking) return;
+    const dx = Math.abs(e.touches[0].clientX - startX);
+    const dy = Math.abs(e.touches[0].clientY - startY);
+    // Cancel if the gesture is clearly more vertical than horizontal
+    if (dy > 12 && dy > dx) tracking = false;
+  }, { passive: true });
+
+  app.addEventListener("touchcancel", () => { tracking = false; }, { passive: true });
+
+  app.addEventListener("touchend", (e: TouchEvent) => {
+    if (!tracking) return;
+    tracking = false;
+    if (drag) return; // ongoing event drag takes priority
+    const dx = e.changedTouches[0].clientX - startX;
+    const dy = e.changedTouches[0].clientY - startY;
+    // Require at least 55px horizontal and more horizontal than vertical
+    if (Math.abs(dx) < 55 || Math.abs(dy) > Math.abs(dx) * 0.65) return;
+    if (dx < 0) {
+      // Swipe left → forward
+      if (state.viewMode === "month") state.monthStart = addMonths(state.monthStart, 1);
+      else state.weekStart = addDays(state.weekStart, 7);
+    } else {
+      // Swipe right → back
+      if (state.viewMode === "month") state.monthStart = addMonths(state.monthStart, -1);
+      else state.weekStart = addDays(state.weekStart, -7);
+    }
+    render();
+    void refreshEvents();
+  }, { passive: true });
+})();
