@@ -721,20 +721,7 @@ function showFilterSheet(): void {
     });
     sheet.querySelector<HTMLElement>("#filter-dupe-btn")?.addEventListener("click", () => {
       sheet.remove();
-      const dupeUids = findDuplicateUids(state.events);
-      if (dupeUids.length === 0) {
-        showDuplicateBanner([]);
-        const el = document.createElement("div");
-        el.className = "dupe-banner";
-        el.style.background = "#1a2a1a";
-        el.style.color = "#30D158";
-        el.innerHTML = `<span style="flex:1;">Keine Duplikate gefunden</span><span class="dupe-banner__dismiss">✕</span>`;
-        el.querySelector(".dupe-banner__dismiss")!.addEventListener("click", () => el.remove());
-        document.body.appendChild(el);
-        setTimeout(() => el.remove(), 3000);
-      } else {
-        void cleanDuplicates(dupeUids);
-      }
+      void runFullDuplicateCleanup();
     });
   }
 
@@ -1139,6 +1126,101 @@ async function cleanDuplicates(dupeUids: string[]): Promise<void> {
       }),
   );
   savePendingDeletes(pendingDeletes);
+}
+
+async function runFullDuplicateCleanup(): Promise<void> {
+  const config = loadConfig();
+  if (!config) return;
+
+  const toast = document.createElement("div");
+  toast.className = "dupe-banner";
+  toast.innerHTML = `<span style="flex:1;">Suche Duplikate in allen Terminen…</span>`;
+  document.body.appendChild(toast);
+
+  try {
+    const client = new HAClient(config);
+    const now = new Date();
+    const rangeStart = addMonths(now, -2);
+    const rangeEnd = addMonths(now, 6);
+
+    const fresh = await client.getAllEvents(rangeStart, rangeEnd);
+
+    const nowMs = Date.now();
+    const visible = fresh.filter((e) => {
+      const exp = pendingDeletes.get(e.uid);
+      if (exp === undefined) return true;
+      if (exp === PERMANENT) return false;
+      return exp <= nowMs;
+    });
+
+    const dupeUids = findDuplicateUids(visible);
+    toast.remove();
+
+    if (dupeUids.length === 0) {
+      const done = document.createElement("div");
+      done.className = "dupe-banner";
+      done.innerHTML = `<span style="flex:1;">Keine Duplikate gefunden ✓</span><span class="dupe-banner__dismiss">✕</span>`;
+      done.querySelector(".dupe-banner__dismiss")!.addEventListener("click", () => done.remove());
+      document.body.appendChild(done);
+      setTimeout(() => done.remove(), 4000);
+      return;
+    }
+
+    const dupeSet = new Set(dupeUids);
+    const dupeEvents = dupeUids
+      .map((uid) => visible.find((e) => e.uid === uid))
+      .filter((ev): ev is CalendarEvent => ev !== undefined);
+
+    for (const uid of dupeUids) pendingDeletes.set(uid, PERMANENT);
+    state.events = state.events.filter((e) => !dupeSet.has(e.uid));
+    savePendingDeletes(pendingDeletes);
+    saveCachedEvents(state.events);
+    render();
+
+    if (!navigator.onLine) {
+      const offline = document.createElement("div");
+      offline.className = "dupe-banner";
+      offline.innerHTML = `<span style="flex:1;">${dupeUids.length} ausgeblendet · Offline – HA-Löschung ausstehend</span><span class="dupe-banner__dismiss">✕</span>`;
+      offline.querySelector(".dupe-banner__dismiss")!.addEventListener("click", () => offline.remove());
+      document.body.appendChild(offline);
+      setTimeout(() => offline.remove(), 8000);
+      return;
+    }
+
+    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+    const results = await Promise.allSettled(
+      dupeEvents
+        .filter((ev) => !ev.uid.startsWith("local-"))
+        .map(async (ev) => {
+          await client.deleteEvent(ev.memberId ?? "", ev.uid);
+          pendingDeletes.set(ev.uid, Date.now() + sevenDays);
+        }),
+    );
+    savePendingDeletes(pendingDeletes);
+
+    const failed = results.filter((r) => r.status === "rejected").length;
+    const succeeded = results.filter((r) => r.status === "fulfilled").length;
+
+    const result = document.createElement("div");
+    result.className = "dupe-banner";
+    const msg = failed > 0
+      ? `${succeeded} gelöscht · ${failed} konnten nicht gelöscht werden (werden ausgeblendet)`
+      : `${succeeded} Duplikate gelöscht ✓`;
+    result.innerHTML = `<span style="flex:1;">${msg}</span><span class="dupe-banner__dismiss">✕</span>`;
+    result.querySelector(".dupe-banner__dismiss")!.addEventListener("click", () => result.remove());
+    document.body.appendChild(result);
+    setTimeout(() => result.remove(), 8000);
+
+  } catch (err) {
+    toast.remove();
+    const errBanner = document.createElement("div");
+    errBanner.className = "dupe-banner";
+    errBanner.style.color = "#FF453A";
+    errBanner.innerHTML = `<span style="flex:1;">Fehler: ${err instanceof Error ? err.message : String(err)}</span><span class="dupe-banner__dismiss">✕</span>`;
+    errBanner.querySelector(".dupe-banner__dismiss")!.addEventListener("click", () => errBanner.remove());
+    document.body.appendChild(errBanner);
+    setTimeout(() => errBanner.remove(), 8000);
+  }
 }
 
 // ── Delete calendar event ──────────────────────────────────────────────────
