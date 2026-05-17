@@ -391,7 +391,8 @@ async function moveEvent(uid: string, targetDay: Date): Promise<void> {
     } catch (err) {
       console.error("Failed to move event in HA:", err);
     }
-    void refreshEvents();
+    // No refreshEvents() here — same race condition as delete: HA needs time
+    // to process the update before we fetch again. Local state is already correct.
   }
 }
 
@@ -772,7 +773,7 @@ async function saveEvent(): Promise<void> {
   saveCachedEvents(state.events);
   state.modal = null;
   render();
-  if (savedToHA) void refreshEvents();
+  if (savedToHA && !editUid) void refreshEvents();
 }
 
 // ── Delete calendar event ──────────────────────────────────────────────────
