@@ -662,6 +662,16 @@ function showFilterSheet(): void {
       </button>`;
     }).join("");
 
+    const dupeCount = findDuplicateUids(state.events).length;
+    const dupeRow = dupeCount > 0
+      ? `<button class="filter-row filter-dupe-row" id="filter-dupe-btn">
+          <span class="filter-row__name" style="color:#FF9F0A;">⚠ ${dupeCount} doppelte Einträge</span>
+          <span style="font-size:12px;font-weight:700;color:#FF9F0A;white-space:nowrap;">Bereinigen</span>
+        </button>`
+      : `<button class="filter-row filter-dupe-row" id="filter-dupe-btn" style="opacity:.5;">
+          <span class="filter-row__name">Duplikate prüfen</span>
+        </button>`;
+
     const html = `<div id="filter-sheet" class="sheet-backdrop">
       <div class="bottom-sheet" data-stop-propagation>
         <div class="bottom-sheet__handle"></div>
@@ -671,6 +681,7 @@ function showFilterSheet(): void {
           <span class="filter-row__check">${allOn ? checkSvg : ""}</span>
         </button>
         <div class="filter-member-list">${rows}</div>
+        <div style="margin-top:8px;border-top:1px solid rgba(120,120,128,0.2);padding-top:4px;">${dupeRow}</div>
       </div>
     </div>`;
 
@@ -707,6 +718,23 @@ function showFilterSheet(): void {
         render();
         mount();
       });
+    });
+    sheet.querySelector<HTMLElement>("#filter-dupe-btn")?.addEventListener("click", () => {
+      sheet.remove();
+      const dupeUids = findDuplicateUids(state.events);
+      if (dupeUids.length === 0) {
+        showDuplicateBanner([]);
+        const el = document.createElement("div");
+        el.className = "dupe-banner";
+        el.style.background = "#1a2a1a";
+        el.style.color = "#30D158";
+        el.innerHTML = `<span style="flex:1;">Keine Duplikate gefunden</span><span class="dupe-banner__dismiss">✕</span>`;
+        el.querySelector(".dupe-banner__dismiss")!.addEventListener("click", () => el.remove());
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 3000);
+      } else {
+        void cleanDuplicates(dupeUids);
+      }
     });
   }
 
@@ -1029,20 +1057,33 @@ async function saveEvent(): Promise<void> {
 // ── Duplicate detection & cleanup ─────────────────────────────────────────
 
 function findDuplicateUids(events: CalendarEvent[]): string[] {
-  const seen = new Map<string, string>();
-  const dupes: string[] = [];
-  for (const ev of events) {
-    const timeKey = ev.allDay
-      ? ev.start.toDateString()
-      : ev.start.toISOString().slice(0, 16);
-    const key = `${ev.summary.toLowerCase()}|${ev.memberId ?? ""}|${timeKey}`;
-    if (seen.has(key)) {
-      dupes.push(ev.uid);
-    } else {
-      seen.set(key, ev.uid);
+  const dupes = new Set<string>();
+
+  for (let i = 0; i < events.length; i++) {
+    if (dupes.has(events[i].uid)) continue;
+    const a = events[i];
+
+    for (let j = i + 1; j < events.length; j++) {
+      const b = events[j];
+      if (dupes.has(b.uid)) continue;
+      if (a.memberId !== b.memberId) continue;
+      if (a.summary.toLowerCase() !== b.summary.toLowerCase()) continue;
+
+      let isDupe = false;
+      if (a.allDay && b.allDay) {
+        // All-day events: duplicate if their date ranges overlap
+        // (catches same event created twice with slightly different start dates)
+        isDupe = a.start < b.end && b.start < a.end;
+      } else if (!a.allDay && !b.allDay) {
+        // Timed events: duplicate if exact same minute
+        isDupe = a.start.getTime() === b.start.getTime();
+      }
+
+      if (isDupe) dupes.add(b.uid);
     }
   }
-  return dupes;
+
+  return [...dupes];
 }
 
 function showDuplicateBanner(dupeUids: string[]): void {
