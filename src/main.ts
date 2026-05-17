@@ -42,11 +42,16 @@ interface QueuedEvent {
   location?: string;
   description?: string;
   attempts: number;
+  createdAt: number;
 }
+
+const QUEUE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // drop items older than 24 h
 
 function loadQueue(): QueuedEvent[] {
   try {
-    return JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]") as QueuedEvent[];
+    const all = JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]") as QueuedEvent[];
+    const cutoff = Date.now() - QUEUE_MAX_AGE_MS;
+    return all.filter((e) => !e.createdAt || e.createdAt > cutoff);
   } catch {
     return [];
   }
@@ -56,9 +61,9 @@ function saveQueue(q: QueuedEvent[]): void {
   localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
 }
 
-function enqueue(ev: Omit<QueuedEvent, "id" | "attempts">): void {
+function enqueue(ev: Omit<QueuedEvent, "id" | "attempts" | "createdAt">): void {
   const q = loadQueue();
-  q.push({ id: `q-${Date.now()}`, attempts: 0, ...ev });
+  q.push({ id: `q-${Date.now()}`, attempts: 0, createdAt: Date.now(), ...ev });
   saveQueue(q);
   updateQueueBadge();
 }
@@ -113,7 +118,8 @@ async function processQueue(): Promise<void> {
 
   saveQueue(remaining);
   updateQueueBadge();
-  if (remaining.length < q.length) void refreshEvents();
+  // Delay refresh so HA has time to index the newly created events before we fetch.
+  if (remaining.length < q.length) setTimeout(() => void refreshEvents(), 3000);
 }
 
 // ── Event cache (LocalStorage) ─────────────────────────────────────────────
@@ -924,8 +930,6 @@ async function saveEvent(): Promise<void> {
 
   const config = loadConfig();
   const { editUid } = state.modal;
-  let savedToHA = false;
-
   if (config && navigator.onLine) {
     try {
       const client = new HAClient(config);
@@ -940,7 +944,6 @@ async function saveEvent(): Promise<void> {
           description: notes || undefined,
         });
       }
-      savedToHA = true;
     } catch {
       if (!editUid) {
         enqueue({
@@ -996,7 +999,9 @@ async function saveEvent(): Promise<void> {
   saveCachedEvents(state.events);
   state.modal = null;
   render();
-  if (savedToHA && !editUid) void refreshEvents();
+  // Do NOT call refreshEvents() here — HA needs time to index the new event.
+  // Fetching immediately would return stale data and processQueue() could
+  // replay queued items creating duplicates. The local state is already correct.
 }
 
 // ── Delete calendar event ──────────────────────────────────────────────────
