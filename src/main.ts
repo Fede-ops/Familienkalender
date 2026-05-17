@@ -918,6 +918,23 @@ function buildDemoWeek(weekStart: Date): CalendarEvent[] {
 
 // ── Boot ───────────────────────────────────────────────────────────────────
 
+// Re-categorize any items that were saved with old (wrong) categories.
+// Safe to run every startup — categories are always auto-assigned, never manually set.
+(function migrateCategorization() {
+  const shopping = loadShoppingItems();
+  const recatShopping = shopping.map((i) => ({ ...i, category: categorizeShoppingItem(i.name) }));
+  if (recatShopping.some((i, idx) => i.category !== shopping[idx].category)) {
+    saveShoppingItems(recatShopping);
+    state.shopping = recatShopping;
+  }
+  const todos = loadTodoItems();
+  const recatTodos = todos.map((i) => ({ ...i, category: categorizeTodoItem(i.title) }));
+  if (recatTodos.some((i, idx) => i.category !== todos[idx].category)) {
+    saveTodoItems(recatTodos);
+    state.todos = recatTodos;
+  }
+})();
+
 const demoMode = new URLSearchParams(window.location.search).has("demo");
 const config = loadConfig();
 if (demoMode) {
