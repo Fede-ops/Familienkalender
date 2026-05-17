@@ -33,4 +33,5 @@ export interface TodoItem {
   category: string;
   completed: boolean;
   createdAt: number;
+  memberId?: string;
 }

@@ -25,6 +25,7 @@ import {
   loadTodoItems,
   renderTodoView,
   saveTodoItems,
+  type TodoViewState,
 } from "./views/todo.ts";
 import type { CalendarEvent, FamilyMember, ShoppingItem, TabKey, TodoItem } from "./types.ts";
 
@@ -166,6 +167,7 @@ interface AppState {
   shopping: ShoppingItem[];
   todos: TodoItem[];
   filterMemberIds: string[];
+  todoFilterMemberId: string;
 }
 
 function startOfMonth(date: Date): Date {
@@ -223,6 +225,8 @@ function savePendingDeletes(map: Map<string, number>): void {
 const pendingDeletes: Map<string, number> = loadPendingDeletes();
 
 const app = document.getElementById("app")!;
+const TODO_FILTER_KEY = "nanoclaw-todo-filter";
+
 const state: AppState = {
   activeTab: "kalender",
   viewMode: "week",
@@ -234,6 +238,7 @@ const state: AppState = {
   shopping: loadShoppingItems(),
   todos: loadTodoItems(),
   filterMemberIds: [],
+  todoFilterMemberId: localStorage.getItem(TODO_FILTER_KEY) ?? "",
 };
 
 function visibleEvents(): CalendarEvent[] {
@@ -248,7 +253,15 @@ function render(): void {
   if (state.activeTab === "einkauf") {
     html = renderShoppingView(state.shopping);
   } else if (state.activeTab === "todo") {
-    html = renderTodoView(state.todos);
+    const filteredTodos = state.todoFilterMemberId
+      ? state.todos.filter((t) => t.memberId === state.todoFilterMemberId)
+      : state.todos;
+    const todoViewState: TodoViewState = {
+      items: filteredTodos,
+      members: state.members,
+      activeMemberId: state.todoFilterMemberId,
+    };
+    html = renderTodoView(todoViewState);
   } else if (state.viewMode === "month") {
     html = renderMonthView({
       monthStart: state.monthStart,
@@ -613,6 +626,12 @@ function bindEvents(): void {
         saveTodoItems(state.todos);
         render();
 
+      // ── Todo member filter ───────────────────────────────────────────────
+      } else if (action === "todo-filter") {
+        state.todoFilterMemberId = el.dataset.memberId ?? "";
+        localStorage.setItem(TODO_FILTER_KEY, state.todoFilterMemberId);
+        render();
+
       // ── Filter / Search ──────────────────────────────────────────────────
       } else if (action === "filter") {
         showFilterSheet();
@@ -800,12 +819,15 @@ function addShoppingItem(): void {
 function addTodoItem(): void {
   const title = readListInput();
   if (!title) return;
+  // Assign to the active member filter, or fall back to first member
+  const memberId = state.todoFilterMemberId || state.members[0]?.id || "";
   state.todos.push({
     id: `t-${Date.now()}`,
     title,
     category: categorizeTodoItem(title),
     completed: false,
     createdAt: Date.now(),
+    memberId,
   });
   saveTodoItems(state.todos);
   clearListInput();

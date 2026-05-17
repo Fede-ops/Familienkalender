@@ -1617,3 +1617,74 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   letter-spacing: -0.01em;
   pointer-events: none;
 }
+
+/* ── Todo member filter strip ─────────────────────────────────────────────── */
+
+.todo-member-filter {
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  flex-shrink: 0;
+}
+
+.todo-member-filter::-webkit-scrollbar {
+  display: none;
+}
+
+.todo-member-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px 5px 6px;
+  border-radius: 20px;
+  border: 1.5px solid rgba(120, 120, 128, 0.3);
+  background: rgba(28, 28, 30, 0.8);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  letter-spacing: -0.01em;
+  flex-shrink: 0;
+}
+
+.todo-member-chip:first-child {
+  padding: 5px 14px;
+}
+
+.todo-member-chip--active {
+  border-color: var(--chip-accent, var(--accent));
+  background: color-mix(in srgb, var(--chip-accent, var(--accent)) 15%, transparent);
+  color: var(--text);
+}
+
+.todo-member-chip__avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.todo-member-chip__label {
+  line-height: 1;
+}
+
+/* Small member dot shown on todo items when "Alle" filter is active */
+.list-item__member-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-left: auto;
+  align-self: center;
+}

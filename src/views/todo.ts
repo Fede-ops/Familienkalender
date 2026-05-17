@@ -1,19 +1,465 @@
-import type { TodoItem, TabKey } from "../types.ts";
+import type { FamilyMember, TodoItem, TabKey } from "../types.ts";
 
 // ── Category definitions ───────────────────────────────────────────────────
 
 export const TODO_CATEGORIES = [
+  {
+    key: "medizin",
+    label: "Medizin & Chirurgie",
+    color: "#FF6B47",
+    keywords: [
+      // Deutsch – professionell medizinisch
+      "patient", "patientin", "patientenakte", "patientengespräch", "patientenaufnahme",
+      "operation", "operieren", "operiert", "präoperativ", "postoperativ", "intraoperativ",
+      "chirurgie", "chirurg", "chirurgin", "chirurgisch",
+      "anästhesie", "anästhesist", "narkose", "lokalanästhesie",
+      "visite", "morgenvisite", "abendvisite", "chefarztvisite",
+      "befund", "befunde", "laborbefund", "röntgenbefund",
+      "diagnose", "differentialdiagnose", "diagnosestellung",
+      "klinik", "krankenhaus", "spital", "klinikum",
+      "station", "normalstation", "intensivstation",
+      "notaufnahme", "notfall", "notaufnahme",
+      "ambulanz", "ambulant", "poliklinik", "praxis",
+      "röntgen", "ultraschall", "sonographie",
+      "radiologie", "radiologisch",
+      "labor", "laborwerte", "blutbild",
+      "medikation", "dosierung", "arzneimittel",
+      "infusion", "injektion", "katheter", "drainage",
+      "wundversorgung", "wundheilung", "naht", "verband",
+      "blutung", "bluttransfusion", "transfusion",
+      "nachsorge", "kontrolltermin",
+      "dienst", "bereitschaftsdienst", "nachtdienst", "wochenenddienst", "spätdienst", "frühdienst",
+      "entlassung", "aufnahme", "einweisung",
+      "aufklärungsgespräch", "aufklärungsbogen", "einwilligung",
+      "komplikation", "komplikationen",
+      "onkologie", "orthopädie", "neurologie", "kardiologie", "gynäkologie",
+      "pädiatrie", "unfallchirurgie", "gefäßchirurgie", "herz", "thorax",
+      "pflegepersonal", "pflegekraft", "krankenschwester", "pfleger",
+      "instrumentierschwester", "op-saal",
+      // English
+      "patient", "surgery", "surgical", "operation", "anesthesia", "anaesthesia",
+      "ward", "round", "ward round", "diagnosis", "diagnose",
+      "clinic", "hospital", "emergency", "outpatient",
+      "radiology", "ultrasound", "scan", "x-ray",
+      "lab results", "blood test", "medication", "dosage",
+      "infusion", "injection", "catheter", "drainage",
+      "wound care", "suture", "sutures", "bandage",
+      "bleeding", "transfusion", "discharge", "admission",
+      "informed consent", "complication", "post-operative", "pre-operative",
+      "on call", "night shift", "weekend duty",
+      "oncology", "orthopedics", "neurology", "cardiology",
+      "gynecology", "pediatrics", "vascular", "thoracic",
+      // Español
+      "paciente", "cirugía", "quirúrgico", "operación", "anestesia",
+      "visita", "ronda", "diagnóstico", "diagnosticar",
+      "clínica", "hospital", "urgencias", "ambulatorio",
+      "radiología", "ecografía", "radiografía",
+      "análisis", "resultado", "medicación", "dosis",
+      "infusión", "inyección", "catéter", "drenaje",
+      "cura", "sutura", "vendaje",
+      "hemorragia", "transfusión", "alta", "ingreso",
+      "consentimiento", "complicación", "postoperatorio",
+      "guardia", "turno de noche", "guardia de fin de semana",
+      "oncología", "ortopedia", "neurología", "cardiología",
+    ],
+  },
+  {
+    key: "technologie",
+    label: "Technologie",
+    color: "#5E5CE6",
+    keywords: [
+      // Deutsch
+      "programmieren", "coden", "entwickeln", "entwicklung",
+      "software", "anwendung", "webseite", "webapp",
+      "bug", "fehler beheben", "debugging", "testen", "testen",
+      "feature", "funktion", "implementieren",
+      "deployment", "release", "launch", "rollout",
+      "server", "konfigurieren", "infrastruktur",
+      "datenbank", "datenmigration", "migration",
+      "schnittstelle", "integration",
+      "repository", "branch", "commit", "merge", "review",
+      "sprint", "backlog", "ticket", "iteratio",
+      "dokumentation", "technische docs",
+      "refactoring", "optimierung", "performance",
+      "security", "sicherheit", "authentifizierung",
+      "cloud", "hosting", "domain",
+      "machine learning", "künstliche intelligenz",
+      "monitoring", "logging", "alerts",
+      "frontend", "backend", "fullstack",
+      // English
+      "programming", "coding", "developing", "development",
+      "software", "application", "website", "webapp",
+      "bug fix", "debugging", "testing", "unit test",
+      "feature", "implement", "build",
+      "deploy", "deployment", "release", "launch",
+      "server", "configure", "infrastructure",
+      "database", "data migration",
+      "api", "integration", "endpoint",
+      "repository", "pull request", "commit", "merge",
+      "sprint", "backlog", "ticket", "iteration",
+      "documentation", "technical docs",
+      "refactor", "optimize", "performance",
+      "security", "authentication", "authorization",
+      "cloud", "hosting", "domain",
+      "machine learning", "artificial intelligence",
+      "monitoring", "logging",
+      "frontend", "backend", "fullstack",
+      "react", "typescript", "python", "javascript", "node",
+      "docker", "kubernetes", "devops",
+      "github", "gitlab", "jira", "confluence",
+      // Español
+      "programar", "codificar", "desarrollar", "desarrollo",
+      "software", "aplicación", "sitio web",
+      "error", "depurar", "probar", "prueba",
+      "funcionalidad", "implementar",
+      "despliegue", "lanzamiento",
+      "servidor", "configurar", "infraestructura",
+      "base de datos", "migración de datos",
+      "integración", "punto de conexión",
+      "repositorio", "solicitud de extracción",
+      "iteración", "sprint", "tarea",
+      "documentación técnica",
+      "refactorizar", "optimizar",
+      "seguridad", "autenticación",
+      "nube", "alojamiento",
+      "inteligencia artificial", "aprendizaje automático",
+    ],
+  },
+  {
+    key: "vertrieb",
+    label: "Vertrieb & Sales",
+    color: "#0A84FF",
+    keywords: [
+      // Deutsch
+      "verkaufen", "verkauf", "vertrieb",
+      "akquise", "kaltakquise", "neukundengewinnung",
+      "angebot erstellen", "angebotserstellung", "angebot senden",
+      "pitch", "präsentation halten", "demo",
+      "lead", "leads", "interessent",
+      "pipeline", "verkaufspipeline",
+      "deal", "abschluss", "vertragsabschluss",
+      "umsatz", "umsatzziel", "quartalsziel", "jahresziel",
+      "messe", "fachmesse", "networking event",
+      "follow-up", "nachfassen",
+      "verhandlung", "verhandeln", "rabatt",
+      "provision", "vergütung",
+      "partnerschaft", "kooperation", "b2b",
+      "lizenz", "lizenzvertrag",
+      "crm", "kundendaten",
+      "onboarding kunde", "kundenbetreuung",
+      "upselling", "cross-selling",
+      // English
+      "selling", "sales", "revenue",
+      "prospecting", "cold call", "cold calling",
+      "proposal", "quote", "offer",
+      "pitch", "demo", "presentation",
+      "lead", "leads", "prospect",
+      "pipeline",
+      "deal", "close", "closing",
+      "target", "quota", "forecast",
+      "trade show", "networking",
+      "follow up",
+      "negotiation", "negotiate", "discount",
+      "commission",
+      "partnership", "cooperation",
+      "license",
+      "upsell", "cross-sell",
+      "onboarding",
+      // Español
+      "vender", "ventas", "comercial",
+      "prospección", "llamada en frío",
+      "propuesta", "presupuesto", "oferta",
+      "presentación", "demo",
+      "cliente potencial", "prospecto",
+      "tubería de ventas",
+      "cierre", "negociación",
+      "objetivo", "cuota",
+      "feria", "exposición",
+      "seguimiento",
+      "descuento", "rebaja",
+      "comisión",
+      "asociación", "colaboración",
+      "licencia",
+    ],
+  },
+  {
+    key: "natur",
+    label: "Natur & Umwelt",
+    color: "#32D74B",
+    keywords: [
+      // Deutsch
+      "naturschutz", "naturschutzprojekt",
+      "umweltschutz", "umweltprojekt", "umweltarbeit",
+      "biodiversität", "artenvielfalt", "artenschutz",
+      "ökosystem", "ökologie", "ökologisch",
+      "klimaschutz", "klimawandel", "klimaprojekt",
+      "nachhaltigkeit", "nachhaltig", "nachhaltigkeitsbericht",
+      "renaturierung", "revitalisierung",
+      "aufforstung", "bepflanzung", "baumpflanzung",
+      "fauna", "flora", "habitat",
+      "wildtier", "wildtiermonitoring",
+      "biotop", "schutzgebiet", "naturreservat", "nationalpark",
+      "feldarbeit", "freilandarbeit", "geländearbeit",
+      "monitoring natur", "naturbeobachtung",
+      "erosion", "bodenqualität", "wasserqualität",
+      "solar", "windenergie", "erneuerbare energie", "photovoltaik",
+      "emissionen", "treibhausgas",
+      "umweltbericht", "umweltaudit",
+      // English
+      "nature conservation", "conservation project",
+      "environmental protection", "environmental project",
+      "biodiversity", "species protection",
+      "ecosystem", "ecology", "ecological",
+      "climate protection", "climate change", "climate project",
+      "sustainability", "sustainable", "sustainability report",
+      "rewilding", "restoration",
+      "reforestation", "afforestation", "tree planting",
+      "fauna", "flora", "habitat",
+      "wildlife", "wildlife monitoring",
+      "nature reserve", "national park", "protected area",
+      "fieldwork", "field survey",
+      "nature monitoring",
+      "erosion", "soil quality", "water quality",
+      "solar energy", "wind energy", "renewable energy",
+      "emissions", "greenhouse gas",
+      "environmental report", "environmental audit",
+      // Español
+      "conservación de la naturaleza", "proyecto de conservación",
+      "protección ambiental", "proyecto ambiental",
+      "biodiversidad", "protección de especies",
+      "ecosistema", "ecología", "ecológico",
+      "protección climática", "cambio climático",
+      "sostenibilidad", "sostenible",
+      "renaturalización", "restauración",
+      "reforestación", "plantación de árboles",
+      "fauna", "flora", "hábitat",
+      "vida silvestre", "monitoreo de fauna",
+      "reserva natural", "parque nacional",
+      "trabajo de campo",
+      "energía solar", "energía eólica", "energía renovable",
+      "emisiones", "gases de efecto invernadero",
+    ],
+  },
+  {
+    key: "freizeit",
+    label: "Freizeit",
+    color: "#64D2FF",
+    keywords: [
+      // Deutsch
+      "konzert", "konzertticket",
+      "kino", "film schauen",
+      "theater", "oper", "musical", "ausstellung", "museum",
+      "restaurant", "essen gehen", "reservierung restaurant",
+      "freunde treffen", "freunde einladen",
+      "party", "feier", "feiern",
+      "fußball", "basketball", "tennis", "volleyball", "schwimmen",
+      "radfahren", "fahrrad", "mountainbike",
+      "wandern", "trekking", "klettern",
+      "laufen", "joggen", "marathon",
+      "lesen", "buch", "bibliothek",
+      "podcast hören", "musik hören",
+      "serie", "netflix", "streaming",
+      "urlaub planen", "reise buchen", "hotel buchen", "flug buchen",
+      "ausflug planen",
+      "hobby", "basteln", "zeichnen", "malen", "fotografieren",
+      "musik", "instrument", "gitarre", "piano", "klavier",
+      "kochen lernen", "rezept ausprobieren",
+      "spieleabend", "gesellschaftsspiel",
+      "spa", "wellness",
+      // English
+      "concert", "concert ticket",
+      "cinema", "movie", "watch film",
+      "theater", "opera", "musical", "exhibition",
+      "restaurant", "dinner out", "reservation",
+      "meet friends", "invite friends",
+      "party", "celebration",
+      "football", "soccer", "basketball", "tennis", "volleyball", "swimming",
+      "cycling", "mountain bike", "bike",
+      "hiking", "trekking", "climbing",
+      "running", "jogging", "marathon",
+      "reading", "book", "library",
+      "podcast", "listen music",
+      "series", "netflix", "streaming",
+      "plan vacation", "book hotel", "book flight",
+      "trip", "getaway",
+      "hobby", "crafting", "drawing", "painting", "photography",
+      "music", "guitar", "piano",
+      "cooking class", "try recipe",
+      "game night", "board game",
+      "wellness", "massage",
+      // Español
+      "concierto", "entrada concierto",
+      "cine", "película", "ver película",
+      "teatro", "ópera", "musical", "exposición", "museo",
+      "restaurante", "cenar fuera", "reservar restaurante",
+      "quedar con amigos", "invitar amigos",
+      "fiesta", "celebración",
+      "fútbol", "baloncesto", "tenis", "natación",
+      "ciclismo", "bicicleta",
+      "senderismo", "trekking", "escalada",
+      "correr", "jogging", "maratón",
+      "leer", "libro", "biblioteca",
+      "podcast", "escuchar música",
+      "serie", "streaming",
+      "planear vacaciones", "reservar hotel", "reservar vuelo",
+      "excursión",
+      "hobby", "manualidades", "dibujar", "pintar", "fotografía",
+      "música", "guitarra", "piano",
+      "clase de cocina", "probar receta",
+      "juegos de mesa",
+    ],
+  },
   {
     key: "familie",
     label: "Familie",
     color: "#FF9F0A",
     keywords: [
       // Deutsch
-      "kind", "kinder", "schule", "arzt", "zahnarzt", "termin", "geburtstag", "spielplatz", "kindergarten", "babysitter", "eltern", "oma", "opa", "geburt", "ausflug", "urlaub", "ferien",
+      "kind", "kinder", "kind", "sohn", "tochter",
+      "schule", "schulaufgabe", "hausaufgabe", "schulanmeldung",
+      "kindergarten", "kita", "hort", "krippe",
+      "babysitter", "kinderbetreuung",
+      "elternabend", "elternsprechtag",
+      "geburtstag", "geburtstagsfeier", "geburtstagsgeschenk",
+      "kinderarzt", "kieferorthopäde", "kinderzahnarzt",
+      "impfung kind",
+      "spielplatz", "kinderkurs", "nachhilfe",
+      "ferienbetreuung", "ferienprogramm",
+      "familien ausflug", "familienurlaub",
+      "oma", "opa", "großeltern", "eltern besuchen",
+      "hochzeit", "taufe", "kommunion", "konfirmation",
+      "spielzeug", "kinderzimmer",
       // English
-      "child", "children", "kids", "school", "doctor", "dentist", "appointment", "birthday", "playground", "kindergarten", "parents", "grandma", "grandpa", "birth", "trip", "vacation", "holiday", "family",
+      "child", "children", "kids", "son", "daughter",
+      "school", "homework", "school enrollment",
+      "kindergarten", "daycare", "nursery",
+      "babysitter", "childcare",
+      "parent meeting", "parent-teacher",
+      "birthday", "birthday party", "birthday gift",
+      "pediatrician",
+      "vaccination", "immunization",
+      "playground", "kids class", "tutoring",
+      "summer camp", "holiday program",
+      "family trip", "family vacation",
+      "grandparents", "visit parents",
+      "wedding", "baptism", "communion",
       // Español
-      "niño", "niños", "hijos", "colegio", "médico", "dentista", "cita", "cumpleaños", "parque", "guardería", "padres", "abuela", "abuelo", "nacimiento", "excursión", "vacaciones", "familia",
+      "niño", "niños", "hijo", "hija",
+      "colegio", "tarea", "deberes", "matrícula",
+      "guardería", "jardín de infancia",
+      "canguro", "cuidado de niños",
+      "reunión de padres", "tutoría",
+      "cumpleaños", "fiesta de cumpleaños", "regalo cumpleaños",
+      "pediatra",
+      "vacunación",
+      "parque infantil", "clase niños", "clases particulares",
+      "campamento", "programa vacacional",
+      "excursión familiar", "vacaciones en familia",
+      "abuelos", "visitar padres",
+      "boda", "bautizo", "comunión",
+    ],
+  },
+  {
+    key: "gesundheit",
+    label: "Gesundheit",
+    color: "#FF2D55",
+    keywords: [
+      // Deutsch – persönliche Gesundheit
+      "arzt", "ärztin", "arzttermin", "hausarzt",
+      "zahnarzt", "zahnarzttermin",
+      "physiotherapie", "physio termin",
+      "apotheke", "medikament abholen", "rezept einlösen",
+      "bluttest", "blutuntersuchung", "check-up",
+      "impfung", "impftermin",
+      "psychologe", "therapie", "beratung",
+      "yoga", "meditieren", "entspannen",
+      "fitnessstudio", "trainieren", "trainingsplan",
+      "abnehmen", "gewicht", "ernährung",
+      "brille", "augenarzt",
+      "operationen persönlich", "krankenversicherung",
+      // English
+      "doctor", "doctor appointment", "gp",
+      "dentist", "dental appointment",
+      "physiotherapy", "physio",
+      "pharmacy", "pick up medication", "prescription",
+      "blood test", "check-up", "health screening",
+      "vaccination appointment",
+      "psychologist", "therapy", "counseling",
+      "yoga", "meditate", "relax",
+      "gym", "workout", "training plan",
+      "lose weight", "nutrition", "diet",
+      "optician", "eye test",
+      "health insurance",
+      // Español
+      "médico", "cita médica", "médico de cabecera",
+      "dentista", "cita dentista",
+      "fisioterapia", "fisio",
+      "farmacia", "recoger medicamentos", "receta",
+      "análisis de sangre", "revisión médica",
+      "cita vacunación",
+      "psicólogo", "terapia",
+      "yoga", "meditar", "relajarse",
+      "gimnasio", "entrenar", "plan de entrenamiento",
+      "perder peso", "nutrición", "dieta",
+      "óptica", "revisión vista",
+    ],
+  },
+  {
+    key: "finanzen",
+    label: "Finanzen",
+    color: "#BF5AF2",
+    keywords: [
+      // Deutsch
+      "rechnung bezahlen", "rechnung überweisen",
+      "steuer", "steuererklärung", "steuern",
+      "versicherung", "versicherungsvertrag",
+      "bank", "bankkonto", "konto", "sparkonto",
+      "überweisung", "dauerauftrag",
+      "kredit", "darlehen", "hypothek",
+      "budget", "haushaltsbuch", "ausgaben",
+      "miete", "miete überweisen",
+      "strom", "gasrechnung", "internetrechnung",
+      "sparplan", "investition", "aktien", "fonds",
+      "rente", "altersvorsorge", "pension",
+      "gehaltsabrechnung", "gehalt",
+      "finanzplan", "finanzberatung",
+      "kreditkarte", "lastschrift",
+      "auto versicherung", "haftpflicht",
+      "finanzen",
+      // English
+      "pay bill", "pay invoice", "bank transfer",
+      "tax", "tax return", "taxes",
+      "insurance", "insurance contract",
+      "bank", "bank account", "savings account",
+      "transfer", "standing order",
+      "loan", "mortgage",
+      "budget", "expenses",
+      "rent", "rent payment",
+      "electricity bill", "gas bill", "internet bill",
+      "savings plan", "investment", "stocks", "funds",
+      "pension", "retirement",
+      "payroll", "salary",
+      "financial planning", "financial advice",
+      "credit card",
+      "car insurance", "liability insurance",
+      "finances",
+      // Español
+      "pagar factura", "transferencia bancaria",
+      "impuesto", "declaración de impuestos",
+      "seguro", "contrato de seguro",
+      "banco", "cuenta bancaria", "cuenta de ahorro",
+      "transferencia", "domiciliación",
+      "préstamo", "hipoteca",
+      "presupuesto", "gastos",
+      "alquiler", "pagar alquiler",
+      "factura luz", "factura gas", "factura internet",
+      "plan de ahorro", "inversión", "acciones",
+      "jubilación", "pensión",
+      "nómina", "salario",
+      "planificación financiera",
+      "tarjeta de crédito",
+      "seguro de coche",
+      "finanzas",
     ],
   },
   {
@@ -22,24 +468,61 @@ export const TODO_CATEGORIES = [
     color: "#30D158",
     keywords: [
       // Deutsch
-      "putzen", "waschen", "kochen", "bügeln", "aufräumen", "einkaufen", "reparier", "müll", "abfall", "garten", "blumen", "fenster", "wäsche", "küche", "bad", "staub", "sauger",
+      "putzen", "reinigen",
+      "waschen", "wäsche",
+      "kochen", "essen kochen", "mahlzeit",
+      "bügeln",
+      "aufräumen", "aufräumen", "sortieren",
+      "staubsaugen", "saugen",
+      "müll rausbringen", "müll", "abfall",
+      "küche putzen", "bad putzen", "toilette putzen",
+      "fenster putzen", "wischen",
+      "garten", "rasen mähen", "unkraut jäten", "blumen gießen", "kompost",
+      "einkaufen", "lebensmittel",
+      "reparieren", "reparatur",
+      "handwerker", "klempner", "elektriker",
+      "lampe", "glühbirne wechseln",
+      "trockner", "waschmaschine",
+      "geschirrspüler", "spülmaschine",
+      "post abholen", "pakete",
+      "schlüssel", "kopieren",
+      "umzug", "einrichten",
       // English
-      "clean", "cleaning", "wash", "cook", "cooking", "iron", "tidy", "grocery", "repair", "fix", "garbage", "trash", "garden", "flowers", "window", "laundry", "kitchen", "vacuum", "dust", "mow",
+      "cleaning", "clean the house",
+      "laundry", "washing",
+      "cooking", "meal prep",
+      "ironing",
+      "tidying", "declutter", "sorting",
+      "vacuuming", "vacuum",
+      "take out trash", "garbage", "recycling",
+      "clean kitchen", "clean bathroom",
+      "clean windows", "mopping",
+      "garden", "mow lawn", "weeding", "water plants",
+      "grocery shopping", "groceries",
+      "repair", "fix",
+      "plumber", "electrician", "handyman",
+      "change lightbulb", "lightbulb",
+      "dishwasher",
+      "collect mail", "packages",
+      "keys",
+      "moving", "furnishing",
       // Español
-      "limpiar", "lavar", "cocinar", "planchar", "ordenar", "comprar", "reparar", "basura", "jardín", "flores", "ventana", "ropa", "cocina", "aspirar", "barrer", "fregar",
-    ],
-  },
-  {
-    key: "arbeit",
-    label: "Arbeit",
-    color: "#0A84FF",
-    keywords: [
-      // Deutsch
-      "meeting", "email", "präsentation", "bericht", "kunde", "projekt", "deadline", "rechnung", "steuer", "vertrag", "büro", "kollege", "chef", "liefern", "konferenz",
-      // English
-      "client", "project", "invoice", "tax", "contract", "office", "colleague", "boss", "report", "presentation", "deliver", "submit", "proposal", "budget", "conference",
-      // Español
-      "reunión", "correo", "presentación", "informe", "cliente", "proyecto", "factura", "impuesto", "contrato", "oficina", "colega", "jefe", "entrega", "presupuesto",
+      "limpiar", "limpiar la casa",
+      "lavar ropa", "lavadora",
+      "cocinar", "preparar comida",
+      "planchar",
+      "ordenar", "recoger",
+      "aspirar",
+      "sacar basura", "basura", "reciclaje",
+      "limpiar cocina", "limpiar baño",
+      "limpiar ventanas", "fregar",
+      "jardín", "cortar césped", "regar plantas",
+      "hacer la compra", "compra",
+      "reparar", "arreglar",
+      "fontanero", "electricista",
+      "cambiar bombilla",
+      "lavavajillas",
+      "recoger correo", "paquetes",
     ],
   },
   {
@@ -54,11 +537,26 @@ export type TodoCategoryKey = (typeof TODO_CATEGORIES)[number]["key"];
 
 // ── Auto-categorize ────────────────────────────────────────────────────────
 
+// Priority: most specific professional terms first, broad household last.
+const CATEGORIZATION_PRIORITY = [
+  "medizin", "technologie", "vertrieb", "natur",
+  "freizeit", "familie", "gesundheit", "finanzen", "haushalt",
+] as const;
+
 export function categorizeTodoItem(title: string): string {
-  const lower = title.toLowerCase();
-  for (const cat of TODO_CATEGORIES) {
-    if (cat.key === "sonstiges") continue;
-    if ((cat.keywords as readonly string[]).some((kw) => lower.includes(kw))) return cat.key;
+  const lower = title.toLowerCase().trim();
+  const tokens = lower.split(/[\s\-\/,;]+/).filter(Boolean);
+
+  for (const key of CATEGORIZATION_PRIORITY) {
+    const cat = TODO_CATEGORIES.find((c) => c.key === key);
+    if (!cat) continue;
+    if (
+      (cat.keywords as readonly string[]).some((kw) => {
+        if (kw.length <= 3) return tokens.includes(kw);
+        return lower.includes(kw);
+      })
+    )
+      return cat.key;
   }
   return "sonstiges";
 }
@@ -111,11 +609,43 @@ function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+function shade(hex: string, pct: number): string {
+  const m = hex.match(/^#([0-9a-f]{6})$/i);
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const clamp = (v: number) => Math.max(0, Math.min(255, v + Math.round((255 * pct) / 100)));
+  return `rgb(${clamp((n >> 16) & 0xff)},${clamp((n >> 8) & 0xff)},${clamp(n & 0xff)})`;
+}
+
+// ── View state ─────────────────────────────────────────────────────────────
+
+export interface TodoViewState {
+  items: TodoItem[];
+  members: FamilyMember[];
+  activeMemberId: string;
+}
+
 // ── Render ─────────────────────────────────────────────────────────────────
 
-export function renderTodoView(items: TodoItem[]): string {
+export function renderTodoView(viewState: TodoViewState): string {
+  const { items, members, activeMemberId } = viewState;
   const open = items.filter((i) => !i.completed);
   const done = items.filter((i) => i.completed);
+
+  // Member filter strip
+  const memberChips = [
+    `<button class="todo-member-chip${!activeMemberId ? " todo-member-chip--active" : ""}" data-action="todo-filter" data-member-id="">
+      <span class="todo-member-chip__label">Alle</span>
+    </button>`,
+    ...members.map((m) => {
+      const grad = `linear-gradient(135deg,${m.color} 0%,${shade(m.color, -30)} 100%)`;
+      const active = m.id === activeMemberId;
+      return `<button class="todo-member-chip${active ? " todo-member-chip--active" : ""}" data-action="todo-filter" data-member-id="${m.id}" style="${active ? `--chip-accent:${m.color};` : ""}">
+        <span class="todo-member-chip__avatar" style="background:${grad};">${m.initial}</span>
+        <span class="todo-member-chip__label">${m.name}</span>
+      </button>`;
+    }),
+  ].join("");
 
   const groups = TODO_CATEGORIES.map((cat) => ({
     cat,
@@ -126,13 +656,18 @@ export function renderTodoView(items: TodoItem[]): string {
 
   for (const { cat, items: groupItems } of groups) {
     const rows = groupItems
-      .map(
-        (item) => `
+      .map((item) => {
+        const member = members.find((m) => m.id === item.memberId);
+        const avatarHtml = member
+          ? `<span class="list-item__member-dot" style="background:${member.color};"></span>`
+          : "";
+        return `
         <button class="list-item" data-action="complete-todo" data-id="${item.id}">
           <span class="list-item__check"></span>
           <span class="list-item__name">${escHtml(item.title)}</span>
-        </button>`
-      )
+          ${avatarHtml}
+        </button>`;
+      })
       .join("");
     bodyHtml += `
       <div class="category-group">
@@ -166,10 +701,13 @@ export function renderTodoView(items: TodoItem[]): string {
   }
 
   if (!bodyHtml) {
+    const hint = activeMemberId
+      ? "Aufgabe oben hinzufügen"
+      : "Person auswählen oder Aufgabe hinzufügen";
     bodyHtml = `<div class="list-empty">
       <div class="list-empty__icon">${ICONS.todo}</div>
       <p class="list-empty__text">Keine Aufgaben</p>
-      <p class="list-empty__hint">Aufgabe oben hinzufügen</p>
+      <p class="list-empty__hint">${hint}</p>
     </div>`;
   }
 
@@ -179,6 +717,7 @@ export function renderTodoView(items: TodoItem[]): string {
     <header class="header list-header">
       <h1 class="header__title">To-Do${totalOpen > 0 ? ` <span class="header__badge">${totalOpen}</span>` : ""}</h1>
     </header>
+    <div class="todo-member-filter">${memberChips}</div>
     <div class="list-add">
       <input class="list-add__input" id="list-input" placeholder="Aufgabe hinzufügen…" autocomplete="off" autocorrect="on" />
       <button class="list-add__btn" data-action="add-todo">${ICONS.plus}</button>
