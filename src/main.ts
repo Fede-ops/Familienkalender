@@ -1065,27 +1065,39 @@ function showDuplicateBanner(dupeUids: string[]): void {
 }
 
 async function cleanDuplicates(dupeUids: string[]): Promise<void> {
-  const config = loadConfig();
-  const client = config && navigator.onLine ? new HAClient(config) : null;
+  const dupeSet = new Set(dupeUids);
 
-  for (const uid of dupeUids) {
-    pendingDeletes.set(uid, PERMANENT);
-    const ev = state.events.find((e) => e.uid === uid);
-    state.events = state.events.filter((e) => e.uid !== uid);
+  // Capture event data before clearing state (needed for HA delete calls)
+  const dupeEvents = dupeUids
+    .map((uid) => state.events.find((e) => e.uid === uid))
+    .filter((ev): ev is CalendarEvent => ev !== undefined);
 
-    if (client && ev && !uid.startsWith("local-")) {
-      try {
-        await client.deleteEvent(ev.memberId ?? "", uid);
-        pendingDeletes.set(uid, Date.now() + 7 * 24 * 60 * 60 * 1000);
-      } catch {
-        // Keep permanent block on failure — event stays hidden
-      }
-    }
-  }
-
+  // Mark all PERMANENT and update UI immediately — no waiting for HA
+  for (const uid of dupeUids) pendingDeletes.set(uid, PERMANENT);
+  state.events = state.events.filter((e) => !dupeSet.has(e.uid));
   savePendingDeletes(pendingDeletes);
   saveCachedEvents(state.events);
   render();
+
+  // Fire HA deletes in parallel in the background
+  const config = loadConfig();
+  if (!config || !navigator.onLine) return;
+  const client = new HAClient(config);
+  const sevenDays = 7 * 24 * 60 * 60 * 1000;
+
+  await Promise.allSettled(
+    dupeEvents
+      .filter((ev) => !ev.uid.startsWith("local-"))
+      .map(async (ev) => {
+        try {
+          await client.deleteEvent(ev.memberId ?? "", ev.uid);
+          pendingDeletes.set(ev.uid, Date.now() + sevenDays);
+        } catch {
+          // Keep PERMANENT block — event stays hidden until next successful delete
+        }
+      }),
+  );
+  savePendingDeletes(pendingDeletes);
 }
 
 // ── Delete calendar event ──────────────────────────────────────────────────
