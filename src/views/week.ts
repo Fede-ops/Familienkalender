@@ -105,10 +105,11 @@ export interface WeekViewState {
   events: CalendarEvent[];
   members: FamilyMember[];
   today: Date;
+  filterActive?: boolean;
 }
 
 export function renderWeekView(viewState: WeekViewState): string {
-  const { weekStart, events, members, today } = viewState;
+  const { weekStart, events, members, today, filterActive } = viewState;
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   const end = addDays(weekStart, 6);
@@ -149,7 +150,10 @@ export function renderWeekView(viewState: WeekViewState): string {
       ${toolbarBtn("today", "Heute", "nav-today")}
       ${toolbarBtn("next", "Weiter", "nav-next")}
       ${toolbarBtn("month", "Monat", "view-month")}
-      ${toolbarBtn("filter", "Filter", "filter")}
+      <button class="toolbar__button${filterActive ? " toolbar__button--active" : ""}" data-action="filter">
+        <span class="toolbar__icon">${ICONS.filter}${filterActive ? `<span class="toolbar__badge"></span>` : ""}</span>
+        <span class="toolbar__label">Filter</span>
+      </button>
       ${toolbarBtn("search", "Suche", "search")}
     </nav>
     <main class="week-list">${rows}</main>

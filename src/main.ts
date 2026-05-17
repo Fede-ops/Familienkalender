@@ -159,6 +159,7 @@ interface AppState {
   modal: ModalState | null;
   shopping: ShoppingItem[];
   todos: TodoItem[];
+  filterMemberIds: string[];
 }
 
 function startOfMonth(date: Date): Date {
@@ -198,7 +199,13 @@ const state: AppState = {
   modal: null,
   shopping: loadShoppingItems(),
   todos: loadTodoItems(),
+  filterMemberIds: [],
 };
+
+function visibleEvents(): CalendarEvent[] {
+  if (state.filterMemberIds.length === 0) return state.events;
+  return state.events.filter((e) => state.filterMemberIds.includes(e.memberId ?? ""));
+}
 
 // ── Rendering ──────────────────────────────────────────────────────────────
 
@@ -211,7 +218,7 @@ function render(): void {
   } else if (state.viewMode === "month") {
     html = renderMonthView({
       monthStart: state.monthStart,
-      events: state.events,
+      events: visibleEvents(),
       members: state.members,
       today: new Date(),
     });
@@ -219,9 +226,10 @@ function render(): void {
   } else {
     html = renderWeekView({
       weekStart: state.weekStart,
-      events: state.events,
+      events: visibleEvents(),
       members: state.members,
       today: new Date(),
+      filterActive: state.filterMemberIds.length > 0,
     });
     if (state.modal) html += renderEventModal(state.modal, state.members);
   }
@@ -570,9 +578,172 @@ function bindEvents(): void {
         state.todos = state.todos.filter((i) => !i.completed);
         saveTodoItems(state.todos);
         render();
+
+      // ── Filter / Search ──────────────────────────────────────────────────
+      } else if (action === "filter") {
+        showFilterSheet();
+      } else if (action === "search") {
+        showSearchSheet();
       }
     });
   });
+}
+
+// ── Filter sheet ───────────────────────────────────────────────────────────
+
+function showFilterSheet(): void {
+  document.getElementById("filter-sheet")?.remove();
+
+  const checkSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg>`;
+
+  function buildSheet(): HTMLElement {
+    const active = state.filterMemberIds;
+    const allOn = active.length === 0;
+
+    const rows = state.members.map((m) => {
+      const on = allOn || active.includes(m.id);
+      return `<button class="filter-row${on ? " filter-row--on" : ""}" data-member-id="${m.id}">
+        <span class="filter-row__dot" style="background:${m.color};box-shadow:0 0 5px ${m.color}88;"></span>
+        <span class="filter-row__name">${m.name}</span>
+        <span class="filter-row__check">${on ? checkSvg : ""}</span>
+      </button>`;
+    }).join("");
+
+    const html = `<div id="filter-sheet" class="sheet-backdrop">
+      <div class="bottom-sheet" data-stop-propagation>
+        <div class="bottom-sheet__handle"></div>
+        <p class="bottom-sheet__title">Nach Person filtern</p>
+        <button class="filter-row filter-row--all${allOn ? " filter-row--on" : ""}" data-action="filter-all">
+          <span class="filter-row__name" style="font-weight:600;">Alle anzeigen</span>
+          <span class="filter-row__check">${allOn ? checkSvg : ""}</span>
+        </button>
+        <div class="filter-member-list">${rows}</div>
+      </div>
+    </div>`;
+
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = html;
+    return wrapper.firstElementChild as HTMLElement;
+  }
+
+  function mount(): void {
+    const sheet = buildSheet();
+    document.body.appendChild(sheet);
+
+    sheet.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement) === sheet) { sheet.remove(); }
+    });
+    sheet.querySelector<HTMLElement>("[data-stop-propagation]")!
+      .addEventListener("click", (e) => e.stopPropagation());
+    sheet.querySelector<HTMLElement>("[data-action='filter-all']")!
+      .addEventListener("click", () => {
+        state.filterMemberIds = [];
+        sheet.remove();
+        render();
+        mount();
+      });
+    sheet.querySelectorAll<HTMLElement>("[data-member-id]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.memberId!;
+        if (state.filterMemberIds.includes(id)) {
+          state.filterMemberIds = state.filterMemberIds.filter((x) => x !== id);
+        } else {
+          state.filterMemberIds = [...state.filterMemberIds, id];
+        }
+        sheet.remove();
+        render();
+        mount();
+      });
+    });
+  }
+
+  mount();
+}
+
+// ── Search sheet ───────────────────────────────────────────────────────────
+
+function showSearchSheet(): void {
+  document.getElementById("search-sheet")?.remove();
+
+  const html = `<div id="search-sheet" class="search-backdrop">
+    <div class="search-sheet" data-stop-propagation>
+      <div class="search-input-row">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="search-icon"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="search-input" class="search-input" placeholder="Termin suchen…" autocomplete="off" autocorrect="off" />
+        <button class="search-close" id="search-close">✕</button>
+      </div>
+      <div id="search-results" class="search-results"></div>
+    </div>
+  </div>`;
+
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = html;
+  const sheet = wrapper.firstElementChild as HTMLElement;
+  document.body.appendChild(sheet);
+
+  const input = document.getElementById("search-input") as HTMLInputElement;
+  const resultsEl = document.getElementById("search-results")!;
+
+  function escHtml(s: string): string {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function renderResults(query: string): void {
+    if (!query.trim()) {
+      resultsEl.innerHTML = `<p class="search-hint">Tippe um Termine zu suchen</p>`;
+      return;
+    }
+    const q = query.toLowerCase();
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    const fmtDate = (d: Date) =>
+      `${["Mo","Di","Mi","Do","Fr","Sa","So"][d.getDay() === 0 ? 6 : d.getDay() - 1]}, ${d.getDate()}. ${["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"][d.getMonth()]}`;
+    const fmtTime = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+    const matches = state.events
+      .filter((e) => e.summary.toLowerCase().includes(q) || (e.description ?? "").toLowerCase().includes(q) || (e.location ?? "").toLowerCase().includes(q))
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
+
+    if (matches.length === 0) {
+      resultsEl.innerHTML = `<p class="search-hint">Keine Treffer im geladenen Zeitraum</p>`;
+      return;
+    }
+
+    resultsEl.innerHTML = matches.map((ev) => {
+      const member = state.members.find((m) => m.id === ev.memberId);
+      const accent = member?.color ?? "#8E8E93";
+      const when = ev.allDay ? fmtDate(ev.start) : `${fmtDate(ev.start)}, ${fmtTime(ev.start)}`;
+      return `<button class="search-result" data-uid="${ev.uid}">
+        <span class="search-result__bar" style="background:${accent};"></span>
+        <span class="search-result__body">
+          <span class="search-result__title">${escHtml(ev.summary)}</span>
+          <span class="search-result__meta">${when}${member ? ` · ${member.name}` : ""}</span>
+        </span>
+      </button>`;
+    }).join("");
+
+    resultsEl.querySelectorAll<HTMLElement>("[data-uid]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const ev = state.events.find((e) => e.uid === btn.dataset.uid);
+        if (!ev) return;
+        sheet.remove();
+        state.viewMode = "week";
+        state.weekStart = startOfWeek(ev.start);
+        render();
+        showEventDetail(ev);
+      });
+    });
+  }
+
+  input.addEventListener("input", () => renderResults(input.value));
+  document.getElementById("search-close")!.addEventListener("click", () => sheet.remove());
+  sheet.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement) === sheet) sheet.remove();
+  });
+  sheet.querySelector<HTMLElement>("[data-stop-propagation]")!
+    .addEventListener("click", (e) => e.stopPropagation());
+
+  renderResults("");
+  requestAnimationFrame(() => input.focus());
 }
 
 function addShoppingItem(): void {
