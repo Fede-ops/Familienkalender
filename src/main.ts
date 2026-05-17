@@ -863,17 +863,20 @@ function showEventDetail(ev: CalendarEvent): void {
   const onMove = (e: TouchEvent) => {
     const dy = e.touches[0].clientY - swipeStartY;
     if (dy > 0) {
-      panel.style.cssText += `transform:translateY(${dy}px);transition:none;`;
+      panel.style.transform = `translateY(${dy}px)`;
+      panel.style.transition = "none";
     }
   };
   const onEnd = (e: TouchEvent) => {
     document.removeEventListener("touchmove", onMove);
     const dy = e.changedTouches[0].clientY - swipeStartY;
     if (dy > 60) {
-      sheet.remove();
+      panel.style.transition = "transform 0.25s cubic-bezier(0.4,0,1,1)";
+      panel.style.transform = "translateY(100%)";
+      panel.addEventListener("transitionend", () => sheet.remove(), { once: true });
     } else {
+      panel.style.transition = "transform 0.35s cubic-bezier(0.22,1,0.36,1)";
       panel.style.transform = "";
-      panel.style.transition = "transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)";
     }
   };
 

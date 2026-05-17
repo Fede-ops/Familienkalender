@@ -62,7 +62,14 @@ export class HAClient {
       else errors.push(r.reason instanceof Error ? r.reason.message : String(r.reason));
     }
     if (errors.length > 0 && events.length === 0) throw new Error(errors[0]);
-    return events.sort((a, b) => a.start.getTime() - b.start.getTime());
+    // Deduplicate: same uid wins; for fallback uids, same (member+start+title) wins.
+    const seen = new Set<string>();
+    const deduped = events.filter((e) => {
+      if (seen.has(e.uid)) return false;
+      seen.add(e.uid);
+      return true;
+    });
+    return deduped.sort((a, b) => a.start.getTime() - b.start.getTime());
   }
 
   async createEvent(
@@ -174,8 +181,11 @@ function normalizeEvent(raw: RawHAEvent, calendarId: string): CalendarEvent {
   const allDay = Boolean(raw.start.date && !raw.start.dateTime);
   const startStr = raw.start.dateTime ?? raw.start.date!;
   const endStr = raw.end.dateTime ?? raw.end.date!;
+  const startMs = parseDateStr(startStr).getTime();
   return {
-    uid: raw.uid ?? `${calendarId}-${startStr}-${raw.summary}`,
+    // Use epoch ms (not the raw string) so the fallback UID is stable
+    // regardless of whether HA returns "+02:00" or "Z" timezone format.
+    uid: raw.uid ?? `${calendarId}-${startMs}-${raw.summary}`,
     summary: raw.summary,
     start: parseDateStr(startStr),
     end: parseDateStr(endStr),
