@@ -1,5 +1,6 @@
 import "./style.css";
 import { HAClient, loadConfig, saveConfig } from "./ha-client.ts";
+declare const __BUILD_TIME__: string;
 import { addDays, renderWeekView, startOfWeek } from "./views/week.ts";
 import { renderMonthView } from "./views/month.ts";
 import { defaultModalState, renderEventModal } from "./views/event-modal.ts";
@@ -852,6 +853,7 @@ function renderConfig(): void {
         <textarea id="cfg-entities" rows="3">${existing ? existing.calendarEntities.join(", ") : defaultEntities}</textarea>
       </label>
       <button id="cfg-save">Speichern und verbinden</button>
+      <p style="margin-top:24px;font-size:11px;color:rgba(235,235,245,0.3);text-align:center;">Build: ${__BUILD_TIME__}</p>
     </div>
   `;
   document.getElementById("cfg-save")!.addEventListener("click", () => {
