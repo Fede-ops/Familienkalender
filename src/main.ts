@@ -1026,6 +1026,68 @@ async function saveEvent(): Promise<void> {
   // replay queued items creating duplicates. The local state is already correct.
 }
 
+// ── Duplicate detection & cleanup ─────────────────────────────────────────
+
+function findDuplicateUids(events: CalendarEvent[]): string[] {
+  const seen = new Map<string, string>();
+  const dupes: string[] = [];
+  for (const ev of events) {
+    const timeKey = ev.allDay
+      ? ev.start.toDateString()
+      : ev.start.toISOString().slice(0, 16);
+    const key = `${ev.summary.toLowerCase()}|${ev.memberId ?? ""}|${timeKey}`;
+    if (seen.has(key)) {
+      dupes.push(ev.uid);
+    } else {
+      seen.set(key, ev.uid);
+    }
+  }
+  return dupes;
+}
+
+function showDuplicateBanner(dupeUids: string[]): void {
+  document.getElementById("dupe-banner")?.remove();
+  if (dupeUids.length === 0) return;
+  const el = document.createElement("div");
+  el.id = "dupe-banner";
+  el.className = "dupe-banner";
+  el.innerHTML = `<span style="flex:1;">${dupeUids.length} doppelte Einträge gefunden</span><button class="dupe-banner__btn" id="dupe-clean-btn">Bereinigen</button><span class="dupe-banner__dismiss">✕</span>`;
+  el.querySelector(".dupe-banner__dismiss")!.addEventListener("click", (e) => {
+    e.stopPropagation();
+    el.remove();
+  });
+  el.querySelector("#dupe-clean-btn")!.addEventListener("click", (e) => {
+    e.stopPropagation();
+    el.remove();
+    void cleanDuplicates(dupeUids);
+  });
+  document.body.appendChild(el);
+}
+
+async function cleanDuplicates(dupeUids: string[]): Promise<void> {
+  const config = loadConfig();
+  const client = config && navigator.onLine ? new HAClient(config) : null;
+
+  for (const uid of dupeUids) {
+    pendingDeletes.set(uid, PERMANENT);
+    const ev = state.events.find((e) => e.uid === uid);
+    state.events = state.events.filter((e) => e.uid !== uid);
+
+    if (client && ev && !uid.startsWith("local-")) {
+      try {
+        await client.deleteEvent(ev.memberId ?? "", uid);
+        pendingDeletes.set(uid, Date.now() + 7 * 24 * 60 * 60 * 1000);
+      } catch {
+        // Keep permanent block on failure — event stays hidden
+      }
+    }
+  }
+
+  savePendingDeletes(pendingDeletes);
+  saveCachedEvents(state.events);
+  render();
+}
+
 // ── Delete calendar event ──────────────────────────────────────────────────
 
 async function deleteEvent(ev: CalendarEvent): Promise<void> {
@@ -1043,8 +1105,8 @@ async function deleteEvent(ev: CalendarEvent): Promise<void> {
     try {
       const client = new HAClient(config);
       await client.deleteEvent(ev.memberId ?? "", ev.uid);
-      // HA confirmed → downgrade to a short-lived block so the entry cleans up.
-      pendingDeletes.set(ev.uid, Date.now() + 120_000);
+      // HA confirmed → 7-day block so the entry stays hidden even after localStorage clears.
+      pendingDeletes.set(ev.uid, Date.now() + 7 * 24 * 60 * 60 * 1000);
       savePendingDeletes(pendingDeletes);
     } catch (err) {
       // HA delete failed — keep permanent block so event stays invisible.
@@ -1086,6 +1148,8 @@ async function refreshEvents(): Promise<void> {
     saveCachedEvents(merged);
     dismissHAError();
     if (state.activeTab === "kalender") render();
+    const dupeUids = findDuplicateUids(merged);
+    if (dupeUids.length > 0) showDuplicateBanner(dupeUids);
     // HA is reachable → try flushing queued events
     void processQueue();
   } catch (err) {

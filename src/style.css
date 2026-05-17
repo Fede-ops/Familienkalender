@@ -1600,6 +1600,44 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   flex-shrink: 0;
 }
 
+.dupe-banner {
+  position: fixed;
+  top: env(safe-area-inset-top, 0);
+  left: 0;
+  right: 0;
+  background: #1a2a3a;
+  color: #64D2FF;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 16px;
+  z-index: 201;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: -0.01em;
+}
+
+.dupe-banner__btn {
+  background: rgba(100,210,255,0.2);
+  border: 1px solid rgba(100,210,255,0.5);
+  color: #64D2FF;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.dupe-banner__dismiss {
+  opacity: .6;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 .offline-badge {
   position: fixed;
   bottom: calc(72px + env(safe-area-inset-bottom));
