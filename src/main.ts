@@ -190,7 +190,29 @@ let drag: DragState | null = null;
 
 // UIDs deleted locally — filtered out when HA data is refreshed so events
 // don't reappear before HA has processed the deletion.
-const pendingDeletes = new Set<string>();
+// Persisted to localStorage so a page reload doesn't break it.
+const PENDING_DELETES_KEY = "nanoclaw-pending-deletes";
+
+function loadPendingDeletes(): Map<string, number> {
+  try {
+    const raw = localStorage.getItem(PENDING_DELETES_KEY);
+    if (!raw) return new Map();
+    const arr = JSON.parse(raw) as [string, number][];
+    const now = Date.now();
+    return new Map(arr.filter(([, exp]) => exp > now));
+  } catch {
+    return new Map();
+  }
+}
+
+function savePendingDeletes(map: Map<string, number>): void {
+  try {
+    localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify([...map]));
+  } catch { /* ignore */ }
+}
+
+// uid → expiry timestamp
+const pendingDeletes: Map<string, number> = loadPendingDeletes();
 
 const app = document.getElementById("app")!;
 const state: AppState = {
@@ -975,7 +997,12 @@ async function saveEvent(): Promise<void> {
 // ── Delete calendar event ──────────────────────────────────────────────────
 
 async function deleteEvent(ev: CalendarEvent): Promise<void> {
-  pendingDeletes.add(ev.uid);
+  // Block this UID from reappearing in refreshes for 2 minutes.
+  // Persisted to localStorage so a page reload doesn't lose it.
+  const expiry = Date.now() + 120_000;
+  pendingDeletes.set(ev.uid, expiry);
+  savePendingDeletes(pendingDeletes);
+
   state.events = state.events.filter((e) => e.uid !== ev.uid);
   saveCachedEvents(state.events);
   render();
@@ -986,14 +1013,11 @@ async function deleteEvent(ev: CalendarEvent): Promise<void> {
       const client = new HAClient(config);
       await client.deleteEvent(ev.memberId ?? "", ev.uid);
     } catch (err) {
+      // HA delete failed (wrong UID, offline, etc.) — the block stays in place
+      // so the event doesn't reappear via refresh. It will return after 2 min.
       console.error("Failed to delete event from HA:", err);
-      // Delete failed — remove from pendingDeletes so the event can reappear.
-      pendingDeletes.delete(ev.uid);
-      return;
     }
   }
-  // Keep blocking the UID for 60 s to survive any in-flight refreshes.
-  setTimeout(() => pendingDeletes.delete(ev.uid), 60_000);
 }
 
 // ── HA data refresh ────────────────────────────────────────────────────────
@@ -1017,8 +1041,12 @@ async function refreshEvents(): Promise<void> {
       rangeEnd = addDays(state.weekStart, 7);
     }
     const fresh = await client.getAllEvents(rangeStart, rangeEnd);
-    // Strip events that were deleted locally and HA hasn't caught up yet.
-    const merged = fresh.filter((e) => !pendingDeletes.has(e.uid));
+    // Strip events deleted locally that HA hasn't caught up with yet.
+    const now = Date.now();
+    const merged = fresh.filter((e) => {
+      const exp = pendingDeletes.get(e.uid);
+      return exp === undefined || exp <= now;
+    });
     state.events = merged;
     saveCachedEvents(merged);
     dismissHAError();
