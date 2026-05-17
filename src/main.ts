@@ -1,6 +1,15 @@
 import "./style.css";
 import { HAClient, loadConfig, saveConfig } from "./ha-client.ts";
 declare const __BUILD_TIME__: string;
+
+// Reload when a new service worker takes over — ensures fresh JS is executed.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    window.location.reload();
+  });
+  // Proactively check for a SW update on every page load.
+  navigator.serviceWorker.ready.then((reg) => reg.update()).catch(() => {});
+}
 import { addDays, renderWeekView, startOfWeek } from "./views/week.ts";
 import { renderMonthView } from "./views/month.ts";
 import { defaultModalState, renderEventModal } from "./views/event-modal.ts";
@@ -217,6 +226,18 @@ function render(): void {
     if (state.modal) html += renderEventModal(state.modal, state.members);
   }
   app.innerHTML = html;
+  app.dataset.buildTime = __BUILD_TIME__;
+  // Show build date in toolbar so users can confirm which version is running.
+  const toolbar = app.querySelector<HTMLElement>(".toolbar");
+  if (toolbar) {
+    const d = new Date(__BUILD_TIME__);
+    const label = `${d.getDate().toString().padStart(2, "0")}.${(d.getMonth() + 1).toString().padStart(2, "0")} ${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
+    const chip = document.createElement("span");
+    chip.className = "build-chip";
+    chip.textContent = `v${label}`;
+    chip.title = __BUILD_TIME__;
+    toolbar.appendChild(chip);
+  }
   bindEvents();
   setupDragDrop();
   if (state.modal) document.getElementById("modal-summary")?.focus();

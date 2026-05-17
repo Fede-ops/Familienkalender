@@ -155,6 +155,15 @@ body {
   letter-spacing: 0;
 }
 
+.build-chip {
+  margin-left: auto;
+  font-size: 9px;
+  color: rgba(235,235,245,0.18);
+  align-self: center;
+  pointer-events: none;
+  user-select: none;
+}
+
 .week-list {
   flex: 1;
   padding: 0 12px 100px;
