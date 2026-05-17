@@ -790,7 +790,8 @@ async function deleteEvent(ev: CalendarEvent): Promise<void> {
     } catch (err) {
       console.error("Failed to delete event from HA:", err);
     }
-    void refreshEvents();
+    // No refreshEvents() here — HA needs a moment to process the deletion.
+    // The event is already gone from local state; a refresh would bring it back.
   }
 }
 
