@@ -626,7 +626,7 @@ export function categorizeTodoItem(title: string): string {
     if (!cat) continue;
     if (
       (cat.keywords as readonly string[]).some((kw) => {
-        if (kw.length <= 3) return tokens.includes(kw);
+        if (kw.length <= 4) return tokens.includes(kw);
         return lower.includes(kw);
       })
     )

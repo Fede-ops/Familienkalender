@@ -21,7 +21,8 @@ export const SHOPPING_CATEGORIES = [
       "brokkoli", "blumenkohl", "rotkohl", "weißkohl", "chinakohl", "rosenkohl", "kohlrabi",
       "wirsing", "spinat", "mangold", "rucola", "salat", "feldsalat", "kopfsalat", "eisbergsalat",
       "rucola", "pilze", "champignon", "steinpilz", "pfifferling", "kräuterseitling",
-      "ingwer", "erbsen", "bohnen", "edamame", "mais", "rote bete", "steckrübe", "pastinake",
+      "ingwer", "erbsen", "bohnen", "edamame", "mais", "maiskolben", "maiskörner",
+      "rote bete", "steckrübe", "pastinake",
       "radieschen", "spargel", "artischocke", "fenchel", "kürbis", "hokkaido", "butternut",
       "pak choi", "koriander", "petersilie", "basilikum", "schnittlauch", "thymian", "rosmarin",
       "salbei", "minze", "dill", "estragon", "oregano frisch", "gemüse", "frisches gemüse",
@@ -46,7 +47,9 @@ export const SHOPPING_CATEGORIES = [
       "rosemary", "mint", "dill", "sage", "oregano fresh", "vegetable", "vegetables",
       "salad", "greens", "herbs",
       // Español – Fruta
-      "manzana", "pera", "platano", "plátano", "naranja", "mandarina", "clementina",
+      "manzana", "pera", "platano", "plátano", "platanos", "plátanos",
+      "banano", "bananos",
+      "naranja", "mandarina", "clementina",
       "pomelo", "uva", "fresa", "frambuesa", "mora", "arándano", "cereza",
       "ciruela", "melocotón", "durazno", "albaricoque", "nectarina", "mango", "papaya",
       "piña", "melón", "sandía", "kiwi", "limón", "lima", "aguacate", "higo",
@@ -108,7 +111,8 @@ export const SHOPPING_CATEGORIES = [
       "fleisch", "rind", "rindfleisch", "rindersteak", "rinderhack", "entrecôte",
       "schwein", "schweinefleisch", "schweineschnitzel", "schweinekotelett",
       "huhn", "hähnchen", "hühnerbrust", "hühnerfilet", "hühnerkeule", "hähnchenflügel",
-      "pute", "putenbrust", "putenfilet", "ente", "gans", "lamm", "lammkeule", "lammkotelett",
+      "pute", "putenbrust", "putenfilet", "ente", "entenbrust", "entenkeule", "entenschenkel",
+      "gans", "gänsebraten", "lamm", "lammkeule", "lammkotelett",
       "kaninchen", "wild", "hirsch", "reh", "wildschwein",
       "hack", "hackfleisch", "wurst", "bratwurst", "currywurst", "weißwurst", "wiener",
       "schinken", "kochschinken", "rohschinken", "parmaschinken", "speck", "pancetta",
@@ -235,7 +239,8 @@ export const SHOPPING_CATEGORIES = [
     color: "#FF375F",
     keywords: [
       // Deutsch
-      "konserve", "konserven", "dose", "büchse", "eingemacht", "eingelegt", "einmachglas",
+      "konserve", "konserven", "dose", "dosen", "büchse", "büchsen", "eingemacht", "eingelegt", "einmachglas",
+      "öl", "speiseöl",
       "tomatensoße", "passata", "tomatenmark", "geschälte tomaten", "dosentomaten",
       "ketchup", "senf", "mayonnaise", "mayo", "soße", "sauce", "bratensauce",
       "sojasauce", "worcester", "tabasco", "sriracha", "chilisauce", "currysauce",
@@ -312,6 +317,10 @@ export const SHOPPING_CATEGORIES = [
       "wasser", "mineralwasser", "sprudel", "stilles wasser",
       "saft", "orangensaft", "apfelsaft", "traubensaft", "tomatensaft", "multivitaminsaft",
       "fruchtsaft", "nektar", "smoothie", "eistee",
+      // compound juice types (needed because "saft" is now exact-token only)
+      "mangosaft", "birnensaft", "ananassaft", "kirschsaft", "pflaumensaft",
+      "cranberrysaft", "johannisbeersaft", "grapefruitsaft", "traubensaft",
+      "guavensaft", "maracujasaft", "holundersaft", "rhabarbersaft",
       "cola", "limo", "limonade", "fanta", "sprite", "energydrink", "energy drink",
       "sportgetränk", "sirup", "brause", "spezi", "radler alkoholfrei",
       "bier", "pils", "weizen", "weizenbier", "radler", "alkoholfreies bier",
@@ -436,13 +445,14 @@ export function categorizeShoppingItem(name: string): string {
     if (!cat) continue;
     if (
       (cat.keywords as readonly string[]).some((kw) => {
-        if (kw.length <= 3) {
-          // Short keywords must be an exact token to avoid "ei" matching "Reis",
-          // "pan" matching "Pfanne", "rum" matching random words, etc.
+        if (kw.length <= 4) {
+          // Short keywords (≤4 chars) must be exact tokens to avoid false positives:
+          // "lata" (tin) inside "platanos", "agua" inside "aguacate",
+          // "wein" (wine) inside "Schweinefleisch", "pan" inside "Pfanne", etc.
           return tokens.includes(kw);
         }
-        // Longer keywords use substring match, which handles German compound words
-        // like "Apfelsaft" → "saft" (drinks), "Vollkornbrot" → "brot" (bread).
+        // Longer keywords use substring match for German compound words:
+        // "Apfelsaft" → "apfelsaft" keyword, "Vollkornbrot" → "vollkornbrot" keyword.
         return lower.includes(kw);
       })
     )
