@@ -107,7 +107,7 @@ export function renderMonthView(viewState: MonthViewState): string {
       }).join("");
 
       cells.push(`<div class="month-cell${isOther ? " month-cell--other-month" : ""}${isToday ? " month-cell--today" : ""}" data-action="day-tap" data-date="${date.toISOString()}">
-        <span class="month-cell__number">${date.getDate()}</span>
+        <span class="month-cell__number">${isToday ? `<span class="month-cell__today-circle">${date.getDate()}</span>` : date.getDate()}</span>
         ${eventPills}
         ${!eventPills && dots ? `<div class="month-cell__dots">${dots}</div>` : ""}
       </div>`);

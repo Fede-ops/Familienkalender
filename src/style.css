@@ -658,15 +658,16 @@ body {
 }
 
 .month-cell__number {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: 24px;
   font-size: 14px;
   font-weight: 500;
   color: var(--text);
-  text-align: left;
-  padding-left: 2px;
-  line-height: 1.1;
   font-variant-numeric: tabular-nums;
   margin-bottom: 4px;
+  padding-left: 2px;
 }
 
 .month-cell--other-month .month-cell__number {
@@ -679,17 +680,19 @@ body {
 }
 
 .month-cell--today .month-cell__number {
-  display: inline-block;
-  background: linear-gradient(135deg, var(--accent) 0%, #ff8a5c 100%);
-  color: #fff;
+  padding-left: 0;
+}
+.month-cell__today-circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  text-align: center;
-  line-height: 24px;
+  background: linear-gradient(135deg, var(--accent) 0%, #ff8a5c 100%);
+  color: #fff;
   font-weight: 600;
   font-size: 13px;
-  padding: 0;
   box-shadow: 0 2px 8px rgba(255, 107, 71, 0.4);
 }
 
