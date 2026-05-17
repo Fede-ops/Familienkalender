@@ -188,6 +188,10 @@ interface DragState {
 
 let drag: DragState | null = null;
 
+// UIDs deleted locally — filtered out when HA data is refreshed so events
+// don't reappear before HA has processed the deletion.
+const pendingDeletes = new Set<string>();
+
 const app = document.getElementById("app")!;
 const state: AppState = {
   activeTab: "kalender",
@@ -971,6 +975,7 @@ async function saveEvent(): Promise<void> {
 // ── Delete calendar event ──────────────────────────────────────────────────
 
 async function deleteEvent(ev: CalendarEvent): Promise<void> {
+  pendingDeletes.add(ev.uid);
   state.events = state.events.filter((e) => e.uid !== ev.uid);
   saveCachedEvents(state.events);
   render();
@@ -982,10 +987,13 @@ async function deleteEvent(ev: CalendarEvent): Promise<void> {
       await client.deleteEvent(ev.memberId ?? "", ev.uid);
     } catch (err) {
       console.error("Failed to delete event from HA:", err);
+      // Delete failed — remove from pendingDeletes so the event can reappear.
+      pendingDeletes.delete(ev.uid);
+      return;
     }
-    // No refreshEvents() here — HA needs a moment to process the deletion.
-    // The event is already gone from local state; a refresh would bring it back.
   }
+  // Keep blocking the UID for 60 s to survive any in-flight refreshes.
+  setTimeout(() => pendingDeletes.delete(ev.uid), 60_000);
 }
 
 // ── HA data refresh ────────────────────────────────────────────────────────
@@ -1009,8 +1017,10 @@ async function refreshEvents(): Promise<void> {
       rangeEnd = addDays(state.weekStart, 7);
     }
     const fresh = await client.getAllEvents(rangeStart, rangeEnd);
-    state.events = fresh;
-    saveCachedEvents(fresh);
+    // Strip events that were deleted locally and HA hasn't caught up yet.
+    const merged = fresh.filter((e) => !pendingDeletes.has(e.uid));
+    state.events = merged;
+    saveCachedEvents(merged);
     dismissHAError();
     if (state.activeTab === "kalender") render();
     // HA is reachable → try flushing queued events
