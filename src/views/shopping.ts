@@ -15,6 +15,8 @@ export const SHOPPING_CATEGORIES = [
       "ananas", "melone", "wassermelone", "kiwi", "zitrone", "limette", "avocado", "feige",
       "granatapfel", "passionsfrucht", "guave", "lychee", "kokosnuss", "datteln", "trockenfrüchte",
       "rosinen", "cranberries", "obst", "frisches obst", "früchte", "frucht", "fruchtig",
+      "äpfel", "birnen", "erdbeeren", "himbeeren", "brombeeren",
+      "zuckerschoten", "physalis", "kumquat", "maracuja",
       // Deutsch – Gemüse
       "tomate", "gurke", "paprika", "zucchini", "aubergine", "karotte", "möhre", "sellerie",
       "lauch", "zwiebel", "schalotte", "frühlingszwiebel", "knoblauch", "kartoffel", "süßkartoffel",
@@ -82,6 +84,12 @@ export const SHOPPING_CATEGORIES = [
       "cheddar", "brie", "camembert", "emmentaler", "gruyère", "feta", "halloumi",
       "raclette", "manchego", "bergkäse", "tilsiter",
       "eier", "freilandeier", "bioeier",
+      // Kühlregal Extras
+      "tofu", "seidentofu", "räuchertofu", "tempeh",
+      "tzatziki", "hummus", "guacamole",
+      "aufschnitt", "wurst aufschnitt", "kassler", "pastete",
+      "sojajoghurt", "kokosjoghurt", "hafermilchjoghurt", "mandeljoghurt",
+      "pflanzenmilch",
       // English
       "milk", "whole milk", "skimmed milk", "semi-skimmed", "oat milk", "almond milk",
       "soy milk", "coconut milk drink", "butter", "margarine", "cream", "whipping cream",
@@ -91,6 +99,10 @@ export const SHOPPING_CATEGORIES = [
       "cheese", "mozzarella", "parmesan", "gouda", "edam", "cheddar", "brie",
       "camembert", "emmental", "gruyere", "feta", "halloumi", "manchego",
       "eggs", "free range eggs", "organic eggs",
+      "tofu", "silken tofu", "smoked tofu", "tempeh",
+      "tzatziki", "hummus", "guacamole",
+      "cold cuts", "deli meat",
+      "soy yogurt", "coconut yogurt", "oat yogurt", "dairy-free yogurt",
       // Español
       "leche", "leche entera", "leche desnatada", "leche semidesnatada", "leche sin lactosa",
       "bebida de avena", "bebida de almendras", "bebida de soja",
@@ -100,6 +112,10 @@ export const SHOPPING_CATEGORIES = [
       "queso", "mozzarella", "parmesano", "gouda", "edam", "cheddar", "brie",
       "camembert", "emmental", "gruyère", "feta", "halloumi", "manchego",
       "huevos", "huevos camperos", "huevos ecológicos",
+      "tofu", "tempeh",
+      "tzatziki", "hummus", "guacamole",
+      "embutido", "charcutería",
+      "yogur de soja", "yogur de coco", "yogur de avena",
     ],
   },
   {
@@ -262,6 +278,14 @@ export const SHOPPING_CATEGORIES = [
       "chips", "kartoffelchips", "salzstangen", "brezel snack", "popcorn",
       "thunfisch dose", "sardinen dose", "mais dose", "linsen dose", "bohnen dose",
       "kokosmilch", "kokosnussmilch",
+      // Spezialzutaten
+      "tahini", "tahin",
+      "miso", "misopaste",
+      "reisnudeln", "glasnudeln", "fadennudeln",
+      "kokoswasser",
+      "soßenbinder", "instant",
+      "fertigsuppe", "brühe", "instant brühe",
+      "breadcrumbs",
       // English
       "canned", "tinned", "jar", "preserve", "pickle", "pickled",
       "tomato sauce", "tomato paste", "passata", "pasta sauce", "crushed tomatoes",
@@ -284,6 +308,10 @@ export const SHOPPING_CATEGORIES = [
       "crisps", "chips", "pretzels", "popcorn", "crackers", "snack",
       "canned tuna", "canned sardines", "canned corn", "canned tomatoes", "canned beans",
       "coconut milk",
+      "tahini", "miso paste",
+      "rice noodles", "glass noodles", "vermicelli",
+      "coconut water", "coconut cream",
+      "instant noodles", "instant soup", "broth", "bouillon",
       // Español
       "conserva", "lata", "bote", "frasco", "encurtido", "escabeche",
       "salsa de tomate", "tomate triturado", "concentrado de tomate", "tomate frito",
@@ -306,6 +334,11 @@ export const SHOPPING_CATEGORIES = [
       "patatas fritas", "palomitas", "aperitivos", "snacks",
       "atún en lata", "sardinas en lata", "maíz en lata", "judías en lata",
       "leche de coco",
+      "tahini", "pasta de sésamo",
+      "pasta de miso",
+      "fideos de arroz", "fideos de cristal",
+      "agua de coco", "crema de coco",
+      "caldo instantáneo", "caldo", "fideos instantáneos",
     ],
   },
   {
@@ -380,6 +413,13 @@ export const SHOPPING_CATEGORIES = [
       "windeln", "babywindeln", "feuchttücher", "babytücher", "taschentücher", "papiertaschentücher",
       "tampons", "binden", "slipeinlage", "damenbinden", "monatshygiene",
       "desinfektionsmittel", "pflaster", "verbandsmaterial",
+      // Kosmetik & Schönheit
+      "make-up", "makeup", "schminke", "lippenstift", "lipgloss",
+      "mascara", "wimperntusche", "eyeliner", "kajal", "lidschatten",
+      "concealer", "foundation", "puder", "rouge", "blush", "highlighter",
+      "nagellack", "nagelentferner", "nagelfeile",
+      "haargel", "haarwachs", "haarspray", "haarmousse", "haarpflegemittel",
+      "kontaktlinsen", "kontaktlinsenflüssigkeit", "pflegelösung linsen",
       // English
       "detergent", "all-purpose cleaner", "bathroom cleaner", "toilet cleaner",
       "glass cleaner", "dish soap", "dishwasher tablet", "dishwasher pods",
@@ -399,6 +439,12 @@ export const SHOPPING_CATEGORIES = [
       "tampons", "sanitary pads", "panty liners", "sanitary towels", "feminine hygiene",
       "tissues", "paper tissues", "facial tissues", "handkerchiefs",
       "disinfectant", "plasters", "bandages",
+      // Cosmetics & Beauty
+      "makeup", "cosmetics", "lipstick", "lip gloss", "lip liner",
+      "mascara", "eyeliner", "eyeshadow", "concealer", "foundation", "powder",
+      "blush", "bronzer", "highlighter", "nail polish", "nail varnish", "nail remover",
+      "hair gel", "hairspray", "hair mousse", "hair wax",
+      "contact lenses", "lens solution",
       // Español
       "limpiador multiusos", "limpiador de baño", "limpiainodoros",
       "limpiacristales", "lavavajillas", "pastillas lavavajillas", "descalcificador",
@@ -419,6 +465,13 @@ export const SHOPPING_CATEGORIES = [
       "higiene femenina", "higiene íntima", "protector diario",
       "toallitas", "pañuelos", "kleenex",
       "desinfectante", "tiritas", "vendas",
+      // Cosmética
+      "maquillaje", "labial", "pintalabios", "lápiz labial", "brillo de labios",
+      "máscara de pestañas", "rímel", "delineador", "sombra de ojos",
+      "colorete", "iluminador", "corrector", "base de maquillaje", "polvo compacto",
+      "esmalte de uñas", "quitaesmalte", "lima de uñas",
+      "gomina", "laca capilar", "mousse capilar",
+      "lentillas", "líquido para lentillas", "solución para lentillas",
     ],
   },
   {
