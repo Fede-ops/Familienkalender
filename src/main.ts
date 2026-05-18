@@ -260,6 +260,8 @@ async function syncHiddenUidsFromHA(): Promise<void> {
     }
     if (changed) {
       localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify([...pendingDeletes]));
+      // Re-filter state.events so newly-hidden UIDs disappear immediately
+      state.events = state.events.filter((e) => pendingDeletes.get(e.uid) !== PERMANENT);
       render();
     }
   } catch { /* ignore */ }
@@ -1717,14 +1719,16 @@ if (demoMode) {
   renderConfig();
 } else {
   render();
-  void refreshEvents();
   void processQueue();
-  // Pull hidden UIDs from HA so deletions on one device propagate to all others.
-  void syncHiddenUidsFromHA();
-  // Sync calendar entities so all devices use the same HA calendars.
-  void syncEntitiesFromHA().then((entities) => {
-    if (!entities) return;
+  // Pull hidden UIDs first, THEN refresh — so deleted events are never
+  // momentarily re-shown after a page reload.
+  void syncHiddenUidsFromHA().then(() => {
     void refreshEvents();
+    // Sync calendar entities after UIDs are known; re-fetch if they changed.
+    void syncEntitiesFromHA().then((entities) => {
+      if (!entities) return;
+      void refreshEvents();
+    });
   });
   // Sync shopping + todos from HA so all devices share the same state.
   void syncShoppingFromHA().then((items) => {
