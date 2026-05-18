@@ -521,6 +521,17 @@ export function categorizeShoppingItem(name: string): string {
 // ── Storage ────────────────────────────────────────────────────────────────
 
 const STORAGE_KEY = "nanoclaw-shopping";
+const TS_KEY = "nanoclaw-shopping-ts";
+const HA_ENTITY = "sensor.familienkalender_shopping";
+
+interface HAConfig { baseUrl: string; token: string }
+
+function haConfig(): HAConfig | null {
+  try {
+    const raw = localStorage.getItem("ha-config");
+    return raw ? (JSON.parse(raw) as HAConfig) : null;
+  } catch { return null; }
+}
 
 export function loadShoppingItems(): ShoppingItem[] {
   try {
@@ -532,7 +543,46 @@ export function loadShoppingItems(): ShoppingItem[] {
 }
 
 export function saveShoppingItems(items: ShoppingItem[]): void {
+  const ts = Date.now();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  localStorage.setItem(TS_KEY, String(ts));
+  const cfg = haConfig();
+  if (!cfg) return;
+  void fetch(`${cfg.baseUrl}/api/states/${HA_ENTITY}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ state: new Date(ts).toISOString(), attributes: { items, ts } }),
+  }).catch(() => {});
+}
+
+export async function syncShoppingFromHA(): Promise<ShoppingItem[] | null> {
+  const cfg = haConfig();
+  if (!cfg) return null;
+  const localTs = Number(localStorage.getItem(TS_KEY) ?? "0");
+  try {
+    const res = await fetch(`${cfg.baseUrl}/api/states/${HA_ENTITY}`, {
+      headers: { Authorization: `Bearer ${cfg.token}` },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { attributes?: { items?: ShoppingItem[]; ts?: number } };
+    const haTs = data.attributes?.ts ?? 0;
+    const haItems = data.attributes?.items;
+    if (!haItems) {
+      if (localTs > 0) {
+        saveShoppingItems(loadShoppingItems());
+      }
+      return null;
+    }
+    if (haTs > localTs) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(haItems));
+      localStorage.setItem(TS_KEY, String(haTs));
+      return haItems;
+    }
+    if (localTs > haTs) {
+      saveShoppingItems(loadShoppingItems());
+    }
+    return null;
+  } catch { return null; }
 }
 
 // ── Icons (inline to keep view self-contained) ─────────────────────────────

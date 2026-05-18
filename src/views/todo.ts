@@ -728,6 +728,17 @@ export function categorizeTodoItem(title: string): string {
 // ── Storage ────────────────────────────────────────────────────────────────
 
 const STORAGE_KEY = "nanoclaw-todos";
+const TS_KEY = "nanoclaw-todos-ts";
+const HA_ENTITY = "sensor.familienkalender_todos";
+
+interface HAConfig { baseUrl: string; token: string }
+
+function haConfig(): HAConfig | null {
+  try {
+    const raw = localStorage.getItem("ha-config");
+    return raw ? (JSON.parse(raw) as HAConfig) : null;
+  } catch { return null; }
+}
 
 export function loadTodoItems(): TodoItem[] {
   try {
@@ -739,7 +750,46 @@ export function loadTodoItems(): TodoItem[] {
 }
 
 export function saveTodoItems(items: TodoItem[]): void {
+  const ts = Date.now();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  localStorage.setItem(TS_KEY, String(ts));
+  const cfg = haConfig();
+  if (!cfg) return;
+  void fetch(`${cfg.baseUrl}/api/states/${HA_ENTITY}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ state: new Date(ts).toISOString(), attributes: { items, ts } }),
+  }).catch(() => {});
+}
+
+export async function syncTodosFromHA(): Promise<TodoItem[] | null> {
+  const cfg = haConfig();
+  if (!cfg) return null;
+  const localTs = Number(localStorage.getItem(TS_KEY) ?? "0");
+  try {
+    const res = await fetch(`${cfg.baseUrl}/api/states/${HA_ENTITY}`, {
+      headers: { Authorization: `Bearer ${cfg.token}` },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { attributes?: { items?: TodoItem[]; ts?: number } };
+    const haTs = data.attributes?.ts ?? 0;
+    const haItems = data.attributes?.items;
+    if (!haItems) {
+      if (localTs > 0) {
+        saveTodoItems(loadTodoItems());
+      }
+      return null;
+    }
+    if (haTs > localTs) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(haItems));
+      localStorage.setItem(TS_KEY, String(haTs));
+      return haItems;
+    }
+    if (localTs > haTs) {
+      saveTodoItems(loadTodoItems());
+    }
+    return null;
+  } catch { return null; }
 }
 
 // ── Icons ──────────────────────────────────────────────────────────────────

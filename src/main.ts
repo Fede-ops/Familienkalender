@@ -28,12 +28,14 @@ import {
   loadShoppingItems,
   renderShoppingView,
   saveShoppingItems,
+  syncShoppingFromHA,
 } from "./views/shopping.ts";
 import {
   categorizeTodoItem,
   loadTodoItems,
   renderTodoView,
   saveTodoItems,
+  syncTodosFromHA,
   type TodoViewState,
 } from "./views/todo.ts";
 import type { CalendarEvent, FamilyMember, ShoppingItem, TabKey, TodoItem } from "./types.ts";
@@ -1633,6 +1635,17 @@ if (demoMode) {
   render();
   void refreshEvents();
   void processQueue();
+  // Sync shopping + todos from HA so all devices share the same state.
+  void syncShoppingFromHA().then((items) => {
+    if (!items) return;
+    state.shopping = items;
+    if (state.activeTab === "einkauf") render();
+  });
+  void syncTodosFromHA().then((items) => {
+    if (!items) return;
+    state.todos = items;
+    if (state.activeTab === "todo") render();
+  });
 }
 
 updateQueueBadge();
