@@ -75,6 +75,14 @@ function saveQueue(q: QueuedEvent[]): void {
 
 function enqueue(ev: Omit<QueuedEvent, "id" | "attempts" | "createdAt">): void {
   const q = loadQueue();
+  // Don't double-enqueue the same event (same entity + start + summary)
+  const alreadyQueued = q.some(
+    (existing) =>
+      existing.entityId === ev.entityId &&
+      existing.summary === ev.summary &&
+      existing.start === ev.start,
+  );
+  if (alreadyQueued) return;
   q.push({ id: `q-${Date.now()}`, attempts: 0, createdAt: Date.now(), ...ev });
   saveQueue(q);
   updateQueueBadge();
@@ -102,36 +110,59 @@ function updateQueueBadge(): void {
   el.textContent = `✓ Gespeichert · ${q.length} warten auf HA-Sync`;
 }
 
+let processingQueue = false;
+
 async function processQueue(): Promise<void> {
-  const config = loadConfig();
-  if (!config || !navigator.onLine) return;
-  const q = loadQueue();
-  if (q.length === 0) return;
+  // Guard against concurrent invocations (boot + online event + refreshEvents all fire at once)
+  if (processingQueue) return;
+  processingQueue = true;
+  try {
+    const config = loadConfig();
+    if (!config || !navigator.onLine) return;
+    const q = loadQueue();
+    if (q.length === 0) return;
 
-  const client = new HAClient(config);
-  const remaining: QueuedEvent[] = [];
-
-  for (const item of q) {
-    try {
-      await client.createEvent(
-        item.entityId,
-        item.summary,
-        new Date(item.start),
-        new Date(item.end),
-        item.allDay,
-        { location: item.location, description: item.description },
+    // Skip items already confirmed in HA (guards against the timeout double-create
+    // scenario where createEvent reached HA but timed out before we got a response).
+    // Only match against real HA UIDs — local- placeholders are not yet in HA.
+    const toCreate = q.filter((item) => {
+      const itemStartMs = new Date(item.start).getTime();
+      return !state.events.some(
+        (e) =>
+          !e.uid.startsWith("local-") &&
+          e.memberId === item.entityId &&
+          e.summary.toLowerCase() === item.summary.toLowerCase() &&
+          Math.abs(e.start.getTime() - itemStartMs) < 60_000,
       );
-    } catch {
-      const updated = { ...item, attempts: (item.attempts ?? 0) + 1 };
-      if (updated.attempts < 5) remaining.push(updated);
-      // silently drop after 5 failed attempts
-    }
-  }
+    });
 
-  saveQueue(remaining);
-  updateQueueBadge();
-  // Delay refresh so HA has time to index the newly created events before we fetch.
-  if (remaining.length < q.length) setTimeout(() => void refreshEvents(), 3000);
+    const client = new HAClient(config);
+    const remaining: QueuedEvent[] = [];
+
+    for (const item of toCreate) {
+      try {
+        await client.createEvent(
+          item.entityId,
+          item.summary,
+          new Date(item.start),
+          new Date(item.end),
+          item.allDay,
+          { location: item.location, description: item.description },
+        );
+      } catch {
+        const updated = { ...item, attempts: (item.attempts ?? 0) + 1 };
+        if (updated.attempts < 5) remaining.push(updated);
+        // silently drop after 5 failed attempts
+      }
+    }
+
+    saveQueue(remaining);
+    updateQueueBadge();
+    // Delay refresh so HA has time to index the newly created events before we fetch.
+    if (remaining.length < toCreate.length) setTimeout(() => void refreshEvents(), 3000);
+  } finally {
+    processingQueue = false;
+  }
 }
 
 // ── Event cache (LocalStorage) ─────────────────────────────────────────────
@@ -1719,7 +1750,6 @@ if (demoMode) {
   renderConfig();
 } else {
   render();
-  void processQueue();
   // Pull hidden UIDs first, THEN refresh — so deleted events are never
   // momentarily re-shown after a page reload.
   void syncHiddenUidsFromHA().then(() => {
@@ -1744,7 +1774,9 @@ if (demoMode) {
 }
 
 updateQueueBadge();
-window.addEventListener("online", () => void processQueue());
+// On reconnect, refresh first (which calls processQueue after state is populated)
+// so the already-in-HA dedup check sees real UIDs before any creates fire.
+window.addEventListener("online", () => void refreshEvents());
 
 // ── Calendar swipe navigation ──────────────────────────────────────────────
 
