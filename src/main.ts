@@ -230,6 +230,39 @@ function savePendingDeletes(map: Map<string, number>): void {
   try {
     localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify([...map]));
   } catch { /* ignore */ }
+  // Sync permanent deletions to HA so all devices honour the same hidden UIDs.
+  const permanent = [...map].filter(([, exp]) => exp === PERMANENT).map(([uid]) => uid);
+  const cfg = loadConfig();
+  if (!cfg || permanent.length === 0) return;
+  void fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_hidden_uids`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ state: String(permanent.length), attributes: { uids: permanent, ts: Date.now() } }),
+  }).catch(() => {});
+}
+
+async function syncHiddenUidsFromHA(): Promise<void> {
+  const cfg = loadConfig();
+  if (!cfg) return;
+  try {
+    const res = await fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_hidden_uids`, {
+      headers: { Authorization: `Bearer ${cfg.token}` },
+    });
+    if (!res.ok) return;
+    const data = (await res.json()) as { attributes?: { uids?: string[] } };
+    const uids = data.attributes?.uids ?? [];
+    let changed = false;
+    for (const uid of uids) {
+      if (!pendingDeletes.has(uid)) {
+        pendingDeletes.set(uid, PERMANENT);
+        changed = true;
+      }
+    }
+    if (changed) {
+      localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify([...pendingDeletes]));
+      render();
+    }
+  } catch { /* ignore */ }
 }
 
 // uid → expiry ms (-1 = permanent until HA confirms)
@@ -1686,6 +1719,8 @@ if (demoMode) {
   render();
   void refreshEvents();
   void processQueue();
+  // Pull hidden UIDs from HA so deletions on one device propagate to all others.
+  void syncHiddenUidsFromHA();
   // Sync calendar entities so all devices use the same HA calendars.
   void syncEntitiesFromHA().then((entities) => {
     if (!entities) return;
