@@ -62,11 +62,15 @@ export class HAClient {
       else errors.push(r.reason instanceof Error ? r.reason.message : String(r.reason));
     }
     if (errors.length > 0 && events.length === 0) throw new Error(errors[0]);
-    // Deduplicate: same uid wins; for fallback uids, same (member+start+title) wins.
-    const seen = new Set<string>();
+    // Primary dedup: by HA uid. Secondary: by (memberId + startMs + summary) to
+    // catch events that appear in multiple calendar entities without a shared uid.
+    const seenUid = new Set<string>();
+    const seenFp = new Set<string>();
     const deduped = events.filter((e) => {
-      if (seen.has(e.uid)) return false;
-      seen.add(e.uid);
+      const fp = `${e.memberId}|${e.start.getTime()}|${e.summary}`;
+      if (seenUid.has(e.uid) || seenFp.has(fp)) return false;
+      seenUid.add(e.uid);
+      seenFp.add(fp);
       return true;
     });
     return deduped.sort((a, b) => a.start.getTime() - b.start.getTime());

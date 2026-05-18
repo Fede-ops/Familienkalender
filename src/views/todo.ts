@@ -766,28 +766,37 @@ export async function syncTodosFromHA(): Promise<TodoItem[] | null> {
   const cfg = haConfig();
   if (!cfg) return null;
   const localTs = Number(localStorage.getItem(TS_KEY) ?? "0");
+  const localItems = loadTodoItems();
   try {
     const res = await fetch(`${cfg.baseUrl}/api/states/${HA_ENTITY}`, {
       headers: { Authorization: `Bearer ${cfg.token}` },
     });
-    if (!res.ok) return null;
+    // HA has no entity yet — push whatever we have locally
+    if (!res.ok) {
+      if (localItems.length > 0) saveTodoItems(localItems);
+      return null;
+    }
     const data = (await res.json()) as { attributes?: { items?: TodoItem[]; ts?: number } };
     const haTs = data.attributes?.ts ?? 0;
     const haItems = data.attributes?.items;
-    if (!haItems) {
-      if (localTs > 0) {
-        saveTodoItems(loadTodoItems());
-      }
+    // HA empty → push local
+    if (!haItems || haItems.length === 0) {
+      if (localItems.length > 0) saveTodoItems(localItems);
       return null;
     }
+    // Local empty but HA has data → always pull
+    if (localItems.length === 0) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(haItems));
+      localStorage.setItem(TS_KEY, String(haTs || Date.now()));
+      return haItems;
+    }
+    // Both have data — compare timestamps
     if (haTs > localTs) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(haItems));
       localStorage.setItem(TS_KEY, String(haTs));
       return haItems;
     }
-    if (localTs > haTs) {
-      saveTodoItems(loadTodoItems());
-    }
+    if (localTs > haTs) saveTodoItems(localItems);
     return null;
   } catch { return null; }
 }
