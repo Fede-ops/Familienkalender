@@ -14,7 +14,7 @@ export const SHOPPING_CATEGORIES = [
       "kirsche", "pflaume", "zwetschge", "pfirsich", "aprikose", "nektarine", "mango", "papaya",
       "ananas", "melone", "wassermelone", "kiwi", "zitrone", "limette", "avocado", "feige",
       "granatapfel", "passionsfrucht", "guave", "lychee", "kokosnuss", "datteln", "trockenfrüchte",
-      "rosinen", "cranberries", "obst", "frisches obst",
+      "rosinen", "cranberries", "obst", "frisches obst", "früchte", "frucht", "fruchtig",
       // Deutsch – Gemüse
       "tomate", "gurke", "paprika", "zucchini", "aubergine", "karotte", "möhre", "sellerie",
       "lauch", "zwiebel", "schalotte", "frühlingszwiebel", "knoblauch", "kartoffel", "süßkartoffel",
