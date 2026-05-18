@@ -26,6 +26,8 @@ export const TODO_CATEGORIES = [
       "chirurgie", "chirurg", "chirurgin", "chirurgisch",
       "anästhesie", "anästhesist", "narkose", "lokalanästhesie",
       "aufklärung op", "op-vorbereitung", "op-liste",
+      // ≤4-Zeichen Abkürzungen (Exact-Token-Match):
+      "op", "ops", "med", "mri",
       "wundversorgung", "wundheilung", "naht", "verband",
       "blutung", "bluttransfusion", "transfusion",
       "nachsorge", "kontrolltermin",
