@@ -668,10 +668,11 @@ function showNotificationsSheet(): void {
     const forEachItems = state.members
       .map((m) => `        - {entity: "${m.id}", id: "${m.id.replace("calendar.", "")}", name: "${m.name}"}`)
       .join("\n");
+    const prefix = cfg.topicPrefix;
     return `# 1. configuration.yaml – rest_command hinzufügen:
 rest_command:
   ntfy_post:
-    url: "https://ntfy.sh/{{ topic }}"
+    url: "{{ url }}"
     method: POST
     headers:
       Title: "{{ title }}"
@@ -697,15 +698,23 @@ ${forEachItems}
       sequence:
         - variables:
             evs: "{{ today[repeat.item.entity].events }}"
-            msg: >-
-              {% if evs | length == 0 %}Keine Termine heute
-              {% else %}{% for e in evs %}{{ e.summary }}{% if e.start.dateTime is defined %} {{ e.start.dateTime[11:16] }}{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}
-              {% endif %}
+            ntfy_url: "https://ntfy.sh/${prefix}-{{ repeat.item.id }}"
+            ntfy_title: "📅 {{ repeat.item.name }} – Heute"
+            ntfy_msg: >-
+              {%- set ns = namespace(parts=[]) -%}
+              {%- for e in evs -%}
+                {%- if e.all_day -%}
+                  {%- set ns.parts = ns.parts + [e.summary] -%}
+                {%- else -%}
+                  {%- set ns.parts = ns.parts + [(e.start | string)[11:16] + ' ' + e.summary] -%}
+                {%- endif -%}
+              {%- endfor -%}
+              {%- if ns.parts | length == 0 -%}Keine Termine heute{%- else -%}{{ ns.parts | join(' · ') }}{%- endif -%}
         - action: rest_command.ntfy_post
           data:
-            topic: "${cfg.topicPrefix}-{{ repeat.item.id }}"
-            title: "\\U0001F4C5 {{ repeat.item.name }} – Heute"
-            message: "{{ msg }}"
+            url: "{{ ntfy_url }}"
+            title: "{{ ntfy_title }}"
+            message: "{{ ntfy_msg }}"
 mode: single`;
   }
 
@@ -733,6 +742,9 @@ mode: single`;
       ${notSupported}
       <label class="notif-field-label">ntfy Server
         <input id="notif-base" class="notif-input" type="url" value="${escHtml(cfg.ntfyBase)}" placeholder="https://ntfy.sh">
+      </label>
+      <label class="notif-field-label">VAPID-Schlüssel <span class="notif-hint">(optional – wird automatisch geladen)</span>
+        <input id="notif-vapid" class="notif-input" type="text" value="${escHtml(cfg.vapidKey ?? "")}" placeholder="BK8… (nur bei Problemen nötig)">
       </label>
       <label class="notif-field-label">Topic-Prefix <span class="notif-hint">(mit der Familie teilen)</span>
         <div class="notif-prefix-row">
@@ -799,10 +811,11 @@ mode: single`;
   function readConfig(): NotifConfig {
     const base = (sheet.querySelector<HTMLInputElement>("#notif-base")!.value.trim().replace(/\/$/, "")) || "https://ntfy.sh";
     const prefix = sheet.querySelector<HTMLInputElement>("#notif-prefix")!.value.trim();
+    const vapidKey = sheet.querySelector<HTMLInputElement>("#notif-vapid")!.value.trim() || undefined;
     const checked = [...sheet.querySelectorAll<HTMLInputElement>(".notif-checkbox:checked")]
       .map((el) => el.dataset.memberId!)
       .filter(Boolean);
-    return { ntfyBase: base, topicPrefix: prefix, subscribedMemberIds: checked };
+    return { ntfyBase: base, topicPrefix: prefix, subscribedMemberIds: checked, vapidKey };
   }
 
   // Save & subscribe
@@ -816,7 +829,7 @@ mode: single`;
     btn.textContent = "…";
     btn.setAttribute("disabled", "");
     try {
-      await updateNtfySubscription(updated);
+      await updateNtfySubscription(updated, updated.vapidKey);
       saveNotifConfig(updated);
       const count = updated.subscribedMemberIds.length;
       showStatus(`✓ Aktiv · ${count} Kalender abonniert`, true);

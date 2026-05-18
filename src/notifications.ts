@@ -2,6 +2,7 @@ export interface NotifConfig {
   ntfyBase: string;
   topicPrefix: string;
   subscribedMemberIds: string[];
+  vapidKey?: string;
 }
 
 const NOTIF_KEY = "nanoclaw-notif-config";
@@ -40,15 +41,29 @@ export function memberTopic(prefix: string, memberId: string): string {
   return `${prefix}-${memberId.replace("calendar.", "")}`;
 }
 
-async function getNtfyVapidKey(base: string): Promise<string> {
-  const res = await fetch(`${base}/v1/config`);
-  if (!res.ok) throw new Error(`ntfy nicht erreichbar (${res.status})`);
-  const cfg = (await res.json()) as { webPushPublicKey?: string };
-  if (!cfg.webPushPublicKey) throw new Error("ntfy Web Push nicht aktiviert auf diesem Server");
-  return cfg.webPushPublicKey;
+async function getNtfyVapidKey(base: string, manualKey?: string): Promise<string> {
+  if (manualKey && manualKey.trim()) return manualKey.trim();
+
+  const res = await fetch(`${base}/v1/info`).catch(() => null)
+    ?? await fetch(`${base}/v1/config`).catch(() => null);
+  if (!res || !res.ok) throw new Error(`ntfy nicht erreichbar`);
+
+  const cfg = (await res.json()) as Record<string, string | undefined>;
+  // ntfy uses kebab-case in JSON; older versions may use camelCase
+  const key =
+    cfg["web-push-public-key"] ??
+    cfg["webPushPublicKey"] ??
+    cfg["web_push_public_key"];
+  if (!key) {
+    throw new Error(
+      "ntfy Web Push nicht aktiviert — bitte VAPID-Schlüssel manuell eingeben " +
+      "(ntfy Admin → /v1/info → web-push-public-key)",
+    );
+  }
+  return key;
 }
 
-export async function updateNtfySubscription(cfg: NotifConfig): Promise<void> {
+export async function updateNtfySubscription(cfg: NotifConfig, manualVapidKey?: string): Promise<void> {
   if (!("Notification" in window) || !("serviceWorker" in navigator)) {
     throw new Error("Push Notifications werden von diesem Browser nicht unterstützt");
   }
@@ -58,7 +73,7 @@ export async function updateNtfySubscription(cfg: NotifConfig): Promise<void> {
     throw new Error("Benachrichtigungen wurden verweigert — bitte in den Browser-Einstellungen aktivieren");
   }
 
-  const vapidKey = await getNtfyVapidKey(cfg.ntfyBase);
+  const vapidKey = await getNtfyVapidKey(cfg.ntfyBase, manualVapidKey);
 
   // Convert base64url VAPID key to Uint8Array for pushManager
   const padding = "=".repeat((4 - (vapidKey.length % 4)) % 4);
