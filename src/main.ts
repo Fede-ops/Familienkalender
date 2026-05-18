@@ -1584,6 +1584,7 @@ function renderConfig(): void {
       return;
     }
     saveConfig({ baseUrl: url.replace(/\/$/, ""), token, calendarEntities: entities });
+    pushEntitiesToHA(entities);
     render();
     void refreshEvents();
   });
@@ -1629,6 +1630,51 @@ function buildDemoWeek(weekStart: Date): CalendarEvent[] {
   }
 })();
 
+// ── Calendar entity config sync ────────────────────────────────────────────
+
+const ENTITIES_TS_KEY = "nanoclaw-entities-ts";
+const HA_ENTITIES_ENTITY = "sensor.familienkalender_entities";
+
+function pushEntitiesToHA(entities: string[]): void {
+  const cfg = loadConfig();
+  if (!cfg) return;
+  const ts = Date.now();
+  localStorage.setItem(ENTITIES_TS_KEY, String(ts));
+  void fetch(`${cfg.baseUrl}/api/states/${HA_ENTITIES_ENTITY}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ state: new Date(ts).toISOString(), attributes: { entities, ts } }),
+  }).catch(() => {});
+}
+
+async function syncEntitiesFromHA(): Promise<string[] | null> {
+  const cfg = loadConfig();
+  if (!cfg) return null;
+  const localTs = Number(localStorage.getItem(ENTITIES_TS_KEY) ?? "0");
+  const localEntities = cfg.calendarEntities;
+  try {
+    const res = await fetch(`${cfg.baseUrl}/api/states/${HA_ENTITIES_ENTITY}`, {
+      headers: { Authorization: `Bearer ${cfg.token}` },
+    });
+    if (!res.ok) { pushEntitiesToHA(localEntities); return null; }
+    const data = (await res.json()) as { attributes?: { entities?: string[]; ts?: number } };
+    const haTs = data.attributes?.ts ?? 0;
+    const haEntities = data.attributes?.entities;
+    if (!haEntities || haEntities.length === 0) {
+      pushEntitiesToHA(localEntities); return null;
+    }
+    if (haTs > localTs) {
+      saveConfig({ ...cfg, calendarEntities: haEntities });
+      localStorage.setItem(ENTITIES_TS_KEY, String(haTs));
+      return haEntities;
+    }
+    if (localTs > haTs) pushEntitiesToHA(localEntities);
+    return null;
+  } catch { return null; }
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+
 const demoMode = new URLSearchParams(window.location.search).has("demo");
 const config = loadConfig();
 if (demoMode) {
@@ -1640,6 +1686,11 @@ if (demoMode) {
   render();
   void refreshEvents();
   void processQueue();
+  // Sync calendar entities so all devices use the same HA calendars.
+  void syncEntitiesFromHA().then((entities) => {
+    if (!entities) return;
+    void refreshEvents();
+  });
   // Sync shopping + todos from HA so all devices share the same state.
   void syncShoppingFromHA().then((items) => {
     if (!items) return;
