@@ -16,11 +16,10 @@ export default defineConfig({
   },
   plugins: [
     VitePWA({
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
       registerType: "autoUpdate",
-      workbox: {
-        skipWaiting: true,
-        clientsClaim: true,
-      },
       manifest: {
         name: "Familienkalender",
         short_name: "Kalender",

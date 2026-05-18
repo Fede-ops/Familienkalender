@@ -1,5 +1,14 @@
 import "./style.css";
 import { HAClient, loadConfig, saveConfig } from "./ha-client.ts";
+import {
+  generateTopicPrefix,
+  isSubscriptionSupported,
+  loadNotifConfig,
+  removeNtfySubscription,
+  saveNotifConfig,
+  updateNtfySubscription,
+  type NotifConfig,
+} from "./notifications.ts";
 declare const __BUILD_TIME__: string;
 
 // Reload when a new service worker takes over — ensures fresh JS is executed.
@@ -642,6 +651,196 @@ function bindEvents(): void {
   });
 }
 
+// ── Notification settings sheet ────────────────────────────────────────────
+
+function showNotificationsSheet(): void {
+  document.getElementById("notif-sheet")?.remove();
+
+  const cfg: NotifConfig = loadNotifConfig() ?? {
+    ntfyBase: "https://ntfy.sh",
+    topicPrefix: generateTopicPrefix(),
+    subscribedMemberIds: [],
+  };
+  const supported = isSubscriptionSupported();
+
+  function haYaml(): string {
+    const entities = state.members.map((m) => `        - ${m.id}`).join("\n");
+    const forEachItems = state.members
+      .map((m) => `        - {entity: "${m.id}", id: "${m.id.replace("calendar.", "")}", name: "${m.name}"}`)
+      .join("\n");
+    return `# 1. configuration.yaml – rest_command hinzufügen:
+rest_command:
+  ntfy_post:
+    url: "https://ntfy.sh/{{ topic }}"
+    method: POST
+    headers:
+      Title: "{{ title }}"
+    payload: "{{ message }}"
+
+# 2. Automatisierung (Einstellungen → Automatisierungen → + → YAML):
+alias: "Familienkalender Tagesübersicht"
+trigger:
+  - platform: time
+    at: "09:00:00"
+action:
+  - action: calendar.get_events
+    target:
+      entity_id:
+${entities}
+    data:
+      start_date_time: "{{ now().strftime('%Y-%m-%d 00:00:00') }}"
+      end_date_time: "{{ now().strftime('%Y-%m-%d 23:59:59') }}"
+    response_variable: today
+  - repeat:
+      for_each:
+${forEachItems}
+      sequence:
+        - variables:
+            evs: "{{ today[repeat.item.entity].events }}"
+            msg: >-
+              {% if evs | length == 0 %}Keine Termine heute
+              {% else %}{% for e in evs %}{{ e.summary }}{% if e.start.dateTime is defined %} {{ e.start.dateTime[11:16] }}{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}
+              {% endif %}
+        - action: rest_command.ntfy_post
+          data:
+            topic: "${cfg.topicPrefix}-{{ repeat.item.id }}"
+            title: "\\U0001F4C5 {{ repeat.item.name }} – Heute"
+            message: "{{ msg }}"
+mode: single`;
+  }
+
+  function escHtml(s: string): string {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  const memberRows = state.members.map((m) => {
+    const checked = cfg.subscribedMemberIds.includes(m.id);
+    return `<label class="notif-member-row" data-member-id="${m.id}">
+      <span class="notif-member-dot" style="background:${m.color};box-shadow:0 0 5px ${m.color}88;"></span>
+      <span class="notif-member-name">${escHtml(m.name)}</span>
+      <input type="checkbox" class="notif-checkbox" data-member-id="${m.id}" ${checked ? "checked" : ""}>
+    </label>`;
+  }).join("");
+
+  const notSupported = !supported
+    ? `<p class="notif-warning">Push Notifications werden von diesem Browser nicht unterstützt. Bitte öffne die App als installierte PWA (zum Home-Bildschirm hinzufügen).</p>`
+    : "";
+
+  const html = `<div id="notif-sheet" class="sheet-backdrop">
+    <div class="bottom-sheet" data-stop-propagation>
+      <div class="bottom-sheet__handle"></div>
+      <p class="bottom-sheet__title">🔔 Benachrichtigungen</p>
+      ${notSupported}
+      <label class="notif-field-label">ntfy Server
+        <input id="notif-base" class="notif-input" type="url" value="${escHtml(cfg.ntfyBase)}" placeholder="https://ntfy.sh">
+      </label>
+      <label class="notif-field-label">Topic-Prefix <span class="notif-hint">(mit der Familie teilen)</span>
+        <div class="notif-prefix-row">
+          <input id="notif-prefix" class="notif-input notif-prefix-input" type="text" value="${escHtml(cfg.topicPrefix)}" placeholder="familienkalender-abc12">
+          <button id="notif-prefix-regen" class="notif-regen-btn" title="Neuen Prefix generieren">🔀</button>
+        </div>
+      </label>
+      <p class="notif-section-label">Für welche Kalender möchtest du Benachrichtigungen?</p>
+      <div class="notif-member-list">${memberRows}</div>
+      <div class="notif-actions">
+        <button id="notif-save-btn" class="notif-save-btn"${!supported ? " disabled" : ""}>Aktivieren / Aktualisieren</button>
+        <button id="notif-remove-btn" class="notif-remove-btn">Deaktivieren</button>
+      </div>
+      <div id="notif-status" class="notif-status"></div>
+      <button id="notif-yaml-btn" class="notif-yaml-btn">HA Automation YAML anzeigen</button>
+      <div id="notif-yaml-block" class="notif-yaml-block" style="display:none;">
+        <pre id="notif-yaml-pre" class="notif-yaml-pre">${escHtml(haYaml())}</pre>
+        <button id="notif-yaml-copy" class="notif-yaml-copy-btn">Kopieren</button>
+      </div>
+    </div>
+  </div>`;
+
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = html;
+  const sheet = wrapper.firstElementChild as HTMLElement;
+  document.body.appendChild(sheet);
+
+  sheet.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement) === sheet) sheet.remove();
+  });
+  sheet.querySelector<HTMLElement>("[data-stop-propagation]")!
+    .addEventListener("click", (e) => e.stopPropagation());
+
+  // Regenerate prefix
+  sheet.querySelector<HTMLElement>("#notif-prefix-regen")!.addEventListener("click", () => {
+    const input = sheet.querySelector<HTMLInputElement>("#notif-prefix")!;
+    input.value = generateTopicPrefix();
+  });
+
+  // YAML toggle
+  sheet.querySelector<HTMLElement>("#notif-yaml-btn")!.addEventListener("click", () => {
+    const block = sheet.querySelector<HTMLElement>("#notif-yaml-block")!;
+    const btn = sheet.querySelector<HTMLElement>("#notif-yaml-btn")!;
+    const visible = block.style.display !== "none";
+    block.style.display = visible ? "none" : "block";
+    btn.textContent = visible ? "HA Automation YAML anzeigen" : "YAML ausblenden";
+  });
+
+  // Copy YAML
+  sheet.querySelector<HTMLElement>("#notif-yaml-copy")!.addEventListener("click", async () => {
+    const pre = sheet.querySelector<HTMLElement>("#notif-yaml-pre")!;
+    await navigator.clipboard.writeText(pre.textContent ?? "").catch(() => {});
+    const btn = sheet.querySelector<HTMLElement>("#notif-yaml-copy")!;
+    btn.textContent = "Kopiert ✓";
+    setTimeout(() => { btn.textContent = "Kopieren"; }, 2000);
+  });
+
+  function showStatus(msg: string, ok: boolean): void {
+    const el = sheet.querySelector<HTMLElement>("#notif-status")!;
+    el.textContent = msg;
+    el.style.color = ok ? "#30D158" : "#FF453A";
+  }
+
+  function readConfig(): NotifConfig {
+    const base = (sheet.querySelector<HTMLInputElement>("#notif-base")!.value.trim().replace(/\/$/, "")) || "https://ntfy.sh";
+    const prefix = sheet.querySelector<HTMLInputElement>("#notif-prefix")!.value.trim();
+    const checked = [...sheet.querySelectorAll<HTMLInputElement>(".notif-checkbox:checked")]
+      .map((el) => el.dataset.memberId!)
+      .filter(Boolean);
+    return { ntfyBase: base, topicPrefix: prefix, subscribedMemberIds: checked };
+  }
+
+  // Save & subscribe
+  sheet.querySelector<HTMLElement>("#notif-save-btn")!.addEventListener("click", async () => {
+    const updated = readConfig();
+    if (!updated.topicPrefix) {
+      showStatus("Bitte Topic-Prefix eingeben", false);
+      return;
+    }
+    const btn = sheet.querySelector<HTMLElement>("#notif-save-btn")!;
+    btn.textContent = "…";
+    btn.setAttribute("disabled", "");
+    try {
+      await updateNtfySubscription(updated);
+      saveNotifConfig(updated);
+      const count = updated.subscribedMemberIds.length;
+      showStatus(`✓ Aktiv · ${count} Kalender abonniert`, true);
+    } catch (err) {
+      showStatus(err instanceof Error ? err.message : String(err), false);
+    }
+    btn.textContent = "Aktivieren / Aktualisieren";
+    btn.removeAttribute("disabled");
+  });
+
+  // Deactivate
+  sheet.querySelector<HTMLElement>("#notif-remove-btn")!.addEventListener("click", async () => {
+    const current = loadNotifConfig();
+    if (!current) return;
+    try {
+      await removeNtfySubscription(current);
+      saveNotifConfig({ ...current, subscribedMemberIds: [] });
+      showStatus("Benachrichtigungen deaktiviert", true);
+    } catch (err) {
+      showStatus(err instanceof Error ? err.message : String(err), false);
+    }
+  });
+}
+
 // ── Filter sheet ───────────────────────────────────────────────────────────
 
 function showFilterSheet(): void {
@@ -681,7 +880,13 @@ function showFilterSheet(): void {
           <span class="filter-row__check">${allOn ? checkSvg : ""}</span>
         </button>
         <div class="filter-member-list">${rows}</div>
-        <div style="margin-top:8px;border-top:1px solid rgba(120,120,128,0.2);padding-top:4px;">${dupeRow}</div>
+        <div style="margin-top:8px;border-top:1px solid rgba(120,120,128,0.2);padding-top:4px;">
+          ${dupeRow}
+          <button class="filter-row filter-notif-row" id="filter-notif-btn">
+            <span class="filter-row__name">🔔 Benachrichtigungen</span>
+            <span style="font-size:12px;font-weight:600;color:rgba(235,235,245,0.5);">Einrichten ›</span>
+          </button>
+        </div>
       </div>
     </div>`;
 
@@ -722,6 +927,10 @@ function showFilterSheet(): void {
     sheet.querySelector<HTMLElement>("#filter-dupe-btn")?.addEventListener("click", () => {
       sheet.remove();
       void runFullDuplicateCleanup();
+    });
+    sheet.querySelector<HTMLElement>("#filter-notif-btn")?.addEventListener("click", () => {
+      sheet.remove();
+      showNotificationsSheet();
     });
   }
 
