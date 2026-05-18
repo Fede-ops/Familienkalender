@@ -1282,12 +1282,17 @@ function findDuplicateUids(events: CalendarEvent[]): string[] {
 
       let isDupe = false;
       if (a.allDay && b.allDay) {
-        // All-day events: duplicate if their date ranges overlap
-        // (catches same event created twice with slightly different start dates)
+        // Both all-day: duplicate if date ranges overlap
         isDupe = a.start < b.end && b.start < a.end;
       } else if (!a.allDay && !b.allDay) {
-        // Timed events: duplicate if exact same minute
+        // Both timed: duplicate if same start minute
         isDupe = a.start.getTime() === b.start.getTime();
+      } else {
+        // Mixed: timed event is a duplicate of the all-day event if it falls
+        // within the all-day span and has the same name (e.g. "Urlaub" created
+        // both as an all-day and accidentally as hourly slots)
+        const [allDay, timed] = a.allDay ? [a, b] : [b, a];
+        isDupe = timed.start >= allDay.start && timed.start < allDay.end;
       }
 
       if (isDupe) dupes.add(b.uid);
