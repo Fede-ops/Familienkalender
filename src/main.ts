@@ -264,7 +264,8 @@ function savePendingDeletes(map: Map<string, number>): void {
   // Sync permanent deletions to HA so all devices honour the same hidden UIDs.
   const permanent = [...map].filter(([, exp]) => exp === PERMANENT).map(([uid]) => uid);
   const cfg = loadConfig();
-  if (!cfg || permanent.length === 0) return;
+  if (!cfg) return;
+  // Always POST — even with empty list — so the sensor always reflects current state.
   void fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_hidden_uids`, {
     method: "POST",
     headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
@@ -1652,7 +1653,9 @@ function renderConfig(): void {
     saveConfig({ baseUrl: url.replace(/\/$/, ""), token, calendarEntities: entities });
     pushEntitiesToHA(entities);
     render();
-    void refreshEvents();
+    // Sync hidden UIDs from HA BEFORE fetching events so that previously-hidden
+    // duplicates are not shown on the first refresh after a fresh login.
+    void syncHiddenUidsFromHA().then(() => void refreshEvents());
   });
 }
 
