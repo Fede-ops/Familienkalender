@@ -1216,6 +1216,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   padding-bottom: 110px;
 }
 
+/* When the header + add-input row are wrapped in .sticky-nav (Einkauf, To-Do),
+   the scrollable list needs top padding to clear the fixed banner. The exact
+   height depends on whether a member-filter row is rendered (To-Do), so we
+   reserve enough for the tallest variant. */
+.list-body--with-sticky {
+  padding-top: 168px;
+}
+
 .category-group {
   margin-bottom: 6px;
 }

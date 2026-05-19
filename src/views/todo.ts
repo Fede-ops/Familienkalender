@@ -755,6 +755,8 @@ export function saveTodoItems(items: TodoItem[]): void {
   localStorage.setItem(TS_KEY, String(ts));
   const cfg = haConfig();
   if (!cfg) return;
+  // Never overwrite HA with an empty list — see shopping.ts for rationale.
+  if (items.length === 0) return;
   void fetch(`${cfg.baseUrl}/api/states/${HA_ENTITY}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
@@ -937,15 +939,17 @@ export function renderTodoView(viewState: TodoViewState): string {
   const totalOpen = open.length;
 
   return `
-    <header class="header list-header">
-      <h1 class="header__title">To-Do${totalOpen > 0 ? ` <span class="header__badge">${totalOpen}</span>` : ""}</h1>
-    </header>
-    <div class="todo-member-filter">${memberChips}</div>
-    <div class="list-add">
-      <input class="list-add__input" id="list-input" placeholder="Aufgabe hinzufügen…" autocomplete="off" autocorrect="on" />
-      <button class="list-add__btn" data-action="add-todo">${ICONS.plus}</button>
+    <div class="sticky-nav">
+      <header class="header list-header">
+        <h1 class="header__title">To-Do${totalOpen > 0 ? ` <span class="header__badge">${totalOpen}</span>` : ""}</h1>
+      </header>
+      <div class="todo-member-filter">${memberChips}</div>
+      <div class="list-add">
+        <input class="list-add__input" id="list-input" placeholder="Aufgabe hinzufügen…" autocomplete="off" autocorrect="on" />
+        <button class="list-add__btn" data-action="add-todo">${ICONS.plus}</button>
+      </div>
     </div>
-    <div class="list-body">${bodyHtml}</div>
+    <div class="list-body list-body--with-sticky">${bodyHtml}</div>
     ${tabBar("todo")}
   `;
 }

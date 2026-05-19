@@ -548,6 +548,13 @@ export function saveShoppingItems(items: ShoppingItem[]): void {
   localStorage.setItem(TS_KEY, String(ts));
   const cfg = haConfig();
   if (!cfg) return;
+  // Never overwrite the HA sensor with an empty list. Empty writes are almost
+  // always a side effect of stale local state or a race condition, not a
+  // deliberate user action — and they would wipe the canonical copy that other
+  // devices rely on. If a user explicitly clears the list, the local empty
+  // state still survives on this device; on next sync HA's items will be
+  // pulled back (which is the desired "soft delete" UX).
+  if (items.length === 0) return;
   void fetch(`${cfg.baseUrl}/api/states/${HA_ENTITY}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
@@ -690,14 +697,16 @@ export function renderShoppingView(items: ShoppingItem[]): string {
   const totalActive = active.length;
 
   return `
-    <header class="header list-header">
-      <h1 class="header__title">Einkauf${totalActive > 0 ? ` <span class="header__badge">${totalActive}</span>` : ""}</h1>
-    </header>
-    <div class="list-add">
-      <input class="list-add__input" id="list-input" placeholder="Artikel hinzufügen…" autocomplete="off" autocorrect="on" />
-      <button class="list-add__btn" data-action="add-item">${ICONS.plus}</button>
+    <div class="sticky-nav">
+      <header class="header list-header">
+        <h1 class="header__title">Einkauf${totalActive > 0 ? ` <span class="header__badge">${totalActive}</span>` : ""}</h1>
+      </header>
+      <div class="list-add">
+        <input class="list-add__input" id="list-input" placeholder="Artikel hinzufügen…" autocomplete="off" autocorrect="on" />
+        <button class="list-add__btn" data-action="add-item">${ICONS.plus}</button>
+      </div>
     </div>
-    <div class="list-body">${bodyHtml}</div>
+    <div class="list-body list-body--with-sticky">${bodyHtml}</div>
     ${tabBar("einkauf")}
   `;
 }

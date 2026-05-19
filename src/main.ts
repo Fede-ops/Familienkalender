@@ -1595,7 +1595,16 @@ async function deleteEvent(ev: CalendarEvent): Promise<void> {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("Failed to delete event from HA:", msg);
-      showTransientBanner(`HA-Löschung fehlgeschlagen: ${msg}`, true);
+      // HA 400 = the calendar integration is read-only (typical for iCal
+      // subscriptions, shared Google calendars without write scope, etc.).
+      // We can't actually delete the event from the source; the PERMANENT
+      // marker hides it on every synced device but the user must delete it
+      // at the source if they want it truly gone.
+      const isReadOnly = /\b40[045]\b/.test(msg);
+      const hint = isReadOnly
+        ? "Kalender ist read-only. Event ist hier ausgeblendet, in der Quelle (Google/iCal) musst du es selbst löschen."
+        : msg;
+      showTransientBanner(`Auf allen Geräten ausgeblendet · ${hint}`, true);
     }
   }
 }
@@ -1871,15 +1880,26 @@ if (demoMode) {
     });
   });
   // Sync shopping + todos from HA so all devices share the same state.
-  void syncShoppingFromHA().then((items) => {
-    if (!items) return;
-    state.shopping = items;
-    if (state.activeTab === "einkauf") render();
-  });
-  void syncTodosFromHA().then((items) => {
-    if (!items) return;
-    state.todos = items;
-    if (state.activeTab === "todo") render();
+  const pullShopping = () =>
+    void syncShoppingFromHA().then((items) => {
+      if (!items) return;
+      state.shopping = items;
+      if (state.activeTab === "einkauf") render();
+    });
+  const pullTodos = () =>
+    void syncTodosFromHA().then((items) => {
+      if (!items) return;
+      state.todos = items;
+      if (state.activeTab === "todo") render();
+    });
+  pullShopping();
+  pullTodos();
+  // Periodic re-sync so changes made on other devices show up without a
+  // full app restart. 60s is a reasonable balance between freshness and load.
+  setInterval(() => { pullShopping(); pullTodos(); }, 60_000);
+  // Also pull when the app comes back to the foreground.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") { pullShopping(); pullTodos(); }
   });
 }
 
