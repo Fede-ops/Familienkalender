@@ -1897,6 +1897,24 @@ updateQueueBadge();
 // so the already-in-HA dedup check sees real UIDs before any creates fire.
 window.addEventListener("online", () => void refreshEvents());
 
+// ── iOS keyboard: keep sticky-nav pinned to the visual viewport ────────────
+// When the iOS software keyboard opens inside a PWA, the layout viewport
+// scrolls upward so the focused input stays above the keyboard. This pushes
+// position:fixed elements (which are anchored to the layout viewport, not the
+// visual viewport) off the top of the screen. visualViewport.offsetTop tells
+// us how far the layout viewport has scrolled relative to the visual viewport;
+// we feed that into --vv-offset so .sticky-nav follows the visible area.
+if (window.visualViewport) {
+  const syncNav = () => {
+    document.documentElement.style.setProperty(
+      "--vv-offset",
+      `${window.visualViewport!.offsetTop}px`,
+    );
+  };
+  window.visualViewport.addEventListener("resize", syncNav);
+  window.visualViewport.addEventListener("scroll", syncNav);
+}
+
 // ── Calendar swipe navigation ──────────────────────────────────────────────
 
 (function setupCalendarSwipe() {
