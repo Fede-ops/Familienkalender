@@ -41,26 +41,46 @@ export function memberTopic(prefix: string, memberId: string): string {
   return `${prefix}-${memberId.replace("calendar.", "")}`;
 }
 
-async function getNtfyVapidKey(base: string, manualKey?: string): Promise<string> {
-  if (manualKey && manualKey.trim()) return manualKey.trim();
+async function tryFetchInfo(url: string): Promise<Response | null> {
+  const opts: RequestInit = {
+    method: "GET",
+    mode: "cors",
+    credentials: "omit",
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  };
+  return fetch(url, opts).catch(() => null);
+}
 
-  const res = await fetch(`${base}/v1/info`).catch(() => null)
-    ?? await fetch(`${base}/v1/config`).catch(() => null);
-  if (!res || !res.ok) throw new Error(`ntfy nicht erreichbar`);
+export async function fetchNtfyVapidKey(base: string): Promise<string> {
+  const res =
+    (await tryFetchInfo(`${base}/v1/info`)) ??
+    (await tryFetchInfo(`${base}/v1/config`));
+
+  if (!res || !res.ok) {
+    throw new Error(
+      `Verbindung zu ${base}/v1/info fehlgeschlagen. ` +
+      `Bitte öffne die URL direkt im Browser und kopiere den "web-push-public-key" Wert.`,
+    );
+  }
 
   const cfg = (await res.json()) as Record<string, string | undefined>;
-  // ntfy uses kebab-case in JSON; older versions may use camelCase
   const key =
     cfg["web-push-public-key"] ??
     cfg["webPushPublicKey"] ??
     cfg["web_push_public_key"];
   if (!key) {
     throw new Error(
-      "ntfy Web Push nicht aktiviert — bitte VAPID-Schlüssel manuell eingeben " +
-      "(ntfy Admin → /v1/info → web-push-public-key)",
+      `"web-push-public-key" fehlt in der ntfy Server Antwort. ` +
+      `Öffne ${base}/v1/info und prüfe ob Web Push aktiviert ist.`,
     );
   }
   return key;
+}
+
+async function getNtfyVapidKey(base: string, manualKey?: string): Promise<string> {
+  if (manualKey && manualKey.trim()) return manualKey.trim();
+  return fetchNtfyVapidKey(base);
 }
 
 export async function updateNtfySubscription(cfg: NotifConfig, manualVapidKey?: string): Promise<void> {

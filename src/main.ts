@@ -1,6 +1,7 @@
 import "./style.css";
 import { HAClient, loadConfig, saveConfig } from "./ha-client.ts";
 import {
+  fetchNtfyVapidKey,
   generateTopicPrefix,
   isSubscriptionSupported,
   loadNotifConfig,
@@ -732,12 +733,12 @@ function showNotificationsSheet(): void {
   };
   const supported = isSubscriptionSupported();
 
-  function haYaml(): string {
+  function haYaml(overridePrefix?: string): string {
     const entities = state.members.map((m) => `        - ${m.id}`).join("\n");
     const forEachItems = state.members
       .map((m) => `        - {entity: "${m.id}", id: "${m.id.replace("calendar.", "")}", name: "${m.name}"}`)
       .join("\n");
-    const prefix = cfg.topicPrefix;
+    const prefix = overridePrefix ?? cfg.topicPrefix;
     return `# 1. configuration.yaml – rest_command hinzufügen:
 rest_command:
   ntfy_post:
@@ -812,8 +813,12 @@ mode: single`;
       <label class="notif-field-label">ntfy Server
         <input id="notif-base" class="notif-input" type="url" value="${escHtml(cfg.ntfyBase)}" placeholder="https://ntfy.sh">
       </label>
-      <label class="notif-field-label">VAPID-Schlüssel <span class="notif-hint">(optional – wird automatisch geladen)</span>
-        <input id="notif-vapid" class="notif-input" type="text" value="${escHtml(cfg.vapidKey ?? "")}" placeholder="BK8… (nur bei Problemen nötig)">
+      <label class="notif-field-label">VAPID-Schlüssel
+        <div class="notif-prefix-row">
+          <input id="notif-vapid" class="notif-input notif-prefix-input" type="text" value="${escHtml(cfg.vapidKey ?? "")}" placeholder="BK8… (automatisch geladen oder manuell)">
+          <button id="notif-vapid-load" class="notif-regen-btn" title="Jetzt von ntfy Server laden">↓</button>
+        </div>
+        <span class="notif-hint">Wird automatisch geladen. Falls nicht: Server-URL eingeben → ↓ klicken. Oder öffne ntfy.sh/v1/info und kopiere "web-push-public-key".</span>
       </label>
       <label class="notif-field-label">Topic-Prefix <span class="notif-hint">(mit der Familie teilen)</span>
         <div class="notif-prefix-row">
@@ -853,11 +858,34 @@ mode: single`;
     input.value = generateTopicPrefix();
   });
 
-  // YAML toggle
+  // Manually load VAPID key from server
+  sheet.querySelector<HTMLElement>("#notif-vapid-load")!.addEventListener("click", async () => {
+    const btn = sheet.querySelector<HTMLElement>("#notif-vapid-load")!;
+    const vapidInput = sheet.querySelector<HTMLInputElement>("#notif-vapid")!;
+    const base = (sheet.querySelector<HTMLInputElement>("#notif-base")!.value.trim().replace(/\/$/, "")) || "https://ntfy.sh";
+    btn.textContent = "…";
+    btn.setAttribute("disabled", "");
+    try {
+      const key = await fetchNtfyVapidKey(base);
+      vapidInput.value = key;
+      showStatus("VAPID-Schlüssel geladen ✓", true);
+    } catch (err) {
+      showStatus(err instanceof Error ? err.message : String(err), false);
+    }
+    btn.textContent = "↓";
+    btn.removeAttribute("disabled");
+  });
+
+  // YAML toggle — regenerate with current prefix each time it's shown
   sheet.querySelector<HTMLElement>("#notif-yaml-btn")!.addEventListener("click", () => {
     const block = sheet.querySelector<HTMLElement>("#notif-yaml-block")!;
     const btn = sheet.querySelector<HTMLElement>("#notif-yaml-btn")!;
     const visible = block.style.display !== "none";
+    if (!visible) {
+      const currentPrefix = sheet.querySelector<HTMLInputElement>("#notif-prefix")!.value.trim() || cfg.topicPrefix;
+      const pre = sheet.querySelector<HTMLElement>("#notif-yaml-pre")!;
+      pre.textContent = haYaml(currentPrefix);
+    }
     block.style.display = visible ? "none" : "block";
     btn.textContent = visible ? "HA Automation YAML anzeigen" : "YAML ausblenden";
   });
