@@ -281,9 +281,13 @@ async function syncHiddenUidsFromHA(): Promise<void> {
     const res = await fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_hidden_uids`, {
       headers: { Authorization: `Bearer ${cfg.token}` },
     });
-    if (!res.ok) return;
-    const data = (await res.json()) as { attributes?: { uids?: string[] } };
-    const uids = data.attributes?.uids ?? [];
+    // 404 means HA was restarted and lost the in-memory sensor state — fall
+    // through so we re-publish our local PERMANENT list below.
+    let uids: string[] = [];
+    if (res.ok) {
+      const data = (await res.json()) as { attributes?: { uids?: string[] } };
+      uids = data.attributes?.uids ?? [];
+    }
     let changed = false;
     for (const uid of uids) {
       if (!pendingDeletes.has(uid)) {
@@ -293,9 +297,20 @@ async function syncHiddenUidsFromHA(): Promise<void> {
     }
     if (changed) {
       localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify([...pendingDeletes]));
-      // Re-filter state.events so newly-hidden UIDs disappear immediately
       state.events = state.events.filter((e) => pendingDeletes.get(e.uid) !== PERMANENT);
       render();
+    }
+    // Always re-publish our local PERMANENT list. REST-API sensor states do
+    // NOT persist across HA restarts, so without this re-publish the cross-
+    // device hidden list quietly disappears whenever HA reboots, and deleted
+    // events come back on every device after their localStorage expires.
+    const localPermanent = [...pendingDeletes].filter(([, exp]) => exp === PERMANENT).map(([u]) => u);
+    if (localPermanent.length > 0) {
+      void fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_hidden_uids`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ state: String(localPermanent.length), attributes: { uids: localPermanent, ts: Date.now() } }),
+      }).catch(() => {});
     }
   } catch { /* ignore */ }
 }
@@ -1518,14 +1533,11 @@ async function runFullDuplicateCleanup(silent = false): Promise<void> {
       return;
     }
 
-    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+    // Keep PERMANENT regardless of HA delete outcome — see deleteEvent() comment.
     const results = await Promise.allSettled(
       dupeEvents
         .filter((ev) => !ev.uid.startsWith("local-"))
-        .map(async (ev) => {
-          await client.deleteEvent(ev.memberId ?? "", ev.uid);
-          pendingDeletes.set(ev.uid, Date.now() + sevenDays);
-        }),
+        .map((ev) => client.deleteEvent(ev.memberId ?? "", ev.uid)),
     );
     savePendingDeletes(pendingDeletes);
 
@@ -1563,8 +1575,11 @@ async function runFullDuplicateCleanup(silent = false): Promise<void> {
 // ── Delete calendar event ──────────────────────────────────────────────────
 
 async function deleteEvent(ev: CalendarEvent): Promise<void> {
-  // Mark as permanently deleted until HA confirms. This survives refreshes
-  // and page reloads — the event will not reappear regardless of HA timing.
+  // Mark as permanently deleted. We keep this PERMANENT forever — even after
+  // HA confirms — because HA's calendar.delete_event may return success while
+  // the event still reappears (recurring rules, external calendar sync, etc.).
+  // The PERMANENT list is synced to HA via sensor.familienkalender_hidden_uids
+  // so all devices honour the same hidden set.
   pendingDeletes.set(ev.uid, PERMANENT);
   savePendingDeletes(pendingDeletes);
 
@@ -1577,14 +1592,22 @@ async function deleteEvent(ev: CalendarEvent): Promise<void> {
     try {
       const client = new HAClient(config);
       await client.deleteEvent(ev.memberId ?? "", ev.uid);
-      // HA confirmed → 7-day block so the entry stays hidden even after localStorage clears.
-      pendingDeletes.set(ev.uid, Date.now() + 7 * 24 * 60 * 60 * 1000);
-      savePendingDeletes(pendingDeletes);
     } catch (err) {
-      // HA delete failed — keep permanent block so event stays invisible.
-      console.error("Failed to delete event from HA:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("Failed to delete event from HA:", msg);
+      showTransientBanner(`HA-Löschung fehlgeschlagen: ${msg}`, true);
     }
   }
+}
+
+function showTransientBanner(text: string, isError = false): void {
+  const banner = document.createElement("div");
+  banner.className = "dupe-banner";
+  if (isError) banner.style.color = "#FF453A";
+  banner.innerHTML = `<span style="flex:1;">${text}</span><span class="dupe-banner__dismiss">✕</span>`;
+  banner.querySelector(".dupe-banner__dismiss")!.addEventListener("click", () => banner.remove());
+  document.body.appendChild(banner);
+  setTimeout(() => banner.remove(), 8000);
 }
 
 // ── HA data refresh ────────────────────────────────────────────────────────
@@ -1614,10 +1637,24 @@ async function refreshEvents(): Promise<void> {
     const now = Date.now();
     // Pass 1: collect fingerprints of every PERMANENT-hidden event in the raw fetch.
     const hiddenFps = new Set<string>();
+    const ghostsToRetryDelete: CalendarEvent[] = [];
     for (const e of fresh) {
       if (pendingDeletes.get(e.uid) === PERMANENT) {
         hiddenFps.add(`${e.memberId}|${e.start.getTime()}|${e.summary.toLowerCase()}`);
+        // Event is marked PERMANENT but HA still returns it → re-attempt
+        // delete in HA. This is the recovery path for cases where HA's first
+        // delete_event call returned success but the event came back (recurring
+        // event, external calendar sync, etc.) or where the initial delete
+        // failed silently.
+        if (!e.uid.startsWith("local-") && e.memberId) {
+          ghostsToRetryDelete.push(e);
+        }
       }
+    }
+    if (ghostsToRetryDelete.length > 0 && navigator.onLine) {
+      void Promise.allSettled(
+        ghostsToRetryDelete.map((e) => client.deleteEvent(e.memberId ?? "", e.uid)),
+      );
     }
     // Pass 2: filter by UID (pendingDeletes) and fingerprint (hiddenFps).
     const withoutHidden = fresh.filter((e) => {

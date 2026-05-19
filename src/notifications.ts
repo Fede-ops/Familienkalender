@@ -52,30 +52,47 @@ async function tryFetchInfo(url: string): Promise<Response | null> {
   return fetch(url, opts).catch(() => null);
 }
 
+async function tryParseConfigJs(url: string): Promise<string | null> {
+  // ntfy.sh's web UI loads its VAPID key from /config.js which contains
+  // a JS literal like:  var config = { web_push_public_key: "BJ..." };
+  const res = await fetch(url, {
+    method: "GET",
+    mode: "cors",
+    credentials: "omit",
+    cache: "no-store",
+  }).catch(() => null);
+  if (!res || !res.ok) return null;
+  const text = await res.text();
+  const m = text.match(/web[_-]push[_-]public[_-]key\s*[:=]\s*["']([A-Za-z0-9_\-]+)["']/);
+  return m ? m[1] : null;
+}
+
 export async function fetchNtfyVapidKey(base: string): Promise<string> {
+  // Try the documented JSON endpoints first (newer ntfy versions).
   const res =
     (await tryFetchInfo(`${base}/v1/info`)) ??
     (await tryFetchInfo(`${base}/v1/config`));
 
-  if (!res || !res.ok) {
-    throw new Error(
-      `Verbindung zu ${base}/v1/info fehlgeschlagen. ` +
-      `Bitte öffne die URL direkt im Browser und kopiere den "web-push-public-key" Wert.`,
-    );
+  if (res && res.ok) {
+    const cfg = (await res.json()) as Record<string, string | undefined>;
+    const key =
+      cfg["web-push-public-key"] ??
+      cfg["webPushPublicKey"] ??
+      cfg["web_push_public_key"];
+    if (key) return key;
   }
 
-  const cfg = (await res.json()) as Record<string, string | undefined>;
-  const key =
-    cfg["web-push-public-key"] ??
-    cfg["webPushPublicKey"] ??
-    cfg["web_push_public_key"];
-  if (!key) {
-    throw new Error(
-      `"web-push-public-key" fehlt in der ntfy Server Antwort. ` +
-      `Öffne ${base}/v1/info und prüfe ob Web Push aktiviert ist.`,
-    );
-  }
-  return key;
+  // Fallback: ntfy.sh's public server doesn't expose /v1/info — but it does
+  // serve its web UI config at /config.js with the same key embedded.
+  const fromConfigJs = await tryParseConfigJs(`${base}/config.js`);
+  if (fromConfigJs) return fromConfigJs;
+
+  throw new Error(
+    `VAPID-Schlüssel konnte nicht automatisch geladen werden ` +
+    `(${base}/v1/info und /config.js erfolglos). ` +
+    `Bitte öffne ${base}/app im Browser, aktiviere dort Web Push, ` +
+    `und kopiere den Schlüssel aus den Browser-Devtools.`,
+  );
 }
 
 async function getNtfyVapidKey(base: string, manualKey?: string): Promise<string> {
