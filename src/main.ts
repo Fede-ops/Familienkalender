@@ -1392,25 +1392,6 @@ function findDuplicateUids(events: CalendarEvent[]): string[] {
   return [...dupes];
 }
 
-function showDuplicateBanner(dupeUids: string[]): void {
-  document.getElementById("dupe-banner")?.remove();
-  if (dupeUids.length === 0) return;
-  const el = document.createElement("div");
-  el.id = "dupe-banner";
-  el.className = "dupe-banner";
-  el.innerHTML = `<span style="flex:1;">${dupeUids.length} doppelte Einträge gefunden</span><button class="dupe-banner__btn" id="dupe-clean-btn">Bereinigen</button><span class="dupe-banner__dismiss">✕</span>`;
-  el.querySelector(".dupe-banner__dismiss")!.addEventListener("click", (e) => {
-    e.stopPropagation();
-    el.remove();
-  });
-  el.querySelector("#dupe-clean-btn")!.addEventListener("click", (e) => {
-    e.stopPropagation();
-    el.remove();
-    // Use full-range cleanup (scans -2 months to +6 months and reports HA delete errors)
-    void runFullDuplicateCleanup();
-  });
-  document.body.appendChild(el);
-}
 
 async function runFullDuplicateCleanup(silent = false): Promise<void> {
   const config = loadConfig();
@@ -1606,12 +1587,23 @@ async function refreshEvents(): Promise<void> {
       seenFp.add(fp);
       return true;
     });
-    state.events = merged;
-    saveCachedEvents(merged);
+    // Auto-deduplicate on every refresh: mark duplicates PERMANENT and re-filter.
+    // This runs inline so duplicates are never shown, even on first load after a
+    // fresh install where localStorage / sensor may be empty.
+    const inViewDupes = findDuplicateUids(merged);
+    let clean = merged;
+    if (inViewDupes.length > 0) {
+      for (const uid of inViewDupes) {
+        if (!pendingDeletes.has(uid)) pendingDeletes.set(uid, PERMANENT);
+      }
+      savePendingDeletes(pendingDeletes);
+      const dupeSet = new Set(inViewDupes);
+      clean = merged.filter((e) => !dupeSet.has(e.uid));
+    }
+    state.events = clean;
+    saveCachedEvents(clean);
     dismissHAError();
     if (state.activeTab === "kalender") render();
-    const dupeUids = findDuplicateUids(merged);
-    if (dupeUids.length > 0) showDuplicateBanner(dupeUids);
     // HA is reachable → try flushing queued events
     void processQueue();
   } catch (err) {
@@ -1787,12 +1779,7 @@ if (demoMode) {
   // Pull hidden UIDs first, THEN refresh — so deleted events are never
   // momentarily re-shown after a page reload.
   void syncHiddenUidsFromHA().then(() => {
-    void refreshEvents().then(() => {
-      // After the first refresh, silently run a full duplicate scan in the background.
-      // This catches leftover HA duplicates from the offline-queue bug and deletes
-      // them automatically. silent=true suppresses the loading toast.
-      setTimeout(() => void runFullDuplicateCleanup(true), 4000);
-    });
+    void refreshEvents();
     // Sync calendar entities after UIDs are known; re-fetch if they changed.
     void syncEntitiesFromHA().then((entities) => {
       if (!entities) return;
