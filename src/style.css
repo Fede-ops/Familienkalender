@@ -47,7 +47,8 @@ body {
 }
 
 #app {
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -376,6 +377,8 @@ body {
 
 .week-list {
   flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 0 12px 100px;
   display: flex;
   flex-direction: column;
