@@ -1812,8 +1812,56 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .notif-member-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 12px;
   margin-bottom: 16px;
+}
+
+.notif-member-block {
+  background: rgba(255,255,255,0.04);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.notif-member-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  margin-bottom: 6px;
+}
+
+.notif-service-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.notif-service-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  cursor: pointer;
+}
+
+.notif-service-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: #0A84FF;
+  flex-shrink: 0;
+}
+
+.notif-service-name {
+  font-size: 14px;
+  color: #fff;
+}
+
+.notif-service-slug {
+  font-size: 11px;
+  color: rgba(255,255,255,0.45);
+  font-family: monospace;
+  margin-left: auto;
 }
 
 .notif-member-row {

@@ -1,8 +1,14 @@
+// Notifications via Home Assistant Companion App.
+// Each device that has the HA Companion App installed registers itself
+// with HA and shows up as a `notify.mobile_app_<slug>` service. The user
+// picks, per family member, which device(s) should receive that member's
+// calendar reminders. The HA automation that the app generates simply
+// calls those notify services directly — no ntfy, no VAPID, no Web Push.
+
 export interface NotifConfig {
-  ntfyBase: string;
-  topicPrefix: string;
-  subscribedMemberIds: string[];
-  vapidKey?: string;
+  // memberId (e.g. "calendar.fede") → list of HA notify service slugs
+  // (e.g. ["mobile_app_iphone_fede", "mobile_app_ipad_familie"])
+  memberServices: Record<string, string[]>;
 }
 
 const NOTIF_KEY = "nanoclaw-notif-config";
@@ -10,7 +16,13 @@ const NOTIF_KEY = "nanoclaw-notif-config";
 export function loadNotifConfig(): NotifConfig | null {
   try {
     const raw = localStorage.getItem(NOTIF_KEY);
-    return raw ? (JSON.parse(raw) as NotifConfig) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<NotifConfig> & Record<string, unknown>;
+    // Tolerate old shape (ntfy-era) and migrate to empty mapping.
+    if (!parsed.memberServices || typeof parsed.memberServices !== "object") {
+      return { memberServices: {} };
+    }
+    return { memberServices: parsed.memberServices };
   } catch {
     return null;
   }
@@ -20,167 +32,72 @@ export function saveNotifConfig(cfg: NotifConfig): void {
   localStorage.setItem(NOTIF_KEY, JSON.stringify(cfg));
 }
 
-export function generateTopicPrefix(): string {
-  const rand = Array.from(crypto.getRandomValues(new Uint8Array(5)))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-  return `familienkalender-${rand}`;
+interface HAConfig { baseUrl: string; token: string }
+
+function haConfig(): HAConfig | null {
+  try {
+    const raw = localStorage.getItem("ha-config");
+    return raw ? (JSON.parse(raw) as HAConfig) : null;
+  } catch { return null; }
 }
 
-// Convert a Web Push key (ArrayBuffer) to base64url string.
-function keyToBase64(buf: ArrayBuffer): string {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+interface HAServiceDomain {
+  domain: string;
+  services: Record<string, unknown>;
 }
 
-// ntfy topic ID for a given member entity ID and prefix.
-// e.g. ("calendar.fede_trabajo", "fam-abc") → "fam-abc-fede_trabajo"
-export function memberTopic(prefix: string, memberId: string): string {
-  return `${prefix}-${memberId.replace("calendar.", "")}`;
-}
-
-async function tryFetchInfo(url: string): Promise<Response | null> {
-  const opts: RequestInit = {
-    method: "GET",
-    mode: "cors",
-    credentials: "omit",
-    cache: "no-store",
-    headers: { Accept: "application/json" },
-  };
-  return fetch(url, opts).catch(() => null);
-}
-
-async function tryParseConfigJs(url: string): Promise<string | null> {
-  // ntfy.sh's web UI loads its VAPID key from /config.js which contains
-  // a JS literal like:  var config = { web_push_public_key: "BJ..." };
-  const res = await fetch(url, {
-    method: "GET",
-    mode: "cors",
-    credentials: "omit",
-    cache: "no-store",
-  }).catch(() => null);
-  if (!res || !res.ok) return null;
-  const text = await res.text();
-  const m = text.match(/web[_-]push[_-]public[_-]key\s*[:=]\s*["']([A-Za-z0-9_\-]+)["']/);
-  return m ? m[1] : null;
-}
-
-export async function fetchNtfyVapidKey(base: string): Promise<string> {
-  // Try the documented JSON endpoints first (newer ntfy versions).
-  const res =
-    (await tryFetchInfo(`${base}/v1/info`)) ??
-    (await tryFetchInfo(`${base}/v1/config`));
-
-  if (res && res.ok) {
-    const cfg = (await res.json()) as Record<string, string | undefined>;
-    const key =
-      cfg["web-push-public-key"] ??
-      cfg["webPushPublicKey"] ??
-      cfg["web_push_public_key"];
-    if (key) return key;
-  }
-
-  // Fallback: ntfy.sh's public server doesn't expose /v1/info — but it does
-  // serve its web UI config at /config.js with the same key embedded.
-  const fromConfigJs = await tryParseConfigJs(`${base}/config.js`);
-  if (fromConfigJs) return fromConfigJs;
-
-  throw new Error(
-    `VAPID-Schlüssel konnte nicht automatisch geladen werden ` +
-    `(${base}/v1/info und /config.js erfolglos). ` +
-    `Bitte öffne ${base}/app im Browser, aktiviere dort Web Push, ` +
-    `und kopiere den Schlüssel aus den Browser-Devtools.`,
-  );
-}
-
-async function getNtfyVapidKey(base: string, manualKey?: string): Promise<string> {
-  if (manualKey && manualKey.trim()) return manualKey.trim();
-  return fetchNtfyVapidKey(base);
-}
-
-export async function updateNtfySubscription(cfg: NotifConfig, manualVapidKey?: string): Promise<void> {
-  if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-    throw new Error("Push Notifications werden von diesem Browser nicht unterstützt");
-  }
-
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") {
-    throw new Error("Benachrichtigungen wurden verweigert — bitte in den Browser-Einstellungen aktivieren");
-  }
-
-  const vapidKey = await getNtfyVapidKey(cfg.ntfyBase, manualVapidKey);
-
-  // Convert base64url VAPID key to Uint8Array for pushManager
-  const padding = "=".repeat((4 - (vapidKey.length % 4)) % 4);
-  const b64 = (vapidKey + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const keyBytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-
-  const reg = await navigator.serviceWorker.ready;
-
-  // Reuse existing subscription if the VAPID key matches; otherwise create a new one.
-  let sub = await reg.pushManager.getSubscription();
-  if (sub) {
-    const existingKey = sub.options.applicationServerKey
-      ? keyToBase64(sub.options.applicationServerKey as ArrayBuffer)
-      : null;
-    if (existingKey !== vapidKey) {
-      await sub.unsubscribe();
-      sub = null;
-    }
-  }
-  if (!sub) {
-    sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: keyBytes,
-    });
-  }
-
-  const subJson = sub.toJSON() as {
-    endpoint: string;
-    keys: { p256dh: string; auth: string };
-  };
-
-  const topics = cfg.subscribedMemberIds.map((id) => memberTopic(cfg.topicPrefix, id));
-
-  const res = await fetch(`${cfg.ntfyBase}/v1/webpush`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      endpoint: subJson.endpoint,
-      p256dh: subJson.keys.p256dh,
-      auth: subJson.keys.auth,
-      topics,
-    }),
+// Query HA for every notify.mobile_app_* service. Returns the service slug
+// without the domain prefix, e.g. "mobile_app_iphone_fede".
+export async function fetchMobileAppServices(): Promise<string[]> {
+  const cfg = haConfig();
+  if (!cfg) throw new Error("HA Verbindung nicht konfiguriert");
+  const res = await fetch(`${cfg.baseUrl}/api/services`, {
+    headers: { Authorization: `Bearer ${cfg.token}` },
   });
-  if (!res.ok) throw new Error(`ntfy Fehler: ${res.status}`);
+  if (!res.ok) {
+    throw new Error(`HA /api/services ${res.status} ${res.statusText}`);
+  }
+  const data = (await res.json()) as HAServiceDomain[];
+  const notify = data.find((d) => d.domain === "notify");
+  if (!notify) return [];
+  return Object.keys(notify.services)
+    .filter((s) => s.startsWith("mobile_app_"))
+    .sort();
 }
 
-export async function removeNtfySubscription(cfg: NotifConfig): Promise<void> {
-  const reg = await navigator.serviceWorker.ready;
-  const sub = await reg.pushManager.getSubscription();
-  if (!sub) return;
-
-  const subJson = sub.toJSON() as {
-    endpoint: string;
-    keys: { p256dh: string; auth: string };
-  };
-
-  // Tell ntfy to remove this subscription (empty topics = remove all)
-  await fetch(`${cfg.ntfyBase}/v1/webpush`, {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      endpoint: subJson.endpoint,
-      p256dh: subJson.keys.p256dh,
-      auth: subJson.keys.auth,
-    }),
-  }).catch(() => {});
-
-  await sub.unsubscribe();
+// Send a one-off notification via HA's notify service. Used by the
+// "Test senden" button in the notifications sheet.
+export async function sendTestNotification(
+  service: string,
+  title: string,
+  message: string,
+): Promise<void> {
+  const cfg = haConfig();
+  if (!cfg) throw new Error("HA Verbindung nicht konfiguriert");
+  const res = await fetch(`${cfg.baseUrl}/api/services/notify/${service}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${cfg.token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ title, message }),
+  });
+  if (!res.ok) {
+    let detail = "";
+    try { detail = (await res.text()).trim(); } catch { /* ignore */ }
+    throw new Error(
+      `HA notify.${service} ${res.status} ${res.statusText}` +
+      (detail ? `: ${detail}` : ""),
+    );
+  }
 }
 
-export function isSubscriptionSupported(): boolean {
-  return "Notification" in window && "serviceWorker" in navigator && "PushManager" in window;
+// Human-friendly label for a notify service slug.
+// "mobile_app_iphone_fede" → "iPhone Fede"
+export function prettyServiceName(slug: string): string {
+  return slug
+    .replace(/^mobile_app_/, "")
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
 }
