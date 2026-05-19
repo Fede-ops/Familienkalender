@@ -1439,12 +1439,17 @@ async function runFullDuplicateCleanup(silent = false): Promise<void> {
         hiddenFpsCleanup.add(`${e.memberId}|${e.start.getTime()}|${e.summary.toLowerCase()}`);
       }
     }
-    const visible = fresh.filter((e) => {
+    const withoutHiddenCleanup = fresh.filter((e) => {
       const exp = pendingDeletes.get(e.uid);
       if (exp === PERMANENT) return false;
       if (exp !== undefined && exp > nowMs) return false;
+      return !hiddenFpsCleanup.has(`${e.memberId}|${e.start.getTime()}|${e.summary.toLowerCase()}`);
+    });
+    const seenFpCleanup = new Set<string>();
+    const visible = withoutHiddenCleanup.filter((e) => {
       const fp = `${e.memberId}|${e.start.getTime()}|${e.summary.toLowerCase()}`;
-      if (hiddenFpsCleanup.has(fp)) return false;
+      if (seenFpCleanup.has(fp)) return false;
+      seenFpCleanup.add(fp);
       return true;
     });
 
@@ -1575,25 +1580,30 @@ async function refreshEvents(): Promise<void> {
       rangeEnd = addDays(state.weekStart, 7);
     }
     const fresh = await client.getAllEvents(rangeStart, rangeEnd);
-    // Strip events that are locally marked as deleted.
-    // First pass: collect fingerprints of PERMANENT events so that duplicate
-    // copies with a different UID (a common HA behaviour when delete fails) are
-    // also hidden, even though only one copy's UID is in pendingDeletes.
+    // getAllEvents only deduplicates by UID; fingerprint dedup happens here,
+    // AFTER the pendingDeletes filter, so that a PERMANENT event's fingerprint
+    // can suppress sibling duplicates that HA returned under a different UID.
     const now = Date.now();
+    // Pass 1: collect fingerprints of every PERMANENT-hidden event in the raw fetch.
     const hiddenFps = new Set<string>();
     for (const e of fresh) {
       if (pendingDeletes.get(e.uid) === PERMANENT) {
         hiddenFps.add(`${e.memberId}|${e.start.getTime()}|${e.summary.toLowerCase()}`);
       }
     }
-    const merged = fresh.filter((e) => {
+    // Pass 2: filter by UID (pendingDeletes) and fingerprint (hiddenFps).
+    const withoutHidden = fresh.filter((e) => {
       const exp = pendingDeletes.get(e.uid);
-      if (exp === PERMANENT) return false;             // hidden by UID
-      if (exp !== undefined && exp > now) return false; // short-lived block not yet expired
-      // Hide any event whose fingerprint matches a permanently-hidden event —
-      // catches the case where HA returns a different UID for the same event.
+      if (exp === PERMANENT) return false;
+      if (exp !== undefined && exp > now) return false;
+      return !hiddenFps.has(`${e.memberId}|${e.start.getTime()}|${e.summary.toLowerCase()}`);
+    });
+    // Pass 3: fingerprint dedup (keep first occurrence per entity+start+summary).
+    const seenFp = new Set<string>();
+    const merged = withoutHidden.filter((e) => {
       const fp = `${e.memberId}|${e.start.getTime()}|${e.summary.toLowerCase()}`;
-      if (hiddenFps.has(fp)) return false;
+      if (seenFp.has(fp)) return false;
+      seenFp.add(fp);
       return true;
     });
     state.events = merged;
