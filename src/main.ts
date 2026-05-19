@@ -1595,16 +1595,9 @@ async function deleteEvent(ev: CalendarEvent): Promise<void> {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("Failed to delete event from HA:", msg);
-      // HA 400 = the calendar integration is read-only (typical for iCal
-      // subscriptions, shared Google calendars without write scope, etc.).
-      // We can't actually delete the event from the source; the PERMANENT
-      // marker hides it on every synced device but the user must delete it
-      // at the source if they want it truly gone.
-      const isReadOnly = /\b40[045]\b/.test(msg);
-      const hint = isReadOnly
-        ? "Kalender ist read-only. Event ist hier ausgeblendet, in der Quelle (Google/iCal) musst du es selbst löschen."
-        : msg;
-      showTransientBanner(`Auf allen Geräten ausgeblendet · ${hint}`, true);
+      // Show HA's actual response verbatim so we know what HA is complaining
+      // about — don't guess the cause.
+      showTransientBanner(msg, true);
     }
   }
 }

@@ -157,10 +157,29 @@ export class HAClient {
       body: JSON.stringify({ entity_id: entityId, uid }),
     });
     if (!res.ok) {
-      let detail = "";
-      try { detail = JSON.stringify(await res.json()); } catch { /* ignore */ }
-      throw new Error(`HA delete_event ${res.status}: ${detail || res.statusText} (entity=${entityId} uid=${uid})`);
+      // Read once as text so we get whatever HA returned — JSON error body,
+      // HTML error page, or plain text. Then surface it verbatim instead of
+      // collapsing to res.statusText, which loses the actual reason.
+      let body = "";
+      try { body = (await res.text()).trim(); } catch { /* ignore */ }
+      // Many HA service errors look like {"message":"..."} — extract that
+      // single field if present, otherwise keep the raw body.
+      let detail = body;
+      try {
+        const parsed = JSON.parse(body) as { message?: string };
+        if (parsed && typeof parsed.message === "string") detail = parsed.message;
+      } catch { /* not JSON, keep raw */ }
+      throw new Error(
+        `HA delete_event ${res.status} ${res.statusText}: ${detail || "(leerer Body)"} ` +
+        `(entity=${entityId} uid=${uid})`,
+      );
     }
+  }
+
+  // Diagnostic: return whatever HA knows about a calendar entity so the
+  // user can confirm which integration is providing it.
+  async getEntityState(entityId: string): Promise<unknown> {
+    return this.request(`/api/states/${entityId}`);
   }
 }
 
