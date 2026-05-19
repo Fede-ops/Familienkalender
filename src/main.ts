@@ -1366,9 +1366,29 @@ function findDuplicateUids(events: CalendarEvent[]): string[] {
     }
   }
 
-  // Also detect same-name same-time events repeated on consecutive days within the
-  // same calendar — a pattern caused by the processQueue bug creating the same
-  // offline event multiple times across different sessions.
+  // Consecutive same-name same-calendar all-day events: the processQueue bug can
+  // create individual one-day chunks instead of one multi-day event.  Adjacent
+  // chunks (end of prev == start of next) are treated as duplicates.
+  const allDayByKey = new Map<string, CalendarEvent[]>();
+  for (const e of events) {
+    if (!e.allDay || dupes.has(e.uid)) continue;
+    const key = `${e.memberId}|${e.summary.toLowerCase()}`;
+    if (!allDayByKey.has(key)) allDayByKey.set(key, []);
+    allDayByKey.get(key)!.push(e);
+  }
+  for (const [, group] of allDayByKey) {
+    if (group.length < 2) continue;
+    const sorted = [...group].sort((a, b) => a.start.getTime() - b.start.getTime());
+    for (let i = 1; i < sorted.length; i++) {
+      // end >= start means adjacent (end==start) or overlapping — both are dupes
+      if (sorted[i - 1].end.getTime() >= sorted[i].start.getTime()) {
+        dupes.add(sorted[i].uid);
+      }
+    }
+  }
+
+  // Same-name same-time timed events repeated on consecutive days within the
+  // same calendar — another processQueue bug pattern.
   const DAY_MS = 24 * 60 * 60 * 1000;
   const timedByKey = new Map<string, CalendarEvent[]>();
   for (const e of events) {
@@ -1384,7 +1404,6 @@ function findDuplicateUids(events: CalendarEvent[]): string[] {
       const prevMidnight = new Date(sorted[i - 1].start); prevMidnight.setHours(0, 0, 0, 0);
       const thisMidnight = new Date(sorted[i].start); thisMidnight.setHours(0, 0, 0, 0);
       const dayDiff = (thisMidnight.getTime() - prevMidnight.getTime()) / DAY_MS;
-      // Consecutive days (≤1 day apart) = created by the offline-queue replay bug
       if (dayDiff <= 1) dupes.add(sorted[i].uid);
     }
   }
