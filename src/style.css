@@ -124,6 +124,8 @@ body {
   padding-top: env(safe-area-inset-top);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
+  will-change: top;
+  transform: translateZ(0);
 }
 
 .toolbar__button {
@@ -210,11 +212,11 @@ body {
   width: 100%;
   background: #1C1C1E;
   border-radius: 16px 16px 0 0;
-  padding: 8px 0 calc(env(safe-area-inset-bottom) + 16px);
   animation: slideUp 0.25s cubic-bezier(0.25,0.46,0.45,0.94);
   max-height: 88vh;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .bottom-sheet__handle {
   width: 36px;
@@ -230,6 +232,15 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 0 20px 8px;
+}
+
+.notif-sheet-header {
+  flex-shrink: 0;
+  padding-top: 8px;
+}
+.notif-sheet-footer {
+  flex-shrink: 0;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 16px);
 }
 
 /* ── Filter rows ─────────────────────────────────────────────────────────── */
@@ -1817,10 +1828,15 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 .notif-member-list {
+  flex: 1 1 0;
+  min-height: 80px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-bottom: 16px;
+  overflow-y: scroll;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 0 20px 12px;
 }
 
 .notif-member-block {

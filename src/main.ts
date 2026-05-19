@@ -842,26 +842,30 @@ mode: single`;
   const html = `<div id="notif-sheet" class="sheet-backdrop">
     <div class="bottom-sheet" data-stop-propagation>
       <div class="bottom-sheet__handle"></div>
-      <p class="bottom-sheet__title">🔔 Benachrichtigungen</p>
-      <p class="notif-hint">
-        Sendet Termin-Erinnerungen über die <b>Home Assistant Companion App</b>.
-        Wähle pro Familienmitglied, welche Geräte (iPhone, iPad, …) seine Termine bekommen sollen.
-      </p>
-      <div class="notif-actions">
-        <button id="notif-refresh-btn" class="notif-yaml-btn">Geräte aktualisieren</button>
+      <div class="notif-sheet-header">
+        <p class="bottom-sheet__title">🔔 Benachrichtigungen</p>
+        <p class="notif-hint">
+          Sendet Termin-Erinnerungen über die <b>Home Assistant Companion App</b>.
+          Wähle pro Familienmitglied, welche Geräte (iPhone, iPad, …) seine Termine bekommen sollen.
+        </p>
+        <div class="notif-actions">
+          <button id="notif-refresh-btn" class="notif-yaml-btn">Geräte aktualisieren</button>
+        </div>
       </div>
       <div id="notif-member-list" class="notif-member-list">
         <p class="notif-hint">Lade Geräte…</p>
       </div>
-      <div class="notif-actions">
-        <button id="notif-save-btn" class="notif-save-btn">Speichern</button>
-        <button id="notif-test-btn" class="notif-yaml-btn">Test senden</button>
-      </div>
-      <div id="notif-status" class="notif-status"></div>
-      <button id="notif-yaml-btn" class="notif-yaml-btn">HA Automation YAML anzeigen</button>
-      <div id="notif-yaml-block" class="notif-yaml-block" style="display:none;">
-        <pre id="notif-yaml-pre" class="notif-yaml-pre"></pre>
-        <button id="notif-yaml-copy" class="notif-yaml-copy-btn">Kopieren</button>
+      <div class="notif-sheet-footer">
+        <div class="notif-actions">
+          <button id="notif-save-btn" class="notif-save-btn">Speichern</button>
+          <button id="notif-test-btn" class="notif-yaml-btn">Test senden</button>
+        </div>
+        <div id="notif-status" class="notif-status"></div>
+        <button id="notif-yaml-btn" class="notif-yaml-btn">HA Automation YAML anzeigen</button>
+        <div id="notif-yaml-block" class="notif-yaml-block" style="display:none;">
+          <pre id="notif-yaml-pre" class="notif-yaml-pre"></pre>
+          <button id="notif-yaml-copy" class="notif-yaml-copy-btn">Kopieren</button>
+        </div>
       </div>
     </div>
   </div>`;
@@ -1905,11 +1909,16 @@ window.addEventListener("online", () => void refreshEvents());
 // us how far the layout viewport has scrolled relative to the visual viewport;
 // we feed that into --vv-offset so .sticky-nav follows the visible area.
 if (window.visualViewport) {
+  let rafId = 0;
+  let lastOffset = 0;
   const syncNav = () => {
-    document.documentElement.style.setProperty(
-      "--vv-offset",
-      `${window.visualViewport!.offsetTop}px`,
-    );
+    cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(() => {
+      const offset = window.visualViewport!.offsetTop;
+      if (offset === lastOffset) return;
+      lastOffset = offset;
+      document.documentElement.style.setProperty("--vv-offset", `${offset}px`);
+    });
   };
   window.visualViewport.addEventListener("resize", syncNav);
   window.visualViewport.addEventListener("scroll", syncNav);
