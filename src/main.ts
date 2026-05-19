@@ -1365,6 +1365,29 @@ function findDuplicateUids(events: CalendarEvent[]): string[] {
     }
   }
 
+  // Also detect same-name same-time events repeated on consecutive days within the
+  // same calendar — a pattern caused by the processQueue bug creating the same
+  // offline event multiple times across different sessions.
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const timedByKey = new Map<string, CalendarEvent[]>();
+  for (const e of events) {
+    if (e.allDay || dupes.has(e.uid)) continue;
+    const key = `${e.memberId}|${e.summary.toLowerCase()}|${e.start.getHours()}:${String(e.start.getMinutes()).padStart(2, "0")}`;
+    if (!timedByKey.has(key)) timedByKey.set(key, []);
+    timedByKey.get(key)!.push(e);
+  }
+  for (const [, group] of timedByKey) {
+    if (group.length < 2) continue;
+    const sorted = [...group].sort((a, b) => a.start.getTime() - b.start.getTime());
+    for (let i = 1; i < sorted.length; i++) {
+      const prevMidnight = new Date(sorted[i - 1].start); prevMidnight.setHours(0, 0, 0, 0);
+      const thisMidnight = new Date(sorted[i].start); thisMidnight.setHours(0, 0, 0, 0);
+      const dayDiff = (thisMidnight.getTime() - prevMidnight.getTime()) / DAY_MS;
+      // Consecutive days (≤1 day apart) = created by the offline-queue replay bug
+      if (dayDiff <= 1) dupes.add(sorted[i].uid);
+    }
+  }
+
   return [...dupes];
 }
 
@@ -1382,55 +1405,23 @@ function showDuplicateBanner(dupeUids: string[]): void {
   el.querySelector("#dupe-clean-btn")!.addEventListener("click", (e) => {
     e.stopPropagation();
     el.remove();
-    void cleanDuplicates(dupeUids);
+    // Use full-range cleanup (scans -2 months to +6 months and reports HA delete errors)
+    void runFullDuplicateCleanup();
   });
   document.body.appendChild(el);
 }
 
-async function cleanDuplicates(dupeUids: string[]): Promise<void> {
-  const dupeSet = new Set(dupeUids);
-
-  // Capture event data before clearing state (needed for HA delete calls)
-  const dupeEvents = dupeUids
-    .map((uid) => state.events.find((e) => e.uid === uid))
-    .filter((ev): ev is CalendarEvent => ev !== undefined);
-
-  // Mark all PERMANENT and update UI immediately — no waiting for HA
-  for (const uid of dupeUids) pendingDeletes.set(uid, PERMANENT);
-  state.events = state.events.filter((e) => !dupeSet.has(e.uid));
-  savePendingDeletes(pendingDeletes);
-  saveCachedEvents(state.events);
-  render();
-
-  // Fire HA deletes in parallel in the background
-  const config = loadConfig();
-  if (!config || !navigator.onLine) return;
-  const client = new HAClient(config);
-  const sevenDays = 7 * 24 * 60 * 60 * 1000;
-
-  await Promise.allSettled(
-    dupeEvents
-      .filter((ev) => !ev.uid.startsWith("local-"))
-      .map(async (ev) => {
-        try {
-          await client.deleteEvent(ev.memberId ?? "", ev.uid);
-          pendingDeletes.set(ev.uid, Date.now() + sevenDays);
-        } catch {
-          // Keep PERMANENT block — event stays hidden until next successful delete
-        }
-      }),
-  );
-  savePendingDeletes(pendingDeletes);
-}
-
-async function runFullDuplicateCleanup(): Promise<void> {
+async function runFullDuplicateCleanup(silent = false): Promise<void> {
   const config = loadConfig();
   if (!config) return;
 
-  const toast = document.createElement("div");
-  toast.className = "dupe-banner";
-  toast.innerHTML = `<span style="flex:1;">Suche Duplikate in allen Terminen…</span>`;
-  document.body.appendChild(toast);
+  let toast: HTMLDivElement | null = null;
+  if (!silent) {
+    toast = document.createElement("div");
+    toast.className = "dupe-banner";
+    toast.innerHTML = `<span style="flex:1;">Suche Duplikate in allen Terminen…</span>`;
+    document.body.appendChild(toast);
+  }
 
   try {
     const client = new HAClient(config);
@@ -1449,15 +1440,18 @@ async function runFullDuplicateCleanup(): Promise<void> {
     });
 
     const dupeUids = findDuplicateUids(visible);
-    toast.remove();
+    toast?.remove();
+    toast = null;
 
     if (dupeUids.length === 0) {
-      const done = document.createElement("div");
-      done.className = "dupe-banner";
-      done.innerHTML = `<span style="flex:1;">Keine Duplikate gefunden ✓</span><span class="dupe-banner__dismiss">✕</span>`;
-      done.querySelector(".dupe-banner__dismiss")!.addEventListener("click", () => done.remove());
-      document.body.appendChild(done);
-      setTimeout(() => done.remove(), 4000);
+      if (!silent) {
+        const done = document.createElement("div");
+        done.className = "dupe-banner";
+        done.innerHTML = `<span style="flex:1;">Keine Duplikate gefunden ✓</span><span class="dupe-banner__dismiss">✕</span>`;
+        done.querySelector(".dupe-banner__dismiss")!.addEventListener("click", () => done.remove());
+        document.body.appendChild(done);
+        setTimeout(() => done.remove(), 4000);
+      }
       return;
     }
 
@@ -1507,14 +1501,16 @@ async function runFullDuplicateCleanup(): Promise<void> {
     setTimeout(() => result.remove(), 8000);
 
   } catch (err) {
-    toast.remove();
-    const errBanner = document.createElement("div");
-    errBanner.className = "dupe-banner";
-    errBanner.style.color = "#FF453A";
-    errBanner.innerHTML = `<span style="flex:1;">Fehler: ${err instanceof Error ? err.message : String(err)}</span><span class="dupe-banner__dismiss">✕</span>`;
-    errBanner.querySelector(".dupe-banner__dismiss")!.addEventListener("click", () => errBanner.remove());
-    document.body.appendChild(errBanner);
-    setTimeout(() => errBanner.remove(), 8000);
+    toast?.remove();
+    if (!silent) {
+      const errBanner = document.createElement("div");
+      errBanner.className = "dupe-banner";
+      errBanner.style.color = "#FF453A";
+      errBanner.innerHTML = `<span style="flex:1;">Fehler: ${err instanceof Error ? err.message : String(err)}</span><span class="dupe-banner__dismiss">✕</span>`;
+      errBanner.querySelector(".dupe-banner__dismiss")!.addEventListener("click", () => errBanner.remove());
+      document.body.appendChild(errBanner);
+      setTimeout(() => errBanner.remove(), 8000);
+    }
   }
 }
 
@@ -1753,7 +1749,12 @@ if (demoMode) {
   // Pull hidden UIDs first, THEN refresh — so deleted events are never
   // momentarily re-shown after a page reload.
   void syncHiddenUidsFromHA().then(() => {
-    void refreshEvents();
+    void refreshEvents().then(() => {
+      // After the first refresh, silently run a full duplicate scan in the background.
+      // This catches leftover HA duplicates from the offline-queue bug and deletes
+      // them automatically. silent=true suppresses the loading toast.
+      setTimeout(() => void runFullDuplicateCleanup(true), 4000);
+    });
     // Sync calendar entities after UIDs are known; re-fetch if they changed.
     void syncEntitiesFromHA().then((entities) => {
       if (!entities) return;
