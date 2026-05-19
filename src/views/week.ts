@@ -140,22 +140,24 @@ export function renderWeekView(viewState: WeekViewState): string {
     .join("");
 
   return `
-    <header class="header">
-      <button class="header__back" data-action="nav-prev">${ICONS.back}</button>
-      <h1 class="header__title">${title}</h1>
-      <button class="header__action" data-action="view-month">${ICONS.month}</button>
-    </header>
-    <nav class="toolbar">
-      ${toolbarBtn("back", "Zurück", "nav-prev")}
-      ${toolbarBtn("today", "Heute", "nav-today")}
-      ${toolbarBtn("next", "Weiter", "nav-next")}
-      ${toolbarBtn("month", "Monat", "view-month")}
-      <button class="toolbar__button${filterActive ? " toolbar__button--active" : ""}" data-action="filter">
-        <span class="toolbar__icon">${ICONS.filter}${filterActive ? `<span class="toolbar__badge"></span>` : ""}</span>
-        <span class="toolbar__label">Filter</span>
-      </button>
-      ${toolbarBtn("search", "Suche", "search")}
-    </nav>
+    <div class="sticky-nav">
+      <header class="header">
+        <button class="header__back" data-action="nav-prev">${ICONS.back}</button>
+        <h1 class="header__title">${title}</h1>
+        <button class="header__action" data-action="view-month">${ICONS.month}</button>
+      </header>
+      <nav class="toolbar">
+        ${toolbarBtn("back", "Zurück", "nav-prev")}
+        ${toolbarBtn("today", "Heute", "nav-today")}
+        ${toolbarBtn("next", "Weiter", "nav-next")}
+        ${toolbarBtn("month", "Monat", "view-month")}
+        <button class="toolbar__button${filterActive ? " toolbar__button--active" : ""}" data-action="filter">
+          <span class="toolbar__icon">${ICONS.filter}${filterActive ? `<span class="toolbar__badge"></span>` : ""}</span>
+          <span class="toolbar__label">Filter</span>
+        </button>
+        ${toolbarBtn("search", "Suche", "search")}
+      </nav>
+    </div>
     <main class="week-list">${rows}</main>
     <button class="fab" data-action="add-event">${ICONS.plus}</button>
     ${tabBar("kalender")}

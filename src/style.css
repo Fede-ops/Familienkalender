@@ -47,8 +47,7 @@ body {
 }
 
 #app {
-  height: 100%;
-  overflow: hidden;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
@@ -113,6 +112,13 @@ body {
   justify-content: space-between;
   padding: 16px 20px 24px;
   gap: 8px;
+}
+
+.sticky-nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg);
 }
 
 .toolbar__button {
@@ -377,8 +383,6 @@ body {
 
 .week-list {
   flex: 1;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
   padding: 0 12px 100px;
   display: flex;
   flex-direction: column;
