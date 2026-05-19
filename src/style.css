@@ -122,8 +122,6 @@ body {
   z-index: 30;
   background: var(--bg);
   padding-top: env(safe-area-inset-top);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
   will-change: top;
   transform: translateZ(0);
 }
@@ -234,6 +232,9 @@ body {
   padding: 0 20px 8px;
 }
 
+.bottom-sheet--large {
+  height: 92vh;
+}
 .notif-sheet-header {
   flex-shrink: 0;
   padding-top: 8px;
@@ -1829,7 +1830,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 .notif-member-list {
   flex: 1 1 0;
-  min-height: 80px;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;

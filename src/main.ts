@@ -840,7 +840,7 @@ mode: single`;
   }
 
   const html = `<div id="notif-sheet" class="sheet-backdrop">
-    <div class="bottom-sheet" data-stop-propagation>
+    <div class="bottom-sheet bottom-sheet--large" data-stop-propagation>
       <div class="bottom-sheet__handle"></div>
       <div class="notif-sheet-header">
         <p class="bottom-sheet__title">🔔 Benachrichtigungen</p>
