@@ -1487,13 +1487,17 @@ async function runFullDuplicateCleanup(silent = false): Promise<void> {
     );
     savePendingDeletes(pendingDeletes);
 
-    const failed = results.filter((r) => r.status === "rejected").length;
+    const failedResults = results.filter((r) => r.status === "rejected");
+    const failed = failedResults.length;
     const succeeded = results.filter((r) => r.status === "fulfilled").length;
+    const firstErr = failed > 0 && failedResults[0].status === "rejected"
+      ? (failedResults[0].reason instanceof Error ? failedResults[0].reason.message : String(failedResults[0].reason))
+      : "";
 
     const result = document.createElement("div");
     result.className = "dupe-banner";
     const msg = failed > 0
-      ? `${succeeded} gelöscht · ${failed} konnten nicht gelöscht werden (werden ausgeblendet)`
+      ? `${succeeded} gelöscht · ${failed} HA-Fehler: ${firstErr}`
       : `${succeeded} Duplikate gelöscht ✓`;
     result.innerHTML = `<span style="flex:1;">${msg}</span><span class="dupe-banner__dismiss">✕</span>`;
     result.querySelector(".dupe-banner__dismiss")!.addEventListener("click", () => result.remove());

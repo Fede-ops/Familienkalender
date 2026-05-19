@@ -158,7 +158,11 @@ export class HAClient {
       },
       body: JSON.stringify({ entity_id: entityId, uid }),
     });
-    if (!res.ok) throw new Error(`HA delete_event failed: ${res.status}`);
+    if (!res.ok) {
+      let detail = "";
+      try { detail = JSON.stringify(await res.json()); } catch { /* ignore */ }
+      throw new Error(`HA delete_event ${res.status}: ${detail || res.statusText} (entity=${entityId} uid=${uid})`);
+    }
   }
 }
 
