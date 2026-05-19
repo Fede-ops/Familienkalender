@@ -212,6 +212,9 @@ body {
   border-radius: 16px 16px 0 0;
   padding: 8px 0 calc(env(safe-area-inset-bottom) + 16px);
   animation: slideUp 0.25s cubic-bezier(0.25,0.46,0.45,0.94);
+  max-height: 88vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .bottom-sheet__handle {
   width: 36px;
@@ -1211,9 +1214,13 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 .list-body {
   flex: 1;
-  overflow-y: auto;
+  overflow-y: scroll;
   -webkit-overflow-scrolling: touch;
   padding-bottom: 110px;
+  scrollbar-width: none;
+}
+.list-body::-webkit-scrollbar {
+  display: none;
 }
 
 /* When the header + add-input row are wrapped in .sticky-nav (Einkauf, To-Do),
