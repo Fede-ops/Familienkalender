@@ -115,10 +115,15 @@ body {
 }
 
 .sticky-nav {
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 20;
+  left: 0;
+  right: 0;
+  z-index: 30;
   background: var(--bg);
+  padding-top: env(safe-area-inset-top);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
 }
 
 .toolbar__button {
@@ -383,7 +388,7 @@ body {
 
 .week-list {
   flex: 1;
-  padding: 0 12px 100px;
+  padding: 176px 12px 100px;
   display: flex;
   flex-direction: column;
   gap: 4px;

@@ -120,21 +120,19 @@ export function renderMonthView(viewState: MonthViewState): string {
   ).join("");
 
   return `
-    <div class="sticky-nav">
-      <header class="header">
-        <button class="header__back" data-action="nav-month-prev">${ICONS.back}</button>
-        <h1 class="header__title">${label}</h1>
-        <button class="header__action" data-action="view-week">${ICONS.week}</button>
-      </header>
-      <nav class="toolbar">
-        ${toolbarBtn("back", "Zurück", "nav-month-prev")}
-        ${toolbarBtn("today", "Heute", "nav-month-today")}
-        ${toolbarBtn("next", "Weiter", "nav-month-next")}
-        ${toolbarBtn("week", "Woche", "view-week")}
-        ${toolbarBtn("filter", "Filter", "filter")}
-      </nav>
-      <div class="month-weekdays">${weekdayHeader}</div>
-    </div>
+    <header class="header">
+      <button class="header__back" data-action="nav-month-prev">${ICONS.back}</button>
+      <h1 class="header__title">${label}</h1>
+      <button class="header__action" data-action="view-week">${ICONS.week}</button>
+    </header>
+    <nav class="toolbar">
+      ${toolbarBtn("back", "Zurück", "nav-month-prev")}
+      ${toolbarBtn("today", "Heute", "nav-month-today")}
+      ${toolbarBtn("next", "Weiter", "nav-month-next")}
+      ${toolbarBtn("week", "Woche", "view-week")}
+      ${toolbarBtn("filter", "Filter", "filter")}
+    </nav>
+    <div class="month-weekdays">${weekdayHeader}</div>
     <div class="month-scroll">
       <div class="month-grid">${rows.join("")}</div>
     </div>
