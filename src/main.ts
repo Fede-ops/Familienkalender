@@ -1433,11 +1433,19 @@ async function runFullDuplicateCleanup(silent = false): Promise<void> {
     const fresh = await client.getAllEvents(rangeStart, rangeEnd);
 
     const nowMs = Date.now();
+    const hiddenFpsCleanup = new Set<string>();
+    for (const e of fresh) {
+      if (pendingDeletes.get(e.uid) === PERMANENT) {
+        hiddenFpsCleanup.add(`${e.memberId}|${e.start.getTime()}|${e.summary.toLowerCase()}`);
+      }
+    }
     const visible = fresh.filter((e) => {
       const exp = pendingDeletes.get(e.uid);
-      if (exp === undefined) return true;
       if (exp === PERMANENT) return false;
-      return exp <= nowMs;
+      if (exp !== undefined && exp > nowMs) return false;
+      const fp = `${e.memberId}|${e.start.getTime()}|${e.summary.toLowerCase()}`;
+      if (hiddenFpsCleanup.has(fp)) return false;
+      return true;
     });
 
     const dupeUids = findDuplicateUids(visible);
@@ -1568,12 +1576,25 @@ async function refreshEvents(): Promise<void> {
     }
     const fresh = await client.getAllEvents(rangeStart, rangeEnd);
     // Strip events that are locally marked as deleted.
+    // First pass: collect fingerprints of PERMANENT events so that duplicate
+    // copies with a different UID (a common HA behaviour when delete fails) are
+    // also hidden, even though only one copy's UID is in pendingDeletes.
     const now = Date.now();
+    const hiddenFps = new Set<string>();
+    for (const e of fresh) {
+      if (pendingDeletes.get(e.uid) === PERMANENT) {
+        hiddenFps.add(`${e.memberId}|${e.start.getTime()}|${e.summary.toLowerCase()}`);
+      }
+    }
     const merged = fresh.filter((e) => {
       const exp = pendingDeletes.get(e.uid);
-      if (exp === undefined) return true;          // not deleted
-      if (exp === PERMANENT) return false;          // deleted, HA not confirmed yet
-      return exp <= now;                            // short-lived block expired
+      if (exp === PERMANENT) return false;             // hidden by UID
+      if (exp !== undefined && exp > now) return false; // short-lived block not yet expired
+      // Hide any event whose fingerprint matches a permanently-hidden event —
+      // catches the case where HA returns a different UID for the same event.
+      const fp = `${e.memberId}|${e.start.getTime()}|${e.summary.toLowerCase()}`;
+      if (hiddenFps.has(fp)) return false;
+      return true;
     });
     state.events = merged;
     saveCachedEvents(merged);
