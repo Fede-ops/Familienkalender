@@ -1537,7 +1537,7 @@ async function runFullDuplicateCleanup(silent = false): Promise<void> {
     const results = await Promise.allSettled(
       dupeEvents
         .filter((ev) => !ev.uid.startsWith("local-"))
-        .map((ev) => client.deleteEvent(ev.memberId ?? "", ev.uid)),
+        .map((ev) => client.deleteEvent(ev.memberId ?? "", ev.uid, ev.recurrenceId)),
     );
     savePendingDeletes(pendingDeletes);
 
@@ -1597,16 +1597,8 @@ async function deleteEvent(ev: CalendarEvent): Promise<void> {
   if (config && !ev.uid.startsWith("local-") && navigator.onLine) {
     try {
       const client = new HAClient(config);
-      await client.deleteEvent(ev.memberId ?? "", ev.uid);
+      await client.deleteEvent(ev.memberId ?? "", ev.uid, ev.recurrenceId);
     } catch (err) {
-      const httpStatus = (err as { httpStatus?: number }).httpStatus;
-      if (httpStatus === 400) {
-        // 400 = read-only calendar (iCloud, Google, external CalDAV sync).
-        // The event is already permanently hidden via sensor.familienkalender_hidden_uids
-        // on all devices, so no user-visible error is needed.
-        console.warn("HA delete_event 400 (read-only calendar, event hidden via sensor):", err instanceof Error ? err.message : err);
-        return;
-      }
       const msg = err instanceof Error ? err.message : String(err);
       console.error("Failed to delete event from HA:", msg);
       showTransientBanner(msg, true);
@@ -1667,7 +1659,7 @@ async function refreshEvents(): Promise<void> {
     }
     if (ghostsToRetryDelete.length > 0 && navigator.onLine) {
       void Promise.allSettled(
-        ghostsToRetryDelete.map((e) => client.deleteEvent(e.memberId ?? "", e.uid)),
+        ghostsToRetryDelete.map((e) => client.deleteEvent(e.memberId ?? "", e.uid, e.recurrenceId)),
       );
     }
     // Pass 2: filter by UID (pendingDeletes) and fingerprint (hiddenFps).

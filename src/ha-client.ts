@@ -147,14 +147,21 @@ export class HAClient {
     if (!res.ok) throw new Error(`HA update_event failed: ${res.status}`);
   }
 
-  async deleteEvent(entityId: string, uid: string): Promise<void> {
+  async deleteEvent(entityId: string, uid: string, recurrenceId?: string): Promise<void> {
+    const body: Record<string, string> = { entity_id: entityId, uid };
+    // Recurring event instances require recurrence_id + range so HA knows
+    // which occurrence to delete — without these, HA returns 400.
+    if (recurrenceId) {
+      body.recurrence_id = recurrenceId;
+      body.range = "this_event";
+    }
     const res = await fetch(`${this.config.baseUrl}/api/services/calendar/delete_event`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.config.token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ entity_id: entityId, uid }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       // Read once as text so we get whatever HA returned — JSON error body,
@@ -188,6 +195,7 @@ export class HAClient {
 interface RawHAEvent {
   summary: string;
   uid?: string;
+  recurrence_id?: string;
   description?: string;
   location?: string;
   start: { dateTime?: string; date?: string };
@@ -220,5 +228,6 @@ function normalizeEvent(raw: RawHAEvent, calendarId: string): CalendarEvent {
     description: raw.description,
     location: raw.location,
     memberId: calendarId,
+    recurrenceId: raw.recurrence_id,
   };
 }

@@ -14,6 +14,7 @@ export interface CalendarEvent {
   description?: string;
   location?: string;
   memberId?: string;
+  recurrenceId?: string;
 }
 
 export type ViewMode = "week" | "month";
