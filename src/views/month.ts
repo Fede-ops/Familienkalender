@@ -87,7 +87,7 @@ export function renderMonthView(viewState: MonthViewState): string {
       const dayEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
       const isToday = isSameDay(date, today);
       const dayEvents = events
-        .filter((e) => e.start < dayEnd && e.end > dayStart)
+        .filter((e) => e.start < dayEnd && (e.allDay ? e.end >= dayStart : e.end > dayStart))
         .slice(0, 3);
 
       const isFirstDay = (ev: CalendarEvent) => isSameDay(ev.start, date);

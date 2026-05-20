@@ -124,7 +124,11 @@ export function renderWeekView(viewState: WeekViewState): string {
     .map((day) => {
       const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate());
       const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
-      const dayEvents = events.filter((e) => e.start < dayEnd && e.end > dayStart);
+      // All-day events: HA returns the last visible day as end (inclusive),
+      // so use >= to include events whose end equals the day start.
+      const dayEvents = events.filter((e) =>
+        e.start < dayEnd && (e.allDay ? e.end >= dayStart : e.end > dayStart)
+      );
       const isToday = isSameDay(day, today);
       const eventsHtml = dayEvents.length
         ? dayEvents.map((e) => renderEvent(e, members.find((m) => m.id === e.memberId))).join("")

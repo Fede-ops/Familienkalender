@@ -388,12 +388,27 @@ function render(): void {
   bindEvents();
   setupDragDrop();
   if (state.modal) document.getElementById("modal-summary")?.focus();
-  if (state.activeTab !== "kalender") {
-    document.getElementById("list-input")?.focus();
-  }
+  // Do NOT auto-focus list-input on render — it opens the iOS keyboard
+  // automatically on every tab switch and causes the sticky nav to jump.
 }
 
 // ── Sync modal form to state before tab switch / save ──────────────────────
+
+// "YYYY-MM-DD" from <input type="date"> must be local midnight, not UTC.
+// new Date("YYYY-MM-DD") parses as UTC → 1-day offset in non-UTC timezones.
+function parseLocalDate(value: string): Date {
+  const [y, m, d] = value.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+// "YYYY-MM-DDTHH:MM" from <input type="datetime-local"> — no TZ suffix means
+// browsers treat it as local, but we parse explicitly to be safe.
+function parseLocalDateTime(value: string): Date {
+  const [datePart, timePart] = value.split("T");
+  const [y, m, d] = datePart.split("-").map(Number);
+  const [h, min] = (timePart ?? "00:00").split(":").map(Number);
+  return new Date(y, m - 1, d, h, min);
+}
 
 function syncModalForm(): void {
   if (!state.modal) return;
@@ -404,8 +419,16 @@ function syncModalForm(): void {
   const locationEl = get<HTMLInputElement>("modal-location");
   const notesEl = get<HTMLTextAreaElement>("modal-notes");
   if (summaryEl) state.modal.summary = summaryEl.value;
-  if (startEl?.value) state.modal.startDate = new Date(startEl.value);
-  if (endEl?.value) state.modal.endDate = new Date(endEl.value);
+  if (startEl?.value) {
+    state.modal.startDate = state.modal.allDay
+      ? parseLocalDate(startEl.value)
+      : parseLocalDateTime(startEl.value);
+  }
+  if (endEl?.value) {
+    state.modal.endDate = state.modal.allDay
+      ? parseLocalDate(endEl.value)
+      : parseLocalDateTime(endEl.value);
+  }
   if (locationEl) state.modal.location = locationEl.value;
   if (notesEl) state.modal.notes = notesEl.value;
 }
@@ -1197,8 +1220,9 @@ function showEventDetail(ev: CalendarEvent): void {
     `${d.getDate()}. ${["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"][d.getMonth()]} ${d.getFullYear()}`;
   const fmtTime = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
+  const diffDays = Math.round((ev.end.getTime() - ev.start.getTime()) / 86_400_000);
   const when = ev.allDay
-    ? fmtDate(ev.start)
+    ? (diffDays > 1 ? `${fmtDate(ev.start)} – ${fmtDate(ev.end)}` : fmtDate(ev.start))
     : `${fmtDate(ev.start)}, ${fmtTime(ev.start)} – ${fmtTime(ev.end)}`;
 
   const html = `<div id="event-detail-sheet" class="detail-backdrop" data-action="close-detail">
