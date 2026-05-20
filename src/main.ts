@@ -384,7 +384,11 @@ document.addEventListener("touchmove", (e) => {
 // ResizeObserver fires whenever the tab bar changes size (orientation,
 // safe-area changes, first paint), eliminating any CSS-calc mismatch.
 function syncAppBottom(): void {
-  app.style.bottom = `${persistentTabBar.getBoundingClientRect().height}px`;
+  // window.innerHeight - rect.top = space the tab bar occupies from the layout
+  // viewport bottom upward. This is exact regardless of how iOS positions
+  // fixed elements relative to the safe area.
+  const top = persistentTabBar.getBoundingClientRect().top;
+  app.style.bottom = `${window.innerHeight - top}px`;
 }
 syncAppBottom();
 new ResizeObserver(syncAppBottom).observe(persistentTabBar);

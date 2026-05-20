@@ -617,7 +617,6 @@ body {
   background: #141416;
   border-top: 1px solid rgba(120, 120, 128, 0.3);
   display: flex;
-  padding: 0 0 env(safe-area-inset-bottom);
 }
 
 .tab-bar__item {
