@@ -829,12 +829,13 @@ ${forEachItems}
             msg_title: "📅 {{ weekday }}, {{ now().strftime('%-d. %-m.') }} – {{ repeat.item.name }}"
             msg_body: >-
               {%- set ns = namespace(lines=[]) -%}
-              {%- for e in evs if e.all_day -%}
-                {%- set ns.lines = ns.lines + ['☀️ ' + e.summary] -%}
-              {%- endfor -%}
-              {%- for e in evs | sort(attribute='start') if not e.all_day -%}
-                {%- set t = (e.start | as_datetime | as_local).strftime('%H:%M') -%}
-                {%- set ns.lines = ns.lines + [t + ' ' + e.summary] -%}
+              {%- for e in evs | sort(attribute='start') -%}
+                {%- if 'T' not in (e.start | string) -%}
+                  {%- set ns.lines = ns.lines + [e.summary + ' – ganztägig'] -%}
+                {%- else -%}
+                  {%- set t = (e.start | as_datetime | as_local).strftime('%H:%M') -%}
+                  {%- set ns.lines = ns.lines + [t + ' ' + e.summary] -%}
+                {%- endif -%}
               {%- endfor -%}
               {%- if ns.lines | length == 0 -%}
               Heute keine Termine ✓
@@ -1003,12 +1004,13 @@ mode: single`;
         e.start < todayEnd &&
         (e.allDay ? e.end >= todayStart : e.end > todayStart),
       );
-      const allDay = evs.filter((e) => e.allDay).map((e) => `☀️ ${e.summary}`);
-      const timed = evs
-        .filter((e) => !e.allDay)
+      const lines = evs
         .sort((a, b) => a.start.getTime() - b.start.getTime())
-        .map((e) => `${pad2(e.start.getHours())}:${pad2(e.start.getMinutes())} ${e.summary}`);
-      const lines = [...allDay, ...timed];
+        .map((e) =>
+          e.allDay
+            ? `${e.summary} – ganztägig`
+            : `${pad2(e.start.getHours())}:${pad2(e.start.getMinutes())} ${e.summary}`,
+        );
       return lines.length > 0 ? lines.join("\n") : "Heute keine Termine ✓";
     }
 
