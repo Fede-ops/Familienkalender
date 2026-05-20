@@ -32,7 +32,13 @@ body.is-dragging * {
   cursor: grabbing !important;
 }
 
-html,
+html {
+  overflow: hidden;
+  height: 100%;
+  background: #141416; /* fills home-indicator zone with tab-bar color — no visible seam */
+  overscroll-behavior: none;
+}
+
 body {
   overflow: hidden;
   height: 100%;
@@ -40,9 +46,6 @@ body {
   color: var(--text);
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
-}
-
-body {
   letter-spacing: -0.01em;
 }
 
