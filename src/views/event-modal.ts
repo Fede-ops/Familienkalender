@@ -7,6 +7,10 @@ export interface ModalState {
   endDate: Date;
   allDay: boolean;
   memberId: string;
+  // Member the event originally belongs to. Needed so a member change can be
+  // resolved as delete-from-old + create-in-new (HA stores events per
+  // calendar entity).
+  originalMemberId?: string;
   location: string;
   notes: string;
   editUid?: string;

@@ -1457,13 +1457,15 @@ function showEventDetail(ev: CalendarEvent): void {
 }
 
 function openEditModal(ev: CalendarEvent): void {
+  const memberId = ev.memberId ?? state.members[0]?.id ?? "";
   state.modal = {
     tab: "datum",
     summary: ev.summary,
     startDate: new Date(ev.start),
     endDate: new Date(ev.end),
     allDay: ev.allDay,
-    memberId: ev.memberId ?? state.members[0]?.id ?? "",
+    memberId,
+    originalMemberId: memberId,
     location: ev.location ?? "",
     notes: ev.description ?? "",
     editUid: ev.uid,
@@ -1475,7 +1477,7 @@ function openEditModal(ev: CalendarEvent): void {
 
 async function saveEvent(): Promise<void> {
   if (!state.modal) return;
-  const { summary, startDate, endDate, allDay, memberId, location, notes } = state.modal;
+  const { summary, startDate, endDate, allDay, memberId, originalMemberId, location, notes } = state.modal;
 
   if (!summary.trim()) {
     const input = document.getElementById("modal-summary") as HTMLInputElement | null;
@@ -1488,11 +1490,29 @@ async function saveEvent(): Promise<void> {
 
   const config = loadConfig();
   const { editUid } = state.modal;
+  const isExistingHaEvent = !!editUid && !editUid.startsWith("local-");
+  const memberChanged = isExistingHaEvent && !!originalMemberId && originalMemberId !== memberId;
+  let memberMoveSucceeded = false;
   if (config && navigator.onLine) {
     try {
       const client = new HAClient(config);
-      if (editUid && !editUid.startsWith("local-")) {
-        await client.updateEvent(memberId, editUid, summary.trim(), startDate, endDate, allDay, {
+      if (memberChanged) {
+        // HA's update_event is scoped to a calendar entity, so a member
+        // switch must be done as create-in-new + delete-from-old. Create
+        // first so a delete failure leaves a recoverable duplicate rather
+        // than data loss.
+        await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, {
+          location: location || undefined,
+          description: notes || undefined,
+        });
+        try {
+          await client.deleteEvent(originalMemberId!, editUid!);
+        } catch (err) {
+          console.warn("Member switch: created in new calendar but failed to delete from old", err);
+        }
+        memberMoveSucceeded = true;
+      } else if (isExistingHaEvent) {
+        await client.updateEvent(memberId, editUid!, summary.trim(), startDate, endDate, allDay, {
           location: location || undefined,
           description: notes || undefined,
         });
@@ -1527,7 +1547,22 @@ async function saveEvent(): Promise<void> {
     });
   }
 
-  if (editUid) {
+  if (memberMoveSucceeded) {
+    // Old UID was just deleted in HA; new event will surface on next
+    // refresh with its server-assigned UID. Drop the old entry from local
+    // state and add a placeholder so the user sees the change immediately.
+    state.events = state.events.filter((e) => e.uid !== editUid);
+    state.events.push({
+      uid: `local-${Date.now()}`,
+      summary: summary.trim(),
+      start: startDate,
+      end: endDate,
+      allDay,
+      memberId,
+      location: location || undefined,
+      description: notes || undefined,
+    });
+  } else if (editUid) {
     const idx = state.events.findIndex((e) => e.uid === editUid);
     const updated: CalendarEvent = {
       uid: editUid,
