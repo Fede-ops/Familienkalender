@@ -47,7 +47,8 @@ body {
 }
 
 #app {
-  min-height: 100vh;
+  height: 100%;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -409,6 +410,11 @@ body {
 
 .week-list {
   flex: 1;
+  min-height: 0;
+  overflow-y: scroll;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
+  scrollbar-width: none;
   padding: 176px 12px 100px;
   display: flex;
   flex-direction: column;
@@ -1246,6 +1252,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
    no fixed-element jitter. */
 .scroll-wrapper {
   flex: 1;
+  min-height: 0;
   overflow-y: scroll;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: none;
