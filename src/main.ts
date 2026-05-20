@@ -1902,9 +1902,18 @@ if (demoMode) {
   // Periodic re-sync so changes made on other devices show up without a
   // full app restart. 60s is a reasonable balance between freshness and load.
   setInterval(() => { pullShopping(); pullTodos(); }, 60_000);
+  // Sync hidden UIDs + calendar events every 5 minutes so deletions made on
+  // other devices appear without requiring an app restart.
+  setInterval(() => {
+    void syncHiddenUidsFromHA().then(() => void refreshEvents());
+  }, 5 * 60_000);
   // Also pull when the app comes back to the foreground.
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") { pullShopping(); pullTodos(); }
+    if (document.visibilityState === "visible") {
+      pullShopping();
+      pullTodos();
+      void syncHiddenUidsFromHA().then(() => void refreshEvents());
+    }
   });
 }
 
