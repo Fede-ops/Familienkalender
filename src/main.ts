@@ -2126,7 +2126,10 @@ window.addEventListener("online", () => void refreshEvents());
   app.addEventListener("touchstart", (e: TouchEvent) => {
     if (state.activeTab !== "kalender" || state.modal) return;
     const target = e.target as HTMLElement;
-    if (target.closest("[data-action='event-detail']") || target.closest("button")) return;
+    // Only block taps on actual buttons (FAB, toolbar). Event items use a div
+    // with data-action and must allow swipe-through — a tap still opens the
+    // event because we only preventDefault once horizontal pan is confirmed.
+    if (target.closest("button")) return;
     startX = e.touches[0].clientX;
     startY = e.touches[0].clientY;
     tracking = true;
@@ -2141,16 +2144,18 @@ window.addEventListener("online", () => void refreshEvents());
     const dy = e.touches[0].clientY - startY;
     const adx = Math.abs(dx), ady = Math.abs(dy);
     if (!panning) {
-      if (adx < 5 && ady < 5) return;
-      // Cancel if gesture is clearly vertical (>60° from horizontal)
-      if (ady > adx * 1.7) { tracking = false; resetSlide(); return; }
+      if (adx < 6 && ady < 6) return;
+      // Cancel only when clearly vertical (>67° from horizontal). Anything
+      // diagonal-ish is still treated as a swipe.
+      if (ady > adx * 2.4) { tracking = false; resetSlide(); return; }
       panning = true;
     }
     // Horizontal pan confirmed — prevent iOS history-swipe and native scroll
     e.preventDefault();
-    // Rubber-band: content follows finger at 35% rate
+    // Content tracks finger nearly 1:1 for responsive feel (small drag for
+    // perceptible resistance without feeling sluggish)
     const el = slideEl();
-    if (el) el.style.transform = `translateX(${dx * 0.35}px)`;
+    if (el) el.style.transform = `translateX(${dx * 0.85}px)`;
   }, { passive: false });
 
   app.addEventListener("touchcancel", () => {
@@ -2167,7 +2172,7 @@ window.addEventListener("online", () => void refreshEvents());
     const dy = e.changedTouches[0].clientY - startY;
     const adx = Math.abs(dx), ady = Math.abs(dy);
 
-    if (adx < 25 || ady > adx * 1.7 || !panning) { resetSlide(); return; }
+    if (adx < 18 || !panning) { resetSlide(); return; }
 
     panning = false;
     const dir = dx < 0 ? 1 : -1;
