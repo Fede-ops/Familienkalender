@@ -2043,18 +2043,15 @@ window.addEventListener("online", () => void refreshEvents());
     if (drag) return; // ongoing event drag takes priority
     const dx = e.changedTouches[0].clientX - startX;
     const dy = e.changedTouches[0].clientY - startY;
-    // Require at least 55px horizontal and more horizontal than vertical
-    if (Math.abs(dx) < 55 || Math.abs(dy) > Math.abs(dx) * 0.65) return;
-    if (dx < 0) {
-      // Swipe left → forward
-      if (state.viewMode === "month") state.monthStart = addMonths(state.monthStart, 1);
-      else state.weekStart = addDays(state.weekStart, 7);
-    } else {
-      // Swipe right → back
-      if (state.viewMode === "month") state.monthStart = addMonths(state.monthStart, -1);
-      else state.weekStart = addDays(state.weekStart, -7);
-    }
-    render();
-    void refreshEvents();
+    // 40px minimum, allow up to 45° diagonal (dy ≤ dx)
+    if (Math.abs(dx) < 40 || Math.abs(dy) > Math.abs(dx)) return;
+    const dir = dx < 0 ? 1 : -1;
+    // Defer DOM update to next frame so iOS finishes processing the touch sequence
+    requestAnimationFrame(() => {
+      if (state.viewMode === "month") state.monthStart = addMonths(state.monthStart, dir);
+      else state.weekStart = addDays(state.weekStart, 7 * dir);
+      render();
+      void refreshEvents();
+    });
   }, { passive: true });
 })();
