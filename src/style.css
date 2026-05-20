@@ -2,6 +2,7 @@
 
 :root {
   --bg: #000000;
+  --tab-bar-h: 60px;
   --bg-elev-1: #1c1c1e;
   --bg-elev-2: #2c2c2e;
   --text: #ffffff;
@@ -47,10 +48,12 @@ body {
 
 #app {
   position: fixed;
-  inset: 0;
+  top: env(safe-area-inset-top);
+  right: 0;
+  left: 0;
+  bottom: calc(var(--tab-bar-h) + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  padding-top: env(safe-area-inset-top);
 }
 
 .slide-viewport {
@@ -606,7 +609,11 @@ body {
 }
 
 .tab-bar {
-  flex-shrink: 0;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
   background: #141416;
   border-top: 1px solid rgba(120, 120, 128, 0.3);
   display: flex;

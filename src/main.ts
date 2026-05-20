@@ -319,6 +319,67 @@ const pendingDeletes: Map<string, number> = loadPendingDeletes();
 const app = document.getElementById("app")!;
 const TODO_FILTER_KEY = "nanoclaw-todo-filter";
 
+// ── Persistent tab bar (lives on <body>, outside #app) ─────────────────────
+// Keeping it outside #app means no CSS transform or compositing inside #app
+// can ever affect its position — the iOS WebKit compositing bug is fully bypassed.
+const _TB_ICONS = {
+  home: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>`,
+  todo: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l2 2 4-4M4 14l2 2 4-4M12 7h8M12 15h8"/></svg>`,
+  cart: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.4 12.5a2 2 0 0 0 2 1.5h8.4a2 2 0 0 0 2-1.5L22 7H6"/></svg>`,
+};
+const _TB_ITEMS: { key: TabKey; icon: string; label: string }[] = [
+  { key: "kalender", icon: _TB_ICONS.home, label: "Kalender" },
+  { key: "todo", icon: _TB_ICONS.todo, label: "To-Do" },
+  { key: "einkauf", icon: _TB_ICONS.cart, label: "Einkauf" },
+];
+const persistentTabBar = document.createElement("nav");
+persistentTabBar.className = "tab-bar";
+persistentTabBar.innerHTML = _TB_ITEMS.map((it) =>
+  `<button class="tab-bar__item" data-tab="${it.key}">
+    <span class="tab-bar__icon">${it.icon}</span>
+    <span class="tab-bar__label">${it.label}</span>
+  </button>`
+).join("");
+document.body.appendChild(persistentTabBar);
+
+function updateTabBarActive(): void {
+  persistentTabBar.querySelectorAll<HTMLElement>(".tab-bar__item").forEach((btn) => {
+    btn.classList.toggle("tab-bar__item--active", btn.dataset.tab === state.activeTab);
+  });
+}
+
+persistentTabBar.addEventListener("click", (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-tab]");
+  if (!btn) return;
+  const tab = btn.dataset.tab as TabKey;
+  if (tab === "kalender") {
+    state.activeTab = "kalender";
+    render();
+  } else if (tab === "todo") {
+    state.activeTab = "todo";
+    render();
+    void syncTodosFromHA().then((items) => {
+      if (!items) return;
+      state.todos = items;
+      if (state.activeTab === "todo") render();
+    });
+  } else if (tab === "einkauf") {
+    state.activeTab = "einkauf";
+    render();
+    void syncShoppingFromHA().then((items) => {
+      if (!items) return;
+      state.shopping = items;
+      if (state.activeTab === "einkauf") render();
+    });
+  }
+});
+
+// Block pinch-zoom — iOS ignores user-scalable=no in standalone mode,
+// but a non-passive multi-touch preventDefault is always respected.
+document.addEventListener("touchmove", (e) => {
+  if (e.touches.length > 1) e.preventDefault();
+}, { passive: false });
+
 const state: AppState = {
   activeTab: "kalender",
   viewMode: "week",
@@ -392,6 +453,7 @@ function render(): void {
   }
   bindEvents();
   setupDragDrop();
+  updateTabBarActive();
   if (state.modal) document.getElementById("modal-summary")?.focus();
   // Do NOT auto-focus list-input on render — it opens the iOS keyboard
   // automatically on every tab switch and causes the sticky nav to jump.
