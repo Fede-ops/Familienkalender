@@ -1,4 +1,4 @@
-import type { FamilyMember, TodoItem, TabKey } from "../types.ts";
+import type { FamilyMember, TodoItem } from "../types.ts";
 
 // ── Category definitions ───────────────────────────────────────────────────
 
@@ -887,22 +887,6 @@ const ICONS = {
   cart: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.4 12.5a2 2 0 0 0 2 1.5h8.4a2 2 0 0 0 2-1.5L22 7H6"/></svg>`,
 };
 
-function tabBar(active: TabKey): string {
-  const items: { key: TabKey; icon: keyof typeof ICONS; label: string }[] = [
-    { key: "kalender", icon: "home", label: "Kalender" },
-    { key: "todo", icon: "todo", label: "To-Do" },
-    { key: "einkauf", icon: "cart", label: "Einkauf" },
-  ];
-  return `<nav class="tab-bar">${items
-    .map(
-      (it) =>
-        `<button class="tab-bar__item${it.key === active ? " tab-bar__item--active" : ""}" data-action="tab-${it.key}">
-          <span class="tab-bar__icon">${ICONS[it.icon]}</span>
-          <span class="tab-bar__label">${it.label}</span>
-        </button>`
-    )
-    .join("")}</nav>`;
-}
 
 function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -1026,6 +1010,5 @@ export function renderTodoView(viewState: TodoViewState): string {
       </div>
       ${bodyHtml}
     </div>
-    ${tabBar("todo")}
   `;
 }

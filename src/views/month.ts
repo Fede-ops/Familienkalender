@@ -1,4 +1,4 @@
-import type { CalendarEvent, FamilyMember, TabKey } from "../types.ts";
+import type { CalendarEvent, FamilyMember } from "../types.ts";
 
 const MONTH_NAMES_DE = [
   "Januar", "Februar", "März", "April", "Mai", "Juni",
@@ -43,22 +43,6 @@ function toolbarBtn(iconKey: keyof typeof ICONS, label: string, action: string):
   </button>`;
 }
 
-function tabBar(active: TabKey): string {
-  const items: { key: TabKey; icon: keyof typeof ICONS; label: string }[] = [
-    { key: "kalender", icon: "home", label: "Kalender" },
-    { key: "todo", icon: "todo", label: "To-Do" },
-    { key: "einkauf", icon: "cart", label: "Einkauf" },
-  ];
-  return `<nav class="tab-bar">${items
-    .map(
-      (it) =>
-        `<button class="tab-bar__item${it.key === active ? " tab-bar__item--active" : ""}" data-action="tab-${it.key}">
-          <span class="tab-bar__icon">${ICONS[it.icon]}</span>
-          <span class="tab-bar__label">${it.label}</span>
-        </button>`
-    )
-    .join("")}</nav>`;
-}
 
 export interface MonthViewState {
   monthStart: Date;
@@ -135,6 +119,5 @@ export function renderMonthView(viewState: MonthViewState): string {
       <div class="month-grid">${rows.join("")}</div>
     </div>
     <button class="fab" data-action="add-event">${ICONS.plus}</button>
-    ${tabBar("kalender")}
   `;
 }

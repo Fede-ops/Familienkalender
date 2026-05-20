@@ -338,6 +338,72 @@ function visibleEvents(): CalendarEvent[] {
   return state.events.filter((e) => state.filterMemberIds.includes(e.memberId ?? ""));
 }
 
+// ── Persistent tab bar (lives on <body>, never inside #app) ────────────────
+// Keeping it outside #app avoids iOS WebKit's "overflow:hidden creates a new
+// stacking context" bug that mispositions position:fixed children after swipes.
+
+const TAB_ICONS = {
+  home: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>`,
+  todo: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l2 2 4-4M4 14l2 2 4-4M12 7h8M12 15h8"/></svg>`,
+  cart: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.4 12.5a2 2 0 0 0 2 1.5h8.4a2 2 0 0 0 2-1.5L22 7H6"/></svg>`,
+};
+
+const TAB_ITEMS: { key: TabKey; icon: keyof typeof TAB_ICONS; label: string }[] = [
+  { key: "kalender", icon: "home", label: "Kalender" },
+  { key: "todo", icon: "todo", label: "To-Do" },
+  { key: "einkauf", icon: "cart", label: "Einkauf" },
+];
+
+function initPersistentTabBar(): void {
+  const nav = document.createElement("nav");
+  nav.id = "persistent-tab-bar";
+  nav.className = "tab-bar";
+  nav.innerHTML = TAB_ITEMS.map(
+    (it) => `<button class="tab-bar__item" data-tab="${it.key}">
+      <span class="tab-bar__icon">${TAB_ICONS[it.icon]}</span>
+      <span class="tab-bar__label">${it.label}</span>
+    </button>`,
+  ).join("");
+
+  nav.querySelectorAll<HTMLElement>("[data-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.tab as TabKey;
+      if (key === "kalender") {
+        state.activeTab = "kalender";
+        render();
+      } else if (key === "todo") {
+        state.activeTab = "todo";
+        render();
+        void syncTodosFromHA().then((items) => {
+          if (!items) return;
+          state.todos = items;
+          if (state.activeTab === "todo") render();
+        });
+      } else if (key === "einkauf") {
+        state.activeTab = "einkauf";
+        render();
+        void syncShoppingFromHA().then((items) => {
+          if (!items) return;
+          state.shopping = items;
+          if (state.activeTab === "einkauf") render();
+        });
+      }
+    });
+  });
+
+  document.body.appendChild(nav);
+}
+
+function updatePersistentTabBar(): void {
+  const nav = document.getElementById("persistent-tab-bar");
+  if (!nav) return;
+  nav.querySelectorAll<HTMLElement>("[data-tab]").forEach((btn) => {
+    btn.classList.toggle("tab-bar__item--active", btn.dataset.tab === state.activeTab);
+  });
+  // Hide on config screen (no active tab set)
+  nav.style.display = "";
+}
+
 // ── Rendering ──────────────────────────────────────────────────────────────
 
 function render(): void {
@@ -390,6 +456,7 @@ function render(): void {
     chip.title = __BUILD_TIME__;
     toolbar.appendChild(chip);
   }
+  updatePersistentTabBar();
   bindEvents();
   setupDragDrop();
   if (state.modal) document.getElementById("modal-summary")?.focus();
@@ -1846,6 +1913,8 @@ function dismissHAError(): void {
 // ── Config screen ──────────────────────────────────────────────────────────
 
 function renderConfig(): void {
+  const nav = document.getElementById("persistent-tab-bar");
+  if (nav) nav.style.display = "none";
   const existing = loadConfig();
   const defaultEntities = "calendar.fede, calendar.pita, calendar.bebos, calendar.santi, calendar.fede_trabajo, calendar.pita_trabajo";
   const escVal = (s: string) => s.replace(/"/g, "&quot;");
@@ -1969,6 +2038,8 @@ async function syncEntitiesFromHA(): Promise<string[] | null> {
 
 // ── Boot ───────────────────────────────────────────────────────────────────
 
+initPersistentTabBar();
+
 const demoMode = new URLSearchParams(window.location.search).has("demo");
 const config = loadConfig();
 if (demoMode) {
@@ -2033,46 +2104,94 @@ window.addEventListener("online", () => void refreshEvents());
 // ── Calendar swipe navigation ──────────────────────────────────────────────
 
 (function setupCalendarSwipe() {
-  let startX = 0;
-  let startY = 0;
-  let tracking = false;
+  let startX = 0, startY = 0;
+  let tracking = false, panning = false;
+
+  function slideEl(): HTMLElement | null {
+    return app.querySelector(".week-list") ?? app.querySelector(".month-scroll");
+  }
+
+  function resetSlide(): void {
+    const el = slideEl();
+    if (!el) return;
+    el.style.transition = "transform 0.2s ease";
+    el.style.transform = "";
+    (el as HTMLElement & { _willChange?: boolean }).style.willChange = "";
+  }
 
   app.addEventListener("touchstart", (e: TouchEvent) => {
     if (state.activeTab !== "kalender" || state.modal) return;
     const target = e.target as HTMLElement;
-    // Don't intercept touches on event chips or interactive controls
     if (target.closest("[data-action='event-detail']") || target.closest("button")) return;
     startX = e.touches[0].clientX;
     startY = e.touches[0].clientY;
     tracking = true;
+    panning = false;
+    const el = slideEl();
+    if (el) { el.style.transition = "none"; el.style.willChange = "transform"; }
   }, { passive: true });
 
   app.addEventListener("touchmove", (e: TouchEvent) => {
     if (!tracking) return;
-    const dx = Math.abs(e.touches[0].clientX - startX);
-    const dy = Math.abs(e.touches[0].clientY - startY);
-    // Cancel if the gesture is clearly more vertical than horizontal
-    if (dy > 12 && dy > dx) tracking = false;
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+    const adx = Math.abs(dx), ady = Math.abs(dy);
+    if (!panning) {
+      if (adx < 5 && ady < 5) return;
+      // Cancel if gesture is clearly vertical (>60° from horizontal)
+      if (ady > adx * 1.7) { tracking = false; resetSlide(); return; }
+      panning = true;
+    }
+    // Rubber-band: content follows finger at 35% rate
+    const el = slideEl();
+    if (el) el.style.transform = `translateX(${dx * 0.35}px)`;
   }, { passive: true });
 
-  app.addEventListener("touchcancel", () => { tracking = false; }, { passive: true });
+  app.addEventListener("touchcancel", () => {
+    tracking = false; panning = false;
+    resetSlide();
+  }, { passive: true });
 
   app.addEventListener("touchend", (e: TouchEvent) => {
     if (!tracking) return;
     tracking = false;
-    if (drag) return; // ongoing event drag takes priority
+    if (drag) { panning = false; resetSlide(); return; }
+
     const dx = e.changedTouches[0].clientX - startX;
     const dy = e.changedTouches[0].clientY - startY;
-    // 40px minimum, allow up to 45° diagonal (dy ≤ dx)
-    if (Math.abs(dx) < 40 || Math.abs(dy) > Math.abs(dx)) return;
+    const adx = Math.abs(dx), ady = Math.abs(dy);
+
+    if (adx < 25 || ady > adx * 1.7 || !panning) { resetSlide(); return; }
+
+    panning = false;
     const dir = dx < 0 ? 1 : -1;
-    // Defer DOM update to next frame so iOS finishes processing the touch sequence
-    requestAnimationFrame(() => {
+    const W = window.innerWidth;
+    const exitX = dx < 0 ? -W : W;
+    const enterX = -exitX;
+
+    const el = slideEl();
+    if (el) {
+      el.style.transition = "transform 0.15s ease-in";
+      el.style.transform = `translateX(${exitX}px)`;
+    }
+
+    setTimeout(() => {
       if (state.viewMode === "month") state.monthStart = addMonths(state.monthStart, dir);
       else state.weekStart = addDays(state.weekStart, 7 * dir);
       render();
-      void refreshEvents();
-    });
+      const newEl = slideEl();
+      if (newEl) {
+        newEl.style.transition = "none";
+        newEl.style.transform = `translateX(${enterX}px)`;
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          newEl.style.transition = "transform 0.22s cubic-bezier(0.25,0.46,0.45,0.94)";
+          newEl.style.transform = "";
+          newEl.style.willChange = "";
+        }));
+      }
+      // Delay data refresh so it doesn't interrupt the entrance animation
+      setTimeout(() => void refreshEvents(), 280);
+    }, 160);
   }, { passive: true });
 })();
 
