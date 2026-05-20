@@ -1542,10 +1542,16 @@ async function runFullDuplicateCleanup(silent = false): Promise<void> {
     savePendingDeletes(pendingDeletes);
 
     const failedResults = results.filter((r) => r.status === "rejected");
-    const failed = failedResults.length;
+    // 400 = read-only calendar; event is already hidden via sensor — not a real failure
+    const realFailures = failedResults.filter((r) => {
+      if (r.status !== "rejected") return false;
+      const status = (r.reason as { httpStatus?: number })?.httpStatus;
+      return status !== 400;
+    });
+    const failed = realFailures.length;
     const succeeded = results.filter((r) => r.status === "fulfilled").length;
-    const firstErr = failed > 0 && failedResults[0].status === "rejected"
-      ? (failedResults[0].reason instanceof Error ? failedResults[0].reason.message : String(failedResults[0].reason))
+    const firstErr = failed > 0 && realFailures[0].status === "rejected"
+      ? (realFailures[0].reason instanceof Error ? realFailures[0].reason.message : String(realFailures[0].reason))
       : "";
 
     const result = document.createElement("div");
@@ -1593,10 +1599,16 @@ async function deleteEvent(ev: CalendarEvent): Promise<void> {
       const client = new HAClient(config);
       await client.deleteEvent(ev.memberId ?? "", ev.uid);
     } catch (err) {
+      const httpStatus = (err as { httpStatus?: number }).httpStatus;
+      if (httpStatus === 400) {
+        // 400 = read-only calendar (iCloud, Google, external CalDAV sync).
+        // The event is already permanently hidden via sensor.familienkalender_hidden_uids
+        // on all devices, so no user-visible error is needed.
+        console.warn("HA delete_event 400 (read-only calendar, event hidden via sensor):", err instanceof Error ? err.message : err);
+        return;
+      }
       const msg = err instanceof Error ? err.message : String(err);
       console.error("Failed to delete event from HA:", msg);
-      // Show HA's actual response verbatim so we know what HA is complaining
-      // about — don't guess the cause.
       showTransientBanner(msg, true);
     }
   }

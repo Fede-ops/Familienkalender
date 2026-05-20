@@ -169,10 +169,12 @@ export class HAClient {
         const parsed = JSON.parse(body) as { message?: string };
         if (parsed && typeof parsed.message === "string") detail = parsed.message;
       } catch { /* not JSON, keep raw */ }
-      throw new Error(
+      const err = new Error(
         `HA delete_event ${res.status} ${res.statusText}: ${detail || "(leerer Body)"} ` +
         `(entity=${entityId} uid=${uid})`,
       );
+      (err as Error & { httpStatus: number }).httpStatus = res.status;
+      throw err;
     }
   }
 
