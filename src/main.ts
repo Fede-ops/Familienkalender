@@ -617,9 +617,21 @@ function bindEvents(): void {
       } else if (action === "tab-todo") {
         state.activeTab = "todo";
         render();
+        // Always pull fresh data from HA on tab open so cross-device changes are visible immediately
+        void syncTodosFromHA().then((items) => {
+          if (!items) return;
+          state.todos = items;
+          if (state.activeTab === "todo") render();
+        });
       } else if (action === "tab-einkauf") {
         state.activeTab = "einkauf";
         render();
+        // Always pull fresh data from HA on tab open so cross-device changes are visible immediately
+        void syncShoppingFromHA().then((items) => {
+          if (!items) return;
+          state.shopping = items;
+          if (state.activeTab === "einkauf") render();
+        });
 
       // ── View switching ───────────────────────────────────────────────────
       } else if (action === "view-month") {
@@ -1971,6 +1983,9 @@ if (demoMode) {
     });
   pullShopping();
   pullTodos();
+  // Retry once after 5 s — catches the race where this device boots before the
+  // source device has pushed its items to the HA sensor.
+  setTimeout(() => { pullShopping(); pullTodos(); }, 5_000);
   // Periodic re-sync so changes made on other devices show up without a
   // full app restart. 60s is a reasonable balance between freshness and load.
   setInterval(() => { pullShopping(); pullTodos(); }, 60_000);

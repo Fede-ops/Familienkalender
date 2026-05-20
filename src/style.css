@@ -49,6 +49,8 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  /* Push all content below the status bar on every device/view uniformly */
+  padding-top: env(safe-area-inset-top);
 }
 
 .header {
