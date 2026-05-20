@@ -783,7 +783,7 @@ function showNotificationsSheet(): void {
         return `        - {entity: "${m.id}", name: "${m.name}", services: [${svcs}]}`;
       })
       .join("\n");
-    return `# Einstellungen → Automatisierungen → + → YAML:
+    return `# Einstellungen → Automatisierungen → + → YAML einfügen:
 alias: "Familienkalender Tagesübersicht"
 trigger:
   - platform: time
@@ -803,17 +803,23 @@ ${forEachItems}
       sequence:
         - variables:
             evs: "{{ today[repeat.item.entity].events }}"
-            msg_title: "📅 {{ repeat.item.name }} – Heute"
+            weekday: >-
+              {{ ['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'][now().weekday()] }}
+            msg_title: "📅 {{ weekday }}, {{ now().strftime('%-d. %-m.') }} – {{ repeat.item.name }}"
             msg_body: >-
-              {%- set ns = namespace(parts=[]) -%}
-              {%- for e in evs -%}
-                {%- if e.all_day -%}
-                  {%- set ns.parts = ns.parts + [e.summary] -%}
-                {%- else -%}
-                  {%- set ns.parts = ns.parts + [(e.start | string)[11:16] + ' ' + e.summary] -%}
-                {%- endif -%}
+              {%- set ns = namespace(lines=[]) -%}
+              {%- for e in evs if e.all_day -%}
+                {%- set ns.lines = ns.lines + ['☀️ ' + e.summary] -%}
               {%- endfor -%}
-              {%- if ns.parts | length == 0 -%}Keine Termine heute{%- else -%}{{ ns.parts | join(' · ') }}{%- endif -%}
+              {%- for e in evs | sort(attribute='start') if not e.all_day -%}
+                {%- set t = (e.start | as_datetime | as_local).strftime('%H:%M') -%}
+                {%- set ns.lines = ns.lines + [t + ' ' + e.summary] -%}
+              {%- endfor -%}
+              {%- if ns.lines | length == 0 -%}
+              Heute keine Termine ✓
+              {%- else -%}
+              {{ ns.lines | join('\\n') }}
+              {%- endif -%}
             target_services: "{{ repeat.item.services }}"
         - repeat:
             for_each: "{{ target_services }}"
@@ -937,29 +943,56 @@ mode: single`;
 
   sheet.querySelector<HTMLElement>("#notif-test-btn")!.addEventListener("click", async () => {
     const mapping = readMapping(sheet);
-    const allServices = new Set<string>();
-    for (const services of Object.values(mapping)) {
-      for (const svc of services) allServices.add(svc);
-    }
-    if (allServices.size === 0) {
+    if (Object.keys(mapping).length === 0) {
       showStatus("Keine Geräte ausgewählt — bitte zuerst Empfänger zuordnen", false);
       return;
     }
     const btn = sheet.querySelector<HTMLElement>("#notif-test-btn")!;
     btn.textContent = "…";
     btn.setAttribute("disabled", "");
-    const results = await Promise.allSettled(
-      [...allServices].map((svc) =>
-        sendTestNotification(svc, "📅 Familienkalender Test", "Test-Benachrichtigung aus der App. Wenn du das siehst, funktioniert es."),
-      ),
-    );
+
+    // Build today's event list from already-loaded state, same format as YAML automation.
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+    const WEEKDAYS_DE = ["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"];
+    const pad2 = (n: number) => String(n).padStart(2, "0");
+    const today = new Date();
+    const dateLabel = `${WEEKDAYS_DE[today.getDay()]}, ${today.getDate()}. ${today.getMonth() + 1}.`;
+
+    function buildBody(memberId: string): string {
+      const evs = state.events.filter((e) =>
+        e.memberId === memberId &&
+        e.start < todayEnd &&
+        (e.allDay ? e.end >= todayStart : e.end > todayStart),
+      );
+      const allDay = evs.filter((e) => e.allDay).map((e) => `☀️ ${e.summary}`);
+      const timed = evs
+        .filter((e) => !e.allDay)
+        .sort((a, b) => a.start.getTime() - b.start.getTime())
+        .map((e) => `${pad2(e.start.getHours())}:${pad2(e.start.getMinutes())} ${e.summary}`);
+      const lines = [...allDay, ...timed];
+      return lines.length > 0 ? lines.join("\n") : "Heute keine Termine ✓";
+    }
+
+    const sends: Promise<void>[] = [];
+    for (const [memberId, services] of Object.entries(mapping)) {
+      const member = state.members.find((m) => m.id === memberId);
+      if (!member || services.length === 0) continue;
+      const title = `📅 ${dateLabel} – ${member.name}`;
+      const message = buildBody(memberId);
+      for (const svc of services) {
+        sends.push(sendTestNotification(svc, title, message));
+      }
+    }
+
+    const results = await Promise.allSettled(sends);
     const failed = results.filter((r) => r.status === "rejected");
     if (failed.length === 0) {
-      showStatus(`Test an ${allServices.size} Gerät(e) gesendet ✓`, true);
+      showStatus(`Tagesübersicht an ${results.length} Gerät(e) gesendet ✓`, true);
     } else {
       const firstErr = (failed[0] as PromiseRejectedResult).reason;
       const msg = firstErr instanceof Error ? firstErr.message : String(firstErr);
-      showStatus(`${failed.length}/${allServices.size} fehlgeschlagen: ${msg}`, false);
+      showStatus(`${failed.length}/${results.length} fehlgeschlagen: ${msg}`, false);
     }
     btn.textContent = "Test senden";
     btn.removeAttribute("disabled");

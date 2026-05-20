@@ -90,8 +90,6 @@ export function renderMonthView(viewState: MonthViewState): string {
         .filter((e) => e.start < dayEnd && (e.allDay ? e.end >= dayStart : e.end > dayStart))
         .slice(0, 3);
 
-      const isFirstDay = (ev: CalendarEvent) => isSameDay(ev.start, date);
-
       const dots = dayEvents.map((ev) => {
         const m = members.find((x) => x.id === ev.memberId);
         const color = m?.color ?? "#8E8E93";
@@ -102,7 +100,7 @@ export function renderMonthView(viewState: MonthViewState): string {
         const m = members.find((x) => x.id === ev.memberId);
         const color = m?.color ?? "#8E8E93";
         const grad = `linear-gradient(160deg,${shade(color, 5)} 0%,${shade(color, -45)} 100%)`;
-        const label = isFirstDay(ev) ? ev.summary : `· ${ev.summary}`;
+        const label = ev.summary;
         return `<div class="month-cell__event" style="background:${grad};">${label}</div>`;
       }).join("");
 
