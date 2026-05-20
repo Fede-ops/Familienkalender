@@ -413,7 +413,7 @@ body {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: none;
   scrollbar-width: none;
-  padding: 176px 12px 100px;
+  padding: 176px 12px 20px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -570,7 +570,7 @@ body {
 .fab {
   position: fixed;
   right: 20px;
-  bottom: calc(68px + env(safe-area-inset-bottom));
+  bottom: calc(80px + env(safe-area-inset-bottom));
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -586,17 +586,11 @@ body {
 }
 
 .tab-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: rgba(20, 20, 22, 0.94);
+  flex-shrink: 0;
+  background: #141416;
   border-top: 1px solid rgba(120, 120, 128, 0.3);
   display: flex;
   padding: 0 0 env(safe-area-inset-bottom);
-  z-index: 30;
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
 }
 
 .tab-bar__item {
@@ -643,10 +637,12 @@ body {
 }
 
 .month-scroll {
-  flex: 1 1 auto;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: 120px;
+  overscroll-behavior: none;
+  padding-bottom: 8px;
 }
 
 .month-block {
@@ -1254,7 +1250,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   overflow-y: scroll;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: none;
-  padding-bottom: 110px;
+  padding-bottom: 8px;
   scrollbar-width: none;
 }
 .scroll-wrapper::-webkit-scrollbar {
