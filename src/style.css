@@ -116,14 +116,12 @@ body {
 
 .sticky-nav {
   position: fixed;
-  top: var(--vv-offset, 0px);
+  top: 0;
   left: 0;
   right: 0;
   z-index: 30;
   background: var(--bg);
   padding-top: env(safe-area-inset-top);
-  will-change: top;
-  transform: translateZ(0);
 }
 
 .toolbar__button {
@@ -210,11 +208,11 @@ body {
   width: 100%;
   background: #1C1C1E;
   border-radius: 16px 16px 0 0;
+  padding: 8px 0 calc(env(safe-area-inset-bottom) + 16px);
   animation: slideUp 0.25s cubic-bezier(0.25,0.46,0.45,0.94);
   max-height: 88vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .bottom-sheet__handle {
   width: 36px;
@@ -232,8 +230,16 @@ body {
   padding: 0 20px 8px;
 }
 
+/* Notification sheet: occupies 90 % of screen with header/footer fixed,
+   only the device list scrolls. height must be explicit so flex:1 on the
+   inner list has a parent height to grow into. */
 .bottom-sheet--large {
-  height: 92vh;
+  height: 90vh;
+  max-height: 90vh;
+  padding: 8px 0 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .notif-sheet-header {
   flex-shrink: 0;
@@ -1235,12 +1241,28 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   display: none;
 }
 
-/* When the header + add-input row are wrapped in .sticky-nav (Einkauf, To-Do),
-   the scrollable list needs top padding to clear the fixed banner. The exact
-   height depends on whether a member-filter row is rendered (To-Do), so we
-   reserve enough for the tallest variant. */
-.list-body--with-sticky {
-  padding-top: 168px;
+/* Einkauf + To-Do: the scroll container that holds sticky-nav + list content.
+   position:sticky on the nav inside here is natively smooth on iOS — no JS,
+   no fixed-element jitter. */
+.scroll-wrapper {
+  flex: 1;
+  overflow-y: scroll;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
+  padding-bottom: 110px;
+  scrollbar-width: none;
+}
+.scroll-wrapper::-webkit-scrollbar {
+  display: none;
+}
+/* Override: inside scroll-wrapper the nav sticks natively instead of being fixed */
+.scroll-wrapper .sticky-nav {
+  position: sticky;
+  top: 0;
+  left: auto;
+  right: auto;
+  will-change: auto;
+  transform: none;
 }
 
 .category-group {

@@ -697,16 +697,18 @@ export function renderShoppingView(items: ShoppingItem[]): string {
   const totalActive = active.length;
 
   return `
-    <div class="sticky-nav">
-      <header class="header list-header">
-        <h1 class="header__title">Einkauf${totalActive > 0 ? ` <span class="header__badge">${totalActive}</span>` : ""}</h1>
-      </header>
-      <div class="list-add">
-        <input class="list-add__input" id="list-input" placeholder="Artikel hinzufügen…" autocomplete="off" autocorrect="on" />
-        <button class="list-add__btn" data-action="add-item">${ICONS.plus}</button>
+    <div class="scroll-wrapper">
+      <div class="sticky-nav">
+        <header class="header list-header">
+          <h1 class="header__title">Einkauf${totalActive > 0 ? ` <span class="header__badge">${totalActive}</span>` : ""}</h1>
+        </header>
+        <div class="list-add">
+          <input class="list-add__input" id="list-input" placeholder="Artikel hinzufügen…" autocomplete="off" autocorrect="on" />
+          <button class="list-add__btn" data-action="add-item">${ICONS.plus}</button>
+        </div>
       </div>
+      ${bodyHtml}
     </div>
-    <div class="list-body list-body--with-sticky">${bodyHtml}</div>
     ${tabBar("einkauf")}
   `;
 }
