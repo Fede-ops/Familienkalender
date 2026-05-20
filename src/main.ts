@@ -789,15 +789,19 @@ function showNotificationsSheet(): void {
   function haYaml(mapping: Record<string, string[]>): string {
     // Build a list of (member, services) pairs for the iteration. Only
     // members that have at least one service configured.
-    const entitiesUsed = state.members.filter((m) => (mapping[m.id]?.length ?? 0) > 0);
+    // Normalise mapping keys: accept both "fede" and "calendar.fede".
+    const normKey = (id: string) => id.startsWith("calendar.") ? id : `calendar.${id}`;
+    const normMapping: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(mapping)) normMapping[normKey(k)] = v;
+    const entitiesUsed = state.members.filter((m) => (normMapping[normKey(m.id)]?.length ?? 0) > 0);
     if (entitiesUsed.length === 0) {
       return "# Noch kein Familienmitglied einem Gerät zugeordnet.\n# Wähle oben mindestens einen Empfänger pro Person aus.";
     }
-    const entityIds = entitiesUsed.map((m) => `        - ${m.id}`).join("\n");
+    const entityIds = entitiesUsed.map((m) => `        - ${normKey(m.id)}`).join("\n");
     const forEachItems = entitiesUsed
       .map((m) => {
-        const svcs = (mapping[m.id] ?? []).map((s) => `"${s}"`).join(", ");
-        return `        - {entity: "${m.id}", name: "${m.name}", services: [${svcs}]}`;
+        const svcs = (normMapping[normKey(m.id)] ?? []).map((s) => `"${s}"`).join(", ");
+        return `        - {entity: "${normKey(m.id)}", name: "${m.name}", services: [${svcs}]}`;
       })
       .join("\n");
     return `# Einstellungen → Automatisierungen → + → YAML einfügen:

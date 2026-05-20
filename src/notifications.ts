@@ -22,7 +22,15 @@ export function loadNotifConfig(): NotifConfig | null {
     if (!parsed.memberServices || typeof parsed.memberServices !== "object") {
       return { memberServices: {} };
     }
-    return { memberServices: parsed.memberServices };
+    // Migrate keys that were saved without "calendar." prefix (old JS).
+    const services = parsed.memberServices as Record<string, unknown>;
+    const migrated: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(services)) {
+      if (!Array.isArray(v)) continue;
+      const key = k.startsWith("calendar.") ? k : `calendar.${k}`;
+      migrated[key] = v as string[];
+    }
+    return { memberServices: migrated };
   } catch {
     return null;
   }
