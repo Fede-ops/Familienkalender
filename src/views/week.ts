@@ -68,6 +68,19 @@ function toolbarBtn(iconKey: keyof typeof ICONS, label: string, action: string):
   </button>`;
 }
 
+function tabBar(active: "kalender" | "todo" | "einkauf"): string {
+  const tabs: { key: "kalender" | "todo" | "einkauf"; icon: string; label: string }[] = [
+    { key: "kalender", icon: ICONS.home, label: "Kalender" },
+    { key: "todo", icon: ICONS.todo, label: "To-Do" },
+    { key: "einkauf", icon: ICONS.cart, label: "Einkauf" },
+  ];
+  return `<nav class="tab-bar">${tabs.map((it) =>
+    `<button class="tab-bar__item${it.key === active ? " tab-bar__item--active" : ""}" data-action="tab-${it.key}">
+      <span class="tab-bar__icon">${it.icon}</span>
+      <span class="tab-bar__label">${it.label}</span>
+    </button>`
+  ).join("")}</nav>`;
+}
 
 function renderEvent(event: CalendarEvent, member?: FamilyMember): string {
   const accent = member?.color ?? "#8E8E93";
@@ -148,5 +161,6 @@ export function renderWeekView(viewState: WeekViewState): string {
     </div>
     <main class="week-list">${rows}</main>
     <button class="fab" data-action="add-event">${ICONS.plus}</button>
+    ${tabBar("kalender")}
   `;
 }

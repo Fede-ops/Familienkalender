@@ -43,6 +43,19 @@ function toolbarBtn(iconKey: keyof typeof ICONS, label: string, action: string):
   </button>`;
 }
 
+function tabBar(active: "kalender" | "todo" | "einkauf"): string {
+  const tabs: { key: "kalender" | "todo" | "einkauf"; icon: string; label: string }[] = [
+    { key: "kalender", icon: ICONS.home, label: "Kalender" },
+    { key: "todo", icon: ICONS.todo, label: "To-Do" },
+    { key: "einkauf", icon: ICONS.cart, label: "Einkauf" },
+  ];
+  return `<nav class="tab-bar">${tabs.map((it) =>
+    `<button class="tab-bar__item${it.key === active ? " tab-bar__item--active" : ""}" data-action="tab-${it.key}">
+      <span class="tab-bar__icon">${it.icon}</span>
+      <span class="tab-bar__label">${it.label}</span>
+    </button>`
+  ).join("")}</nav>`;
+}
 
 export interface MonthViewState {
   monthStart: Date;
@@ -119,5 +132,6 @@ export function renderMonthView(viewState: MonthViewState): string {
       <div class="month-grid">${rows.join("")}</div>
     </div>
     <button class="fab" data-action="add-event">${ICONS.plus}</button>
+    ${tabBar("kalender")}
   `;
 }

@@ -338,72 +338,6 @@ function visibleEvents(): CalendarEvent[] {
   return state.events.filter((e) => state.filterMemberIds.includes(e.memberId ?? ""));
 }
 
-// ── Persistent tab bar (lives on <body>, never inside #app) ────────────────
-// Keeping it outside #app avoids iOS WebKit's "overflow:hidden creates a new
-// stacking context" bug that mispositions position:fixed children after swipes.
-
-const TAB_ICONS = {
-  home: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>`,
-  todo: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l2 2 4-4M4 14l2 2 4-4M12 7h8M12 15h8"/></svg>`,
-  cart: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.4 12.5a2 2 0 0 0 2 1.5h8.4a2 2 0 0 0 2-1.5L22 7H6"/></svg>`,
-};
-
-const TAB_ITEMS: { key: TabKey; icon: keyof typeof TAB_ICONS; label: string }[] = [
-  { key: "kalender", icon: "home", label: "Kalender" },
-  { key: "todo", icon: "todo", label: "To-Do" },
-  { key: "einkauf", icon: "cart", label: "Einkauf" },
-];
-
-function initPersistentTabBar(): void {
-  const nav = document.createElement("nav");
-  nav.id = "persistent-tab-bar";
-  nav.className = "tab-bar";
-  nav.innerHTML = TAB_ITEMS.map(
-    (it) => `<button class="tab-bar__item" data-tab="${it.key}">
-      <span class="tab-bar__icon">${TAB_ICONS[it.icon]}</span>
-      <span class="tab-bar__label">${it.label}</span>
-    </button>`,
-  ).join("");
-
-  nav.querySelectorAll<HTMLElement>("[data-tab]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const key = btn.dataset.tab as TabKey;
-      if (key === "kalender") {
-        state.activeTab = "kalender";
-        render();
-      } else if (key === "todo") {
-        state.activeTab = "todo";
-        render();
-        void syncTodosFromHA().then((items) => {
-          if (!items) return;
-          state.todos = items;
-          if (state.activeTab === "todo") render();
-        });
-      } else if (key === "einkauf") {
-        state.activeTab = "einkauf";
-        render();
-        void syncShoppingFromHA().then((items) => {
-          if (!items) return;
-          state.shopping = items;
-          if (state.activeTab === "einkauf") render();
-        });
-      }
-    });
-  });
-
-  document.body.appendChild(nav);
-}
-
-function updatePersistentTabBar(): void {
-  const nav = document.getElementById("persistent-tab-bar");
-  if (!nav) return;
-  nav.querySelectorAll<HTMLElement>("[data-tab]").forEach((btn) => {
-    btn.classList.toggle("tab-bar__item--active", btn.dataset.tab === state.activeTab);
-  });
-  // Hide on config screen (no active tab set)
-  nav.style.display = "";
-}
-
 // ── Rendering ──────────────────────────────────────────────────────────────
 
 function render(): void {
@@ -456,7 +390,6 @@ function render(): void {
     chip.title = __BUILD_TIME__;
     toolbar.appendChild(chip);
   }
-  updatePersistentTabBar();
   bindEvents();
   setupDragDrop();
   if (state.modal) document.getElementById("modal-summary")?.focus();
@@ -1913,8 +1846,6 @@ function dismissHAError(): void {
 // ── Config screen ──────────────────────────────────────────────────────────
 
 function renderConfig(): void {
-  const nav = document.getElementById("persistent-tab-bar");
-  if (nav) nav.style.display = "none";
   const existing = loadConfig();
   const defaultEntities = "calendar.fede, calendar.pita, calendar.bebos, calendar.santi, calendar.fede_trabajo, calendar.pita_trabajo";
   const escVal = (s: string) => s.replace(/"/g, "&quot;");
@@ -2037,8 +1968,6 @@ async function syncEntitiesFromHA(): Promise<string[] | null> {
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────────
-
-initPersistentTabBar();
 
 const demoMode = new URLSearchParams(window.location.search).has("demo");
 const config = loadConfig();

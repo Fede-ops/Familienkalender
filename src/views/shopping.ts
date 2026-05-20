@@ -655,6 +655,20 @@ function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+function tabBar(active: "kalender" | "todo" | "einkauf"): string {
+  const tabs: { key: "kalender" | "todo" | "einkauf"; icon: string; label: string }[] = [
+    { key: "kalender", icon: ICONS.home, label: "Kalender" },
+    { key: "todo", icon: ICONS.todo, label: "To-Do" },
+    { key: "einkauf", icon: ICONS.cart, label: "Einkauf" },
+  ];
+  return `<nav class="tab-bar">${tabs.map((it) =>
+    `<button class="tab-bar__item${it.key === active ? " tab-bar__item--active" : ""}" data-action="tab-${it.key}">
+      <span class="tab-bar__icon">${it.icon}</span>
+      <span class="tab-bar__label">${it.label}</span>
+    </button>`
+  ).join("")}</nav>`;
+}
+
 // ── Render ─────────────────────────────────────────────────────────────────
 
 export function renderShoppingView(items: ShoppingItem[]): string {
@@ -732,5 +746,6 @@ export function renderShoppingView(items: ShoppingItem[]): string {
       </div>
       ${bodyHtml}
     </div>
+    ${tabBar("einkauf")}
   `;
 }
