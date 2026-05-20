@@ -1912,6 +1912,15 @@ async function syncEntitiesFromHA(): Promise<string[] | null> {
   } catch { return null; }
 }
 
+// ── Viewport height fix ────────────────────────────────────────────────────
+// 100dvh is unreliable in iOS PWA mode. window.innerHeight is always the
+// exact pixel height of the usable viewport on every device.
+function applyViewportHeight(): void {
+  app.style.height = `${window.innerHeight}px`;
+}
+applyViewportHeight();
+window.addEventListener("resize", applyViewportHeight);
+
 // ── Boot ───────────────────────────────────────────────────────────────────
 
 const demoMode = new URLSearchParams(window.location.search).has("demo");
