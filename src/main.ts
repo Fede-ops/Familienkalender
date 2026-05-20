@@ -341,6 +341,11 @@ function visibleEvents(): CalendarEvent[] {
 // ── Rendering ──────────────────────────────────────────────────────────────
 
 function render(): void {
+  // Cancel any pending drag before replacing the DOM. Without this, the
+  // 350ms drag-activation timer can fire after innerHTML is replaced,
+  // appending a ghost and adding a non-passive touchmove listener to
+  // document that calls e.preventDefault() — permanently blocking swipes.
+  if (drag) cancelDrag();
   let html = "";
   if (state.activeTab === "einkauf") {
     html = renderShoppingView(state.shopping);
@@ -2055,3 +2060,15 @@ window.addEventListener("online", () => void refreshEvents());
     });
   }, { passive: true });
 })();
+
+// ── Service Worker reload on update ───────────────────────────────────────
+// When a new SW activates and claims this client it sends "sw-reload".
+// Reloading here ensures the page picks up the new SW's cached assets
+// instead of continuing to run the old JS/CSS bundle.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("message", (evt) => {
+    if ((evt.data as { type?: string })?.type === "sw-reload") {
+      window.location.reload();
+    }
+  });
+}
