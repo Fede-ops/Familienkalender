@@ -45,7 +45,7 @@ body {
 }
 
 #app {
-  height: 100dvh;
+  height: var(--app-h, 100dvh);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -409,7 +409,6 @@ body {
   overflow-y: scroll;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: none;
-  touch-action: pan-y;
   scrollbar-width: none;
   padding: 8px 12px 20px;
   display: flex;

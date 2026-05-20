@@ -319,6 +319,17 @@ const pendingDeletes: Map<string, number> = loadPendingDeletes();
 const app = document.getElementById("app")!;
 const TODO_FILTER_KEY = "nanoclaw-todo-filter";
 
+// ── Reliable viewport height ──────────────────────────────────────────────
+// 100dvh is unreliable on iOS (changes after keyboard, wrong on iOS ≤15).
+// window.innerHeight is always the actual visible height of the PWA window.
+function setAppHeight(): void {
+  document.documentElement.style.setProperty("--app-h", `${window.innerHeight}px`);
+}
+setAppHeight();
+window.addEventListener("resize", setAppHeight);
+// Also update on visual viewport resize (keyboard appear/disappear on iOS)
+window.visualViewport?.addEventListener("resize", setAppHeight);
+
 const state: AppState = {
   activeTab: "kalender",
   viewMode: "week",
