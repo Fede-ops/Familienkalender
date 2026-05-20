@@ -46,7 +46,7 @@ body {
 }
 
 #app {
-  height: var(--app-h, 100dvh);
+  height: 100dvh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
