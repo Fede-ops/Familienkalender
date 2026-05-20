@@ -51,7 +51,7 @@ body {
   top: env(safe-area-inset-top);
   right: 0;
   left: 0;
-  bottom: calc(var(--tab-bar-h) + env(safe-area-inset-bottom));
+  bottom: 0; /* overridden by JS: syncAppBottom() sets this to tab bar's real height */
   display: flex;
   flex-direction: column;
 }

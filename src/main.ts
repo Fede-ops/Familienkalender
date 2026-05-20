@@ -380,6 +380,15 @@ document.addEventListener("touchmove", (e) => {
   if (e.touches.length > 1) e.preventDefault();
 }, { passive: false });
 
+// Keep #app.bottom = exact rendered height of the tab bar.
+// ResizeObserver fires whenever the tab bar changes size (orientation,
+// safe-area changes, first paint), eliminating any CSS-calc mismatch.
+function syncAppBottom(): void {
+  app.style.bottom = `${persistentTabBar.getBoundingClientRect().height}px`;
+}
+syncAppBottom();
+new ResizeObserver(syncAppBottom).observe(persistentTabBar);
+
 const state: AppState = {
   activeTab: "kalender",
   viewMode: "week",
