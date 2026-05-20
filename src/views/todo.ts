@@ -786,6 +786,7 @@ export function categorizeTodoItem(title: string): string {
 
 const STORAGE_KEY = "nanoclaw-todos";
 const TS_KEY = "nanoclaw-todos-ts";
+const BACKUP_KEY = "nanoclaw-todos-backup";
 const HA_ENTITY = "sensor.familienkalender_todos";
 
 interface HAConfig { baseUrl: string; token: string }
@@ -800,7 +801,20 @@ function haConfig(): HAConfig | null {
 export function loadTodoItems(): TodoItem[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as TodoItem[]) : [];
+    if (raw) {
+      const items = JSON.parse(raw) as TodoItem[];
+      if (items.length > 0) return items;
+    }
+    // Primary key empty — try backup
+    const backup = localStorage.getItem(BACKUP_KEY);
+    if (backup) {
+      const items = JSON.parse(backup) as TodoItem[];
+      if (items.length > 0) {
+        localStorage.setItem(STORAGE_KEY, backup);
+        return items;
+      }
+    }
+    return [];
   } catch {
     return [];
   }
@@ -810,6 +824,9 @@ export function saveTodoItems(items: TodoItem[]): void {
   const ts = Date.now();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
   localStorage.setItem(TS_KEY, String(ts));
+  if (items.length > 0) {
+    localStorage.setItem(BACKUP_KEY, JSON.stringify(items));
+  }
   const cfg = haConfig();
   if (!cfg) return;
   // Never overwrite HA with an empty list — see shopping.ts for rationale.

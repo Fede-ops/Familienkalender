@@ -868,6 +868,12 @@ mode: single`;
     }).join("");
   }
 
+  const savedCount = Object.values(cfg.memberServices).reduce((a, arr) => a + arr.length, 0);
+  const savedMemberCount = Object.keys(cfg.memberServices).length;
+  const initialStatus = savedCount > 0
+    ? `Gespeichert: ${savedMemberCount} Person(en), ${savedCount} Gerät-Zuordnung(en)`
+    : "";
+
   const html = `<div id="notif-sheet" class="sheet-backdrop">
     <div class="bottom-sheet bottom-sheet--large" data-stop-propagation>
       <div class="bottom-sheet__handle"></div>
@@ -889,7 +895,7 @@ mode: single`;
           <button id="notif-save-btn" class="notif-save-btn">Speichern</button>
           <button id="notif-test-btn" class="notif-yaml-btn">Test senden</button>
         </div>
-        <div id="notif-status" class="notif-status"></div>
+        <div id="notif-status" class="notif-status">${initialStatus}</div>
         <button id="notif-yaml-btn" class="notif-yaml-btn">HA Automation YAML anzeigen</button>
         <div id="notif-yaml-block" class="notif-yaml-block" style="display:none;">
           <pre id="notif-yaml-pre" class="notif-yaml-pre"></pre>
@@ -903,6 +909,11 @@ mode: single`;
   wrapper.innerHTML = html;
   const sheet = wrapper.firstElementChild as HTMLElement;
   document.body.appendChild(sheet);
+
+  if (initialStatus) {
+    const statusEl = sheet.querySelector<HTMLElement>("#notif-status")!;
+    statusEl.style.color = "#30D158";
+  }
 
   sheet.addEventListener("click", (e) => {
     if ((e.target as HTMLElement) === sheet) sheet.remove();
@@ -922,8 +933,12 @@ mode: single`;
     try {
       availableServices = await fetchMobileAppServices();
       listEl.innerHTML = renderMemberList();
-      if (availableServices.length > 0) {
-        showStatus(`${availableServices.length} Geräte gefunden ✓`, true);
+      const savedTotal = Object.values(cfg.memberServices).reduce((a, arr) => a + arr.length, 0);
+      if (savedTotal > 0) {
+        const mCount = Object.keys(cfg.memberServices).length;
+        showStatus(`Gespeichert: ${mCount} Person(en), ${savedTotal} Gerät-Zuordnung(en)`, true);
+      } else if (availableServices.length > 0) {
+        showStatus(`${availableServices.length} Geräte gefunden — bitte Zuordnung speichern`, true);
       }
     } catch (err) {
       listEl.innerHTML = `<p class="notif-warning">${escHtml(err instanceof Error ? err.message : String(err))}</p>`;
@@ -936,9 +951,11 @@ mode: single`;
 
   sheet.querySelector<HTMLElement>("#notif-save-btn")!.addEventListener("click", () => {
     const mapping = readMapping(sheet);
+    cfg.memberServices = mapping; // keep closure in sync so Geräte-refresh re-renders correctly
     saveNotifConfig({ memberServices: mapping });
     const count = Object.values(mapping).reduce((acc, arr) => acc + arr.length, 0);
-    showStatus(`Gespeichert · ${count} Empfänger-Zuordnungen`, true);
+    const memberCount = Object.keys(mapping).length;
+    showStatus(`Gespeichert ✓ — ${memberCount} Person(en), ${count} Gerät-Zuordnung(en)`, true);
   });
 
   sheet.querySelector<HTMLElement>("#notif-test-btn")!.addEventListener("click", async () => {
@@ -1065,7 +1082,13 @@ function showFilterSheet(): void {
           ${dupeRow}
           <button class="filter-row filter-notif-row" id="filter-notif-btn">
             <span class="filter-row__name">🔔 Benachrichtigungen</span>
-            <span style="font-size:12px;font-weight:600;color:rgba(235,235,245,0.5);">Einrichten ›</span>
+            ${(() => {
+              const nc = loadNotifConfig();
+              const total = Object.values(nc?.memberServices ?? {}).reduce((a, arr) => a + arr.length, 0);
+              return total > 0
+                ? `<span style="font-size:12px;font-weight:600;color:#30D158;">${total} Zuordnung(en) · Bearbeiten ›</span>`
+                : `<span style="font-size:12px;font-weight:600;color:rgba(235,235,245,0.5);">Einrichten ›</span>`;
+            })()}
           </button>
         </div>
       </div>

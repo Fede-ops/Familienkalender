@@ -544,6 +544,7 @@ export function categorizeShoppingItem(name: string): string {
 
 const STORAGE_KEY = "nanoclaw-shopping";
 const TS_KEY = "nanoclaw-shopping-ts";
+const BACKUP_KEY = "nanoclaw-shopping-backup";
 const HA_ENTITY = "sensor.familienkalender_shopping";
 
 interface HAConfig { baseUrl: string; token: string }
@@ -558,7 +559,20 @@ function haConfig(): HAConfig | null {
 export function loadShoppingItems(): ShoppingItem[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as ShoppingItem[]) : [];
+    if (raw) {
+      const items = JSON.parse(raw) as ShoppingItem[];
+      if (items.length > 0) return items;
+    }
+    // Primary key empty — try backup
+    const backup = localStorage.getItem(BACKUP_KEY);
+    if (backup) {
+      const items = JSON.parse(backup) as ShoppingItem[];
+      if (items.length > 0) {
+        localStorage.setItem(STORAGE_KEY, backup);
+        return items;
+      }
+    }
+    return [];
   } catch {
     return [];
   }
@@ -568,6 +582,9 @@ export function saveShoppingItems(items: ShoppingItem[]): void {
   const ts = Date.now();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
   localStorage.setItem(TS_KEY, String(ts));
+  if (items.length > 0) {
+    localStorage.setItem(BACKUP_KEY, JSON.stringify(items));
+  }
   const cfg = haConfig();
   if (!cfg) return;
   // Never overwrite the HA sensor with an empty list. Empty writes are almost
