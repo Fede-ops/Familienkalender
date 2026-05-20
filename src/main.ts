@@ -2071,10 +2071,12 @@ window.addEventListener("online", () => void refreshEvents());
       if (ady > adx * 1.7) { tracking = false; resetSlide(); return; }
       panning = true;
     }
+    // Horizontal pan confirmed — prevent iOS history-swipe and native scroll
+    e.preventDefault();
     // Rubber-band: content follows finger at 35% rate
     const el = slideEl();
     if (el) el.style.transform = `translateX(${dx * 0.35}px)`;
-  }, { passive: true });
+  }, { passive: false });
 
   app.addEventListener("touchcancel", () => {
     tracking = false; panning = false;

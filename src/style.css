@@ -430,9 +430,9 @@ body {
   position: absolute;
   inset: 0;
   overflow-y: scroll;
-  -webkit-overflow-scrolling: touch;
   overscroll-behavior: none;
   scrollbar-width: none;
+  touch-action: pan-y;
   padding: 8px 12px 16px;
   display: flex;
   flex-direction: column;
@@ -660,8 +660,8 @@ body {
   position: absolute;
   inset: 0;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
   overscroll-behavior: none;
+  touch-action: pan-y;
   padding-bottom: 16px;
 }
 
