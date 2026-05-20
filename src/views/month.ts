@@ -128,9 +128,7 @@ export function renderMonthView(viewState: MonthViewState): string {
       ${toolbarBtn("filter", "Filter", "filter")}
     </nav>
     <div class="month-weekdays">${weekdayHeader}</div>
-    <div class="month-scroll">
-      <div class="month-grid">${rows.join("")}</div>
-    </div>
+    <div class="slide-viewport"><div class="month-scroll"><div class="month-grid">${rows.join("")}</div></div></div>
     <button class="fab" data-action="add-event">${ICONS.plus}</button>
     ${tabBar("kalender")}
   `;

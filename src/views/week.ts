@@ -159,7 +159,7 @@ export function renderWeekView(viewState: WeekViewState): string {
         ${toolbarBtn("search", "Suche", "search")}
       </nav>
     </div>
-    <main class="week-list">${rows}</main>
+    <div class="slide-viewport"><main class="week-list">${rows}</main></div>
     <button class="fab" data-action="add-event">${ICONS.plus}</button>
     ${tabBar("kalender")}
   `;
