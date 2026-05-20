@@ -35,7 +35,7 @@ body.is-dragging * {
 html {
   overflow: hidden;
   height: 100%;
-  background: #141416; /* fills home-indicator zone with tab-bar color — no visible seam */
+  background: #000000;
   overscroll-behavior: none;
 }
 
@@ -613,29 +613,40 @@ body {
 
 .tab-bar {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 100;
-  background: #141416;
-  border-top: 1px solid rgba(120, 120, 128, 0.3);
+  background: rgba(30, 30, 32, 0.96);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-radius: 9999px;
   display: flex;
+  padding: 6px;
+  gap: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
 }
 
 .tab-bar__item {
-  flex: 1 1 0;
+  flex: none;
   background: none;
   border: none;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  padding: 8px 4px 10px;
-  color: rgba(235, 235, 245, 0.42);
+  justify-content: center;
+  padding: 14px 28px;
+  color: rgba(235, 235, 245, 0.4);
   cursor: pointer;
+  border-radius: 9999px;
+  transition: background 0.15s, color 0.15s;
+  min-width: 64px;
 }
 
 .tab-bar__item--active {
-  color: var(--accent-blue);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .tab-bar__icon {
@@ -645,15 +656,12 @@ body {
 }
 
 .tab-bar__icon svg {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
 }
 
 .tab-bar__label {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  margin-top: 3px;
+  display: none;
 }
 
 .fab svg {
