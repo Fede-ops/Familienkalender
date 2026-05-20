@@ -114,13 +114,8 @@ body {
 }
 
 .sticky-nav {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 30;
+  flex-shrink: 0;
   background: var(--bg);
-  padding-top: env(safe-area-inset-top);
 }
 
 .toolbar__button {
@@ -413,7 +408,7 @@ body {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: none;
   scrollbar-width: none;
-  padding: 176px 12px 20px;
+  padding: 8px 12px 20px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -1256,14 +1251,11 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .scroll-wrapper::-webkit-scrollbar {
   display: none;
 }
-/* Override: inside scroll-wrapper the nav sticks natively instead of being fixed */
+/* Inside scroll-wrapper the nav sticks to the top of its scroll container */
 .scroll-wrapper .sticky-nav {
   position: sticky;
   top: 0;
-  left: auto;
-  right: auto;
-  will-change: auto;
-  transform: none;
+  z-index: 10;
 }
 
 .category-group {
