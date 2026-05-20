@@ -2169,8 +2169,7 @@ window.addEventListener("online", () => void refreshEvents());
     if (drag) { panning = false; resetSlide(); return; }
 
     const dx = e.changedTouches[0].clientX - startX;
-    const dy = e.changedTouches[0].clientY - startY;
-    const adx = Math.abs(dx), ady = Math.abs(dy);
+    const adx = Math.abs(dx);
 
     if (adx < 18 || !panning) { resetSlide(); return; }
 
