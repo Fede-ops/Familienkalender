@@ -29,6 +29,12 @@ export const SHOPPING_CATEGORIES = [
       "pak choi", "koriander", "petersilie", "basilikum", "schnittlauch", "thymian", "rosmarin",
       "salbei", "minze", "dill", "estragon", "oregano frisch", "gemüse", "frisches gemüse",
       "blattsalat", "rucola", "chicorée", "endivie", "grünkohl", "staudensellerie",
+      // Österreichische Begriffe
+      "marille", "marillen", "zwetschke", "zwetschken", "ribisel",
+      "paradeiser", "paradeisern", "fisolen", "karfiol", "erdäpfel", "erdapfel",
+      "kukuruz", "vogerlsalat", "vogerl", "kren",
+      "weintrauben", "trauben", "beeren",
+      "maracuja", "yam", "süßkartoffeln",
       // English – Fruit
       "apple", "pear", "banana", "orange", "mandarin", "clementine", "grapefruit",
       "grape", "strawberry", "raspberry", "blackberry", "blueberry", "cranberry",
@@ -76,7 +82,7 @@ export const SHOPPING_CATEGORIES = [
     keywords: [
       // Deutsch — "ei" entfernt; nur "eier" verwenden
       "milch", "vollmilch", "fettarme milch", "laktosefreie milch", "hafermilch", "mandelmilch",
-      "sojamilch", "kokosmilch getränk", "butter", "margarine", "sahne", "schlagsahne",
+      "sojamilch", "kokosmilch getränk", "butter", "margarine", "sahne", "schlagsahne", "schlagobers", "topfen", "topfenaufstrich",
       "kaffeesahne", "obers", "joghurt", "naturjoghurt", "griechischer joghurt", "kefir",
       "buttermilch", "quark", "magerquark", "frischkäse", "hüttenkäse", "ricotta",
       "mascarpone", "crème fraîche", "schmand", "sauerrahm", "skyr",
@@ -132,7 +138,7 @@ export const SHOPPING_CATEGORIES = [
       "kaninchen", "wild", "hirsch", "reh", "wildschwein",
       "hack", "hackfleisch", "wurst", "bratwurst", "currywurst", "weißwurst", "wiener",
       "schinken", "kochschinken", "rohschinken", "parmaschinken", "speck", "pancetta",
-      "salami", "pepperoni", "chorizo", "mortadella", "leberwurst", "blutwurst",
+      "salami", "pepperoni", "chorizo", "mortadella", "leberwurst", "blutwurst", "faschiertes", "faschiertes fleisch", "leberkäse", "leberkässemmel", "extrawurst", "käsekrainer", "debreziner", "cabanossi", "surschnitzel", "geselchtes", "selchfleisch", "grammelschmalz", "zunge", "lunge",
       "fleischkäse", "lyoner", "schnitzel", "steak", "filet", "kotelett", "spare ribs",
       "fisch", "lachs", "lachsfilet", "räucherlachs", "thunfisch", "forelle", "makrele",
       "hering", "sardine", "kabeljau", "dorsch", "seelachs", "pangasius", "tilapia",
@@ -187,6 +193,10 @@ export const SHOPPING_CATEGORIES = [
       "reis", "basmatireis", "jasminreis", "vollkornreis", "risottoreis", "wildreis",
       "quinoa", "couscous", "bulgur", "hirse", "buchweizen", "polenta", "grieß",
       "haferflocken", "müsli", "granola", "cornflakes", "cerealien", "porridge",
+      // Österreichische Backwaren
+      "kaisersemmel", "handsemmel", "kornspitz", "mohnweckerl", "kürbiskernweckerl", "laugenstangerl", "vollkornweckerl",
+      "kipferl", "buchteln", "topfenstrudel", "apfelstrudel", "milchrahmstrudel",
+      "kürbiskernbrot", "wachauer laib", "roggenmischbrot",
       "linsen", "rote linsen", "kichererbsen", "kidneybohnen", "weiße bohnen",
       // English
       "bread", "wholemeal bread", "sourdough", "rye bread", "spelt bread",
@@ -283,7 +293,9 @@ export const SHOPPING_CATEGORIES = [
       "miso", "misopaste",
       "reisnudeln", "glasnudeln", "fadennudeln",
       "kokoswasser",
-      "soßenbinder", "instant",
+      "soßenbinder", "instant", "liptauer", "verhackertes",
+      // Österreichische Gewürze/Vorräte
+      "kürbiskernöl", "steirisches kürbiskernöl", "essig most", "ringlottenmarmelade",
       "fertigsuppe", "brühe", "instant brühe",
       "breadcrumbs",
       // English
@@ -362,6 +374,16 @@ export const SHOPPING_CATEGORIES = [
       "kaffee", "kaffeebohnen", "filterkaffee", "espresso", "cappuccino",
       "tee", "grüntee", "schwarztee", "kräutertee", "früchtetee", "kamillentee",
       "kakao", "heiße schokolade",
+      // Marken & Österreich
+      "red bull", "redbull", "monster energy", "monster", "burn energy", "burn", "rockstar",
+      "almdudler", "vöslauer", "römerquelle", "waldquelle", "güssinger",
+      "ottakringer", "schwechater", "zipfer", "puntigamer", "göss", "murauer", "kaiser bier", "wieselburger",
+      "coca-cola", "coca cola", "pepsi cola", "pepsi max", "pepsi light", "coca cola zero", "coke zero",
+      "rauch", "hohes c", "pfanner", "tropicana", "capri sonne", "capri sun",
+      "hugo", "aperol spritz", "spritzer", "weinschorle",
+      "melange", "verlängerter", "mokka", "schwarzer", "brauner", "einspänner",
+      "protein shake", "proteinshake", "iso drink", "isodrink",
+      "leitungswasser",
       // English
       "water", "sparkling water", "mineral water", "still water",
       "juice", "orange juice", "apple juice", "grape juice", "tomato juice",
@@ -402,7 +424,7 @@ export const SHOPPING_CATEGORIES = [
       "spülmittel", "spültabs", "geschirrspülmittel", "entkalker", "backofenreiniger",
       "abflussreiniger", "waschmittel", "colorwaschmittel", "weichspüler", "fleckentferner",
       "toilettenpapier", "klopapier", "küchenpapier", "haushaltsrolle",
-      "müllbeutel", "gefrierbeutel", "frischhaltefolie", "alufolie", "backpapier",
+      "müllbeutel", "mistbeutel", "gefrierbeutel", "frischhaltefolie", "alufolie", "backpapier",
       "schwamm", "spülschwamm", "reinigungstuch", "microfasertuch", "schrubber",
       "seife", "handseife", "flüssigseife", "körperseife", "duschgel", "badeschaum",
       "shampoo", "haarshampoo", "spülung", "haarspülung", "haarkur",
