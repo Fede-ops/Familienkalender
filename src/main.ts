@@ -900,7 +900,10 @@ mode: single`;
     <div class="bottom-sheet bottom-sheet--large" data-stop-propagation>
       <div class="bottom-sheet__handle"></div>
       <div class="notif-sheet-header">
-        <p class="bottom-sheet__title">🔔 Benachrichtigungen</p>
+        <div class="notif-sheet-title-row">
+          <p class="bottom-sheet__title">🔔 Benachrichtigungen</p>
+          <button id="notif-close-btn" class="notif-close-btn" aria-label="Schließen">✕</button>
+        </div>
         <p class="notif-hint">
           Sendet Termin-Erinnerungen über die <b>Home Assistant Companion App</b>.
           Wähle pro Familienmitglied, welche Geräte (iPhone, iPad, …) seine Termine bekommen sollen.
@@ -942,6 +945,8 @@ mode: single`;
   });
   sheet.querySelector<HTMLElement>("[data-stop-propagation]")!
     .addEventListener("click", (e) => e.stopPropagation());
+  sheet.querySelector<HTMLElement>("#notif-close-btn")!
+    .addEventListener("click", () => sheet.remove());
 
   function showStatus(msg: string, ok: boolean): void {
     const el = sheet.querySelector<HTMLElement>("#notif-status")!;

@@ -242,6 +242,22 @@ body {
   flex-shrink: 0;
   padding-top: 8px;
 }
+.notif-sheet-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 4px;
+}
+.notif-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 18px;
+  line-height: 1;
+  padding: 8px 12px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
 .notif-sheet-footer {
   flex-shrink: 0;
   padding-bottom: calc(env(safe-area-inset-bottom) + 16px);
@@ -411,7 +427,7 @@ body {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: none;
   scrollbar-width: none;
-  padding: 8px 12px 20px;
+  padding: 8px 12px calc(60px + env(safe-area-inset-bottom) + 20px);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -584,7 +600,11 @@ body {
 }
 
 .tab-bar {
-  flex-shrink: 0;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
   background: #141416;
   border-top: 1px solid rgba(120, 120, 128, 0.3);
   display: flex;
@@ -640,7 +660,7 @@ body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: none;
-  padding-bottom: 8px;
+  padding-bottom: calc(60px + env(safe-area-inset-bottom) + 8px);
 }
 
 .month-block {
@@ -1248,7 +1268,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   overflow-y: scroll;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: none;
-  padding-bottom: 8px;
+  padding-bottom: calc(60px + env(safe-area-inset-bottom) + 8px);
   scrollbar-width: none;
 }
 .scroll-wrapper::-webkit-scrollbar {
