@@ -1510,6 +1510,11 @@ async function saveEvent(): Promise<void> {
         } catch (err) {
           console.warn("Member switch: created in new calendar but failed to delete from old", err);
         }
+        // Mark the old UID PERMANENT so subsequent refreshes filter it out
+        // even if HA still returns it (delete may not have propagated yet,
+        // or delete may have failed — same recovery path as direct delete).
+        pendingDeletes.set(editUid!, PERMANENT);
+        savePendingDeletes(pendingDeletes);
         memberMoveSucceeded = true;
       } else if (isExistingHaEvent) {
         await client.updateEvent(memberId, editUid!, summary.trim(), startDate, endDate, allDay, {
