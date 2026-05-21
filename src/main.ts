@@ -1506,11 +1506,12 @@ async function saveEvent(): Promise<void> {
           location: location || undefined,
           description: notes || undefined,
         });
-        // Best-effort delete — 400 means HA rejected it (read-only, already gone,
-        // wrong recurrence format). Suppress the error; the create already succeeded.
+        // Best-effort delete — pass recurrenceId so HA can identify the exact
+        // occurrence for multi-day / recurring events (without it HA returns 400).
+        const originalEvent = state.events.find((e) => e.uid === editUid);
         try {
-          await client.deleteEvent(originalMemberId, editUid!);
-        } catch { /* suppress */ }
+          await client.deleteEvent(originalMemberId, editUid!, originalEvent?.recurrenceId);
+        } catch { /* suppress — already gone or read-only calendar */ }
         // Suppress the old UID for 5 min so it doesn't reappear on the next
         // refresh before HA has fully processed the delete. NOT permanent — we
         // don't want cross-device sensor pollution or cascade fingerprint hiding.
