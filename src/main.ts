@@ -908,15 +908,22 @@ ${forEachItems}
               {{ ['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'][now().weekday()] }}
             msg_title: "📅 {{ weekday }}, {{ now().strftime('%-d. %-m.') }} – {{ repeat.item.name }}"
             msg_body: >-
-              {%- set ns = namespace(lines=[], seen=[]) -%}
+              {%- set ns = namespace(lines=[], seen=[], allday=[]) -%}
+              {%- for e in evs -%}
+                {%- if 'T' not in (e.start | string) -%}
+                  {%- set ns.allday = ns.allday + [e.summary | lower] -%}
+                {%- endif -%}
+              {%- endfor -%}
               {%- for e in evs | sort(attribute='start') -%}
                 {%- if 'T' not in (e.start | string) -%}
                   {%- set line = e.summary + ' – ganztägig' -%}
+                {%- elif (e.summary | lower) in ns.allday -%}
+                  {%- set line = '' -%}
                 {%- else -%}
                   {%- set t = (e.start | as_datetime | as_local).strftime('%H:%M') -%}
                   {%- set line = t + ' ' + e.summary -%}
                 {%- endif -%}
-                {%- if line not in ns.seen -%}
+                {%- if line and line not in ns.seen -%}
                   {%- set ns.lines = ns.lines + [line] -%}
                   {%- set ns.seen = ns.seen + [line] -%}
                 {%- endif -%}
