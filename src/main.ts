@@ -337,14 +337,19 @@ const _TB_ITEMS: { key: TabKey; icon: string; label: string }[] = [
   { key: "todo", icon: _TB_ICONS.todo, label: "To-Do" },
   { key: "einkauf", icon: _TB_ICONS.cart, label: "Einkauf" },
 ];
+const _PLUS_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>`;
 const persistentTabBar = document.createElement("nav");
 persistentTabBar.className = "tab-bar";
-persistentTabBar.innerHTML = _TB_ITEMS.map((it) =>
-  `<button class="tab-bar__item" data-tab="${it.key}">
-    <span class="tab-bar__icon">${it.icon}</span>
-    <span class="tab-bar__label">${it.label}</span>
-  </button>`
-).join("");
+persistentTabBar.innerHTML =
+  _TB_ITEMS.map((it) =>
+    `<button class="tab-bar__item" data-tab="${it.key}">
+      <span class="tab-bar__icon">${it.icon}</span>
+      <span class="tab-bar__label">${it.label}</span>
+    </button>`
+  ).join("") +
+  `<button class="tab-bar__add" data-action="add-event" aria-label="Termin hinzufügen">
+    <span class="tab-bar__icon">${_PLUS_SVG}</span>
+  </button>`;
 document.body.appendChild(persistentTabBar);
 
 function updateTabBarActive(): void {
@@ -354,6 +359,11 @@ function updateTabBarActive(): void {
 }
 
 persistentTabBar.addEventListener("click", (e) => {
+  if ((e.target as HTMLElement).closest<HTMLElement>("[data-action='add-event']")) {
+    state.modal = defaultModalState(state.members);
+    render();
+    return;
+  }
   const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-tab]");
   if (!btn) return;
   const tab = btn.dataset.tab as TabKey;
@@ -471,7 +481,6 @@ function render(): void {
   }
   bindEvents();
   setupDragDrop();
-  setupFabHide();
   updateTabBarActive();
   if (state.modal) document.getElementById("modal-summary")?.focus();
   // Do NOT auto-focus list-input on render — it opens the iOS keyboard
@@ -533,17 +542,6 @@ function clearListInput(): void {
 
 // ── Drag-and-drop ──────────────────────────────────────────────────────────
 
-let fabHideTimer: ReturnType<typeof setTimeout> | null = null;
-function setupFabHide(): void {
-  const list = app.querySelector<HTMLElement>(".week-list");
-  const fab = app.querySelector<HTMLElement>(".fab");
-  if (!list || !fab) return;
-  list.addEventListener("scroll", () => {
-    fab.classList.add("fab--hidden");
-    if (fabHideTimer) clearTimeout(fabHideTimer);
-    fabHideTimer = setTimeout(() => fab.classList.remove("fab--hidden"), 400);
-  }, { passive: true });
-}
 
 function setupDragDrop(): void {
   app.querySelectorAll<HTMLElement>("[data-action='event-detail'][data-uid]").forEach((el) => {

@@ -145,6 +145,5 @@ export function renderWeekView(viewState: WeekViewState): string {
       </nav>
     </div>
     <div class="slide-viewport"><main class="week-list">${rows}</main></div>
-    <button class="fab" data-action="add-event">${ICONS.plus}</button>
   `;
 }
