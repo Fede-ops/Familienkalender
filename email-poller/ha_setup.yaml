@@ -1,0 +1,14 @@
+# ── In configuration.yaml einfügen ───────────────────────────────────────────
+shell_command:
+  check_calendar_emails: "python3 /config/scripts/email_to_calendar.py >> /config/scripts/email_poller.log 2>&1"
+
+# ── Als neue Automation in HA anlegen ────────────────────────────────────────
+automation:
+  - alias: "Familienkalender Email-Poller"
+    description: "Alle 10 Minuten Postfach prüfen und Events anlegen"
+    trigger:
+      - platform: time_pattern
+        minutes: "/10"
+    action:
+      - service: shell_command.check_calendar_emails
+    mode: single
