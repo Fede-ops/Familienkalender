@@ -1457,13 +1457,15 @@ function showEventDetail(ev: CalendarEvent): void {
 }
 
 function openEditModal(ev: CalendarEvent): void {
+  const memberId = ev.memberId ?? state.members[0]?.id ?? "";
   state.modal = {
     tab: "datum",
     summary: ev.summary,
     startDate: new Date(ev.start),
     endDate: new Date(ev.end),
     allDay: ev.allDay,
-    memberId: ev.memberId ?? state.members[0]?.id ?? "",
+    memberId,
+    originalMemberId: memberId,
     location: ev.location ?? "",
     notes: ev.description ?? "",
     editUid: ev.uid,
@@ -1487,11 +1489,36 @@ async function saveEvent(): Promise<void> {
   }
 
   const config = loadConfig();
-  const { editUid } = state.modal;
+  const { editUid, originalMemberId } = state.modal;
+  const memberChanged =
+    !!editUid &&
+    !editUid.startsWith("local-") &&
+    !!originalMemberId &&
+    originalMemberId !== memberId;
+
   if (config && navigator.onLine) {
     try {
       const client = new HAClient(config);
-      if (editUid && !editUid.startsWith("local-")) {
+      if (memberChanged) {
+        // HA's update_event is scoped to one calendar entity — moving an event
+        // between members requires create-in-new + delete-from-old.
+        await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, {
+          location: location || undefined,
+          description: notes || undefined,
+        });
+        // Best-effort delete — 400 means HA rejected it (read-only, already gone,
+        // wrong recurrence format). Suppress the error; the create already succeeded.
+        try {
+          await client.deleteEvent(originalMemberId, editUid!);
+        } catch { /* suppress */ }
+        // Suppress the old UID for 5 min so it doesn't reappear on the next
+        // refresh before HA has fully processed the delete. NOT permanent — we
+        // don't want cross-device sensor pollution or cascade fingerprint hiding.
+        pendingDeletes.set(editUid!, Date.now() + 5 * 60 * 1000);
+        savePendingDeletes(pendingDeletes);
+        // Trigger a refresh after 3 s so HA's newly indexed event appears.
+        setTimeout(() => void refreshEvents(), 3000);
+      } else if (editUid && !editUid.startsWith("local-")) {
         await client.updateEvent(memberId, editUid, summary.trim(), startDate, endDate, allDay, {
           location: location || undefined,
           description: notes || undefined,

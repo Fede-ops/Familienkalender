@@ -7,6 +7,8 @@ export interface ModalState {
   endDate: Date;
   allDay: boolean;
   memberId: string;
+  // Original member when editing — used to detect a calendar move (delete-from-old + create-in-new).
+  originalMemberId?: string;
   location: string;
   notes: string;
   editUid?: string;
