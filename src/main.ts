@@ -784,7 +784,9 @@ function bindEvents(): void {
         state.modal.allDay = !state.modal.allDay;
         if (state.modal.allDay) {
           state.modal.startDate.setHours(0, 0, 0, 0);
-          state.modal.endDate = addDays(state.modal.startDate, 1);
+          // Modal uses inclusive end (last visible day = startDate)
+          state.modal.endDate = new Date(state.modal.startDate);
+          state.modal.endDate.setHours(0, 0, 0, 0);
         }
         render();
       } else if (action === "select-member") {
@@ -1470,11 +1472,14 @@ function showEventDetail(ev: CalendarEvent): void {
 
 function openEditModal(ev: CalendarEvent): void {
   const memberId = ev.memberId ?? state.members[0]?.id ?? "";
+  // All-day events use exclusive end dates (iCal standard). The modal shows
+  // the last VISIBLE day (inclusive), so subtract 1 day for all-day events.
+  const endDate = ev.allDay ? addDays(new Date(ev.end), -1) : new Date(ev.end);
   state.modal = {
     tab: "datum",
     summary: ev.summary,
     startDate: new Date(ev.start),
-    endDate: new Date(ev.end),
+    endDate,
     allDay: ev.allDay,
     memberId,
     originalMemberId: memberId,
@@ -1489,7 +1494,10 @@ function openEditModal(ev: CalendarEvent): void {
 
 async function saveEvent(): Promise<void> {
   if (!state.modal) return;
-  const { summary, startDate, endDate, allDay, memberId, location, notes } = state.modal;
+  const { summary, startDate, allDay, memberId, location, notes } = state.modal;
+  // Modal stores inclusive end for all-day events (last visible day).
+  // HA and local state need exclusive end (iCal standard: +1 day).
+  const endDate = allDay ? addDays(state.modal.endDate, 1) : state.modal.endDate;
 
   if (!summary.trim()) {
     const input = document.getElementById("modal-summary") as HTMLInputElement | null;
@@ -1559,18 +1567,21 @@ async function saveEvent(): Promise<void> {
           description: notes || undefined,
         });
       }
-    } catch {
-      if (!editUid) {
-        enqueue({
-          entityId: memberId,
-          summary: summary.trim(),
-          start: startDate.toISOString(),
-          end: endDate.toISOString(),
-          allDay,
-          location: location || undefined,
-          description: notes || undefined,
-        });
+    } catch (err) {
+      if (editUid) {
+        const msg = err instanceof Error ? err.message : String(err);
+        showTransientBanner(`Speichern fehlgeschlagen: ${msg}`, true);
+        return;
       }
+      enqueue({
+        entityId: memberId,
+        summary: summary.trim(),
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
+        allDay,
+        location: location || undefined,
+        description: notes || undefined,
+      });
     }
   } else if (config && !editUid) {
     enqueue({
