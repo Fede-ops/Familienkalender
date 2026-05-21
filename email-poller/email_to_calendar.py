@@ -95,15 +95,17 @@ def parse_ics(text):
 
 
 def parse_with_claude(text, pdf_bytes=None):
-    """Extrahiert Event-Details aus Text oder PDF via Claude API."""
+    """Extrahiert alle Event-Details aus Text oder PDF via Claude API.
+    Gibt eine Liste von Events zurück (z.B. Hin- und Rückflug)."""
     today = date.today().isoformat()
     instruction = (
-        f"Today is {today}. Extract the calendar event from this content. "
-        "Return ONLY a JSON object with: "
+        f"Today is {today}. Extract ALL calendar events from this content "
+        "(e.g. outbound AND return flight, multiple appointments, etc.). "
+        "Return ONLY a JSON array of objects, each with: "
         "summary (string), start (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS), "
         "end (same format), all_day (true/false), location (string or null), "
         "description (string or null). "
-        'If no event is found return {"error":"no event"}.'
+        'If no events are found return [{"error":"no event"}].'
     )
 
     if pdf_bytes:
@@ -139,8 +141,15 @@ def parse_with_claude(text, pdf_bytes=None):
         with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
             result = json.loads(resp.read())
         raw = result["content"][0]["text"]
+        # Versuche zuerst ein Array zu parsen, dann ein einzelnes Objekt
+        m = re.search(r"\[.*\]", raw, re.DOTALL)
+        if m:
+            parsed = json.loads(m.group())
+            return parsed if isinstance(parsed, list) else [parsed]
         m = re.search(r"\{.*\}", raw, re.DOTALL)
-        return json.loads(m.group()) if m else None
+        if m:
+            return [json.loads(m.group())]
+        return None
     except Exception as exc:
         print(f"  Claude API error: {exc}", file=sys.stderr)
         return None
@@ -217,29 +226,40 @@ def process_message(msg):
         if raw:
             body = raw.decode("utf-8", errors="replace")
 
-    # .ics Anhang hat Vorrang
+    created = 0
+
+    # .ics Anhang hat Vorrang (enthält bereits strukturierte Daten)
     if ics_data:
         ev = parse_ics(ics_data)
         if ev:
             print(f"  → ICS: {ev['summary']}")
-            return create_ha_event(ev)
+            if create_ha_event(ev):
+                created += 1
 
     # PDF-Anhang direkt an Claude schicken
-    if pdf_bytes:
-        ev = parse_with_claude("", pdf_bytes=pdf_bytes)
-        if ev and "error" not in ev:
-            print(f"  → PDF: {ev['summary']}")
-            return create_ha_event(ev)
+    if not created and pdf_bytes:
+        events = parse_with_claude("", pdf_bytes=pdf_bytes)
+        if events:
+            for ev in events:
+                if "error" not in ev:
+                    print(f"  → PDF: {ev['summary']}")
+                    if create_ha_event(ev):
+                        created += 1
 
-    # Sonst Email-Text an Claude schicken
-    full = f"Subject: {subject}\n\n{body}"
-    ev = parse_with_claude(full)
-    if ev and "error" not in ev:
-        print(f"  → Claude: {ev['summary']}")
-        return create_ha_event(ev)
+    # Email-Text an Claude schicken
+    if not created:
+        full   = f"Subject: {subject}\n\n{body}"
+        events = parse_with_claude(full)
+        if events:
+            for ev in events:
+                if "error" not in ev:
+                    print(f"  → Claude: {ev['summary']}")
+                    if create_ha_event(ev):
+                        created += 1
 
-    print(f"  → Übersprungen (kein Event): {subject}")
-    return False
+    if not created:
+        print(f"  → Übersprungen (kein Event): {subject}")
+    return created > 0
 
 
 def main():
