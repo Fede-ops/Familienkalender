@@ -280,7 +280,7 @@ def main():
 
             print(f"{len(ids)} neue Email(s).")
             for mid in ids:
-                _, raw = imap.fetch(mid, "(RFC822)")
+                _, raw = imap.fetch(mid, "(BODY.PEEK[])")
                 msg = email.message_from_bytes(raw[0][1])
                 subj = decode_str(msg.get("Subject", "(kein Betreff)"))
                 print(f"Verarbeite: {subj}")
