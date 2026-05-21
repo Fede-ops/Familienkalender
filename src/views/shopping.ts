@@ -728,7 +728,6 @@ export function renderShoppingView(items: ShoppingItem[]): string {
         </header>
         <div class="list-add">
           <input class="list-add__input" id="list-input" placeholder="Artikel hinzufügen…" autocomplete="off" autocorrect="on" />
-          <button class="list-add__btn" data-action="add-item">${ICONS.plus}</button>
         </div>
       </div>
       ${bodyHtml}

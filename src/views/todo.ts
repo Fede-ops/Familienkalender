@@ -1006,7 +1006,6 @@ export function renderTodoView(viewState: TodoViewState): string {
         <div class="todo-member-filter">${memberChips}</div>
         <div class="list-add">
           <input class="list-add__input" id="list-input" placeholder="Aufgabe hinzufügen…" autocomplete="off" autocorrect="on" />
-          <button class="list-add__btn" data-action="add-todo">${ICONS.plus}</button>
         </div>
       </div>
       ${bodyHtml}
