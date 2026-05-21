@@ -450,7 +450,7 @@ body {
   flex-direction: row;
   gap: 10px;
   align-items: stretch;
-  padding: 20px 0 12px;
+  padding: 16px 0 16px;
   border-top: 0.5px solid rgba(120, 120, 128, 0.55);
   min-height: 56px;
 }
