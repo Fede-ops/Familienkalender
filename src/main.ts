@@ -784,9 +784,7 @@ function bindEvents(): void {
         state.modal.allDay = !state.modal.allDay;
         if (state.modal.allDay) {
           state.modal.startDate.setHours(0, 0, 0, 0);
-          // Modal uses inclusive end (last visible day = startDate)
-          state.modal.endDate = new Date(state.modal.startDate);
-          state.modal.endDate.setHours(0, 0, 0, 0);
+          state.modal.endDate = addDays(state.modal.startDate, 1);
         }
         render();
       } else if (action === "select-member") {
@@ -1472,14 +1470,11 @@ function showEventDetail(ev: CalendarEvent): void {
 
 function openEditModal(ev: CalendarEvent): void {
   const memberId = ev.memberId ?? state.members[0]?.id ?? "";
-  // All-day events use exclusive end dates (iCal standard). The modal shows
-  // the last VISIBLE day (inclusive), so subtract 1 day for all-day events.
-  const endDate = ev.allDay ? addDays(new Date(ev.end), -1) : new Date(ev.end);
   state.modal = {
     tab: "datum",
     summary: ev.summary,
     startDate: new Date(ev.start),
-    endDate,
+    endDate: new Date(ev.end),
     allDay: ev.allDay,
     memberId,
     originalMemberId: memberId,
@@ -1494,10 +1489,7 @@ function openEditModal(ev: CalendarEvent): void {
 
 async function saveEvent(): Promise<void> {
   if (!state.modal) return;
-  const { summary, startDate, allDay, memberId, location, notes } = state.modal;
-  // Modal stores inclusive end for all-day events (last visible day).
-  // HA and local state need exclusive end (iCal standard: +1 day).
-  const endDate = allDay ? addDays(state.modal.endDate, 1) : state.modal.endDate;
+  const { summary, startDate, endDate, allDay, memberId, location, notes } = state.modal;
 
   if (!summary.trim()) {
     const input = document.getElementById("modal-summary") as HTMLInputElement | null;

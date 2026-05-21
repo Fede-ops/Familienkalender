@@ -109,7 +109,7 @@ export function renderWeekView(viewState: WeekViewState): string {
       const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate());
       const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
       const dayEvents = events.filter((e) =>
-        e.start < dayEnd && e.end > dayStart
+        e.start < dayEnd && (e.allDay ? e.end >= dayStart : e.end > dayStart)
       );
       const isToday = isSameDay(day, today);
       const eventsHtml = dayEvents.length
