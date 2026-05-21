@@ -367,8 +367,18 @@ function updateTabBarActive(): void {
 
 bottomBar.addEventListener("click", (e) => {
   if ((e.target as HTMLElement).closest<HTMLElement>("[data-action='add-event']")) {
-    state.modal = defaultModalState(state.members);
-    render();
+    if (state.activeTab === "kalender") {
+      state.modal = defaultModalState(state.members);
+      render();
+    } else if (state.activeTab === "todo") {
+      const input = document.getElementById("list-input") as HTMLInputElement | null;
+      if (input?.value.trim()) addTodoItem();
+      else input?.focus();
+    } else if (state.activeTab === "einkauf") {
+      const input = document.getElementById("list-input") as HTMLInputElement | null;
+      if (input?.value.trim()) addShoppingItem();
+      else input?.focus();
+    }
     return;
   }
   const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-tab]");
