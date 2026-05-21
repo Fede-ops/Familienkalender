@@ -164,8 +164,12 @@ def create_ha_event(ev):
 
     payload = {"entity_id": HA_CALENDAR, "summary": ev["summary"]}
     if all_day:
-        payload["start_date"] = start
-        payload["end_date"]   = end
+        s = date.fromisoformat(start[:10])
+        e = date.fromisoformat(end[:10]) if end else s + timedelta(days=1)
+        if e <= s:
+            e = s + timedelta(days=1)
+        payload["start_date"] = s.isoformat()
+        payload["end_date"]   = e.isoformat()
     else:
         payload["start_date_time"] = start
         payload["end_date_time"]   = end
