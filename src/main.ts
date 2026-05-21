@@ -834,7 +834,8 @@ function bindEvents(): void {
 
       // ── Shopping list ────────────────────────────────────────────────────
       } else if (action === "add-item") {
-        addShoppingItem();
+        { const inp = document.getElementById("list-input") as HTMLInputElement | null;
+          if (inp?.value.trim()) addShoppingItem(); else inp?.focus(); }
       } else if (action === "toggle-item") {
         const id = el.dataset.id;
         if (!id) return;
@@ -851,7 +852,8 @@ function bindEvents(): void {
 
       // ── Todo list ────────────────────────────────────────────────────────
       } else if (action === "add-todo") {
-        addTodoItem();
+        { const inp = document.getElementById("list-input") as HTMLInputElement | null;
+          if (inp?.value.trim()) addTodoItem(); else inp?.focus(); }
       } else if (action === "complete-todo") {
         const id = el.dataset.id;
         if (!id) return;
