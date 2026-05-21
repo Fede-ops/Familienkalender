@@ -1502,36 +1502,22 @@ async function saveEvent(): Promise<void> {
 
   const config = loadConfig();
   const { editUid, originalMemberId } = state.modal;
-  const memberChanged =
-    !!editUid &&
-    !editUid.startsWith("local-") &&
-    !!originalMemberId &&
-    originalMemberId !== memberId;
-
   if (config && navigator.onLine) {
     try {
       const client = new HAClient(config);
-      if (memberChanged) {
-        // HA's update_event is scoped to one calendar entity — moving an event
-        // between members requires create-in-new + delete-from-old.
+      if (editUid && !editUid.startsWith("local-")) {
+        // Use create-then-delete for all edits: update_event is not supported
+        // by all calendar backends and fails with 400 on some HA setups.
         await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, {
           location: location || undefined,
           description: notes || undefined,
         });
-        // Best-effort delete — pass recurrenceId so HA can identify the exact
-        // occurrence for multi-day / recurring events (without it HA returns 400).
         const originalEvent = state.events.find((e) => e.uid === editUid);
         try {
-          await client.deleteEvent(originalMemberId, editUid!, originalEvent?.recurrenceId);
+          await client.deleteEvent(originalMemberId ?? memberId, editUid!, originalEvent?.recurrenceId);
         } catch { /* suppress — already gone or read-only calendar */ }
-        // Suppress the old UID for 5 min so it doesn't reappear on the next
-        // refresh before HA has fully processed the delete. NOT permanent — we
-        // don't want cross-device sensor pollution or cascade fingerprint hiding.
         pendingDeletes.set(editUid!, Date.now() + 5 * 60 * 1000);
         savePendingDeletes(pendingDeletes);
-        // Inject a local placeholder so the event stays visible in every
-        // refreshEvents call until HA has indexed the newly created event.
-        // Keyed by fingerprint so we auto-drop it the moment HA returns the real event.
         const moveFp = `${memberId}|${startDate.getTime()}|${summary.trim().toLowerCase()}`;
         pendingMoveEvents.set(moveFp, {
           event: {
@@ -1546,13 +1532,7 @@ async function saveEvent(): Promise<void> {
           },
           expiry: Date.now() + 5 * 60 * 1000,
         });
-        // Trigger a refresh after 10 s — gives HA time to index the new event.
         setTimeout(() => void refreshEvents(), 10000);
-      } else if (editUid && !editUid.startsWith("local-")) {
-        await client.updateEvent(memberId, editUid, summary.trim(), startDate, endDate, allDay, {
-          location: location || undefined,
-          description: notes || undefined,
-        });
       } else {
         await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, {
           location: location || undefined,
