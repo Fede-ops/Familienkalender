@@ -2205,6 +2205,10 @@ window.addEventListener("online", () => void refreshEvents());
 (function setupCalendarSwipe() {
   let startX = 0, startY = 0;
   let tracking = false, panning = false;
+  // Whether the touch started inside the vertically-scrollable week list.
+  // When true we need to be much more conservative about claiming the gesture
+  // horizontally — any vertical-dominant movement must stay as native scroll.
+  let inScrollArea = false;
 
   function slideEl(): HTMLElement | null {
     return app.querySelector(".week-list") ?? app.querySelector(".month-scroll");
@@ -2229,6 +2233,7 @@ window.addEventListener("online", () => void refreshEvents());
     startY = e.touches[0].clientY;
     tracking = true;
     panning = false;
+    inScrollArea = Boolean(target.closest(".week-list, .month-scroll"));
     const el = slideEl();
     if (el) { el.style.transition = "none"; el.style.willChange = "transform"; }
   }, { passive: true });
@@ -2240,15 +2245,16 @@ window.addEventListener("online", () => void refreshEvents());
     const adx = Math.abs(dx), ady = Math.abs(dy);
     if (!panning) {
       if (adx < 6 && ady < 6) return;
-      // Cancel only when clearly vertical (>67° from horizontal). Anything
-      // diagonal-ish is still treated as a swipe.
-      if (ady > adx * 2.4) { tracking = false; resetSlide(); return; }
+      // Inside a scrollable area: yield to native scroll on any vertical-dominant
+      // gesture so the user can always scroll the list. Only claim the gesture
+      // when horizontal movement clearly wins (adx > ady).
+      if (inScrollArea && ady >= adx) { tracking = false; resetSlide(); return; }
+      // Outside scrollable area: cancel only when clearly vertical (>67°).
+      if (!inScrollArea && ady > adx * 2.4) { tracking = false; resetSlide(); return; }
       panning = true;
     }
     // Horizontal pan confirmed — prevent iOS history-swipe and native scroll
     e.preventDefault();
-    // Content tracks finger nearly 1:1 for responsive feel (small drag for
-    // perceptible resistance without feeling sluggish)
     const el = slideEl();
     if (el) el.style.transform = `translateX(${dx * 0.85}px)`;
   }, { passive: false });
