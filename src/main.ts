@@ -1843,6 +1843,8 @@ async function deleteEvent(ev: CalendarEvent): Promise<void> {
       const client = new HAClient(config);
       await client.deleteEvent(ev.memberId ?? "", ev.uid, ev.recurrenceId);
     } catch (err) {
+      const status = (err as Error & { httpStatus?: number }).httpStatus;
+      if (status === 400 || status === 404) return; // already gone
       const msg = err instanceof Error ? err.message : String(err);
       console.error("Failed to delete event from HA:", msg);
       showTransientBanner(msg, true);
