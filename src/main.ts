@@ -237,6 +237,11 @@ interface DragState {
 
 let drag: DragState | null = null;
 
+// Placeholder events for in-flight calendar moves (create-in-new + delete-from-old).
+// Keyed by fingerprint (memberId|startMs|summary) so refreshEvents detects when HA
+// has indexed the new event and can drop the placeholder automatically.
+const pendingMoveEvents = new Map<string, { event: CalendarEvent; expiry: number }>();
+
 // UIDs deleted locally — filtered from every HA refresh so events don't
 // reappear. Persisted to localStorage across page reloads.
 // Value: expiry timestamp in ms, or -1 = permanent (HA delete not yet confirmed).
@@ -1517,8 +1522,25 @@ async function saveEvent(): Promise<void> {
         // don't want cross-device sensor pollution or cascade fingerprint hiding.
         pendingDeletes.set(editUid!, Date.now() + 5 * 60 * 1000);
         savePendingDeletes(pendingDeletes);
-        // Trigger a refresh after 3 s so HA's newly indexed event appears.
-        setTimeout(() => void refreshEvents(), 3000);
+        // Inject a local placeholder so the event stays visible in every
+        // refreshEvents call until HA has indexed the newly created event.
+        // Keyed by fingerprint so we auto-drop it the moment HA returns the real event.
+        const moveFp = `${memberId}|${startDate.getTime()}|${summary.trim().toLowerCase()}`;
+        pendingMoveEvents.set(moveFp, {
+          event: {
+            uid: `local-move-${Date.now()}`,
+            summary: summary.trim(),
+            start: startDate,
+            end: endDate,
+            allDay,
+            memberId,
+            location: location || undefined,
+            description: notes || undefined,
+          },
+          expiry: Date.now() + 5 * 60 * 1000,
+        });
+        // Trigger a refresh after 10 s — gives HA time to index the new event.
+        setTimeout(() => void refreshEvents(), 10000);
       } else if (editUid && !editUid.startsWith("local-")) {
         await client.updateEvent(memberId, editUid, summary.trim(), startDate, endDate, allDay, {
           location: location || undefined,
@@ -1904,6 +1926,21 @@ async function refreshEvents(): Promise<void> {
       savePendingDeletes(pendingDeletes);
       const dupeSet = new Set(inViewDupes);
       clean = merged.filter((e) => !dupeSet.has(e.uid));
+    }
+    // Inject placeholders for in-flight member moves where HA hasn't indexed
+    // the new event yet. Once HA returns it (fingerprint match), auto-drop.
+    const moveNow = Date.now();
+    for (const [fp, { event: pending, expiry }] of pendingMoveEvents) {
+      if (expiry < moveNow) { pendingMoveEvents.delete(fp); continue; }
+      const haHasIt = clean.some(
+        (e) => `${e.memberId}|${e.start.getTime()}|${e.summary.toLowerCase()}` === fp,
+      );
+      if (haHasIt) {
+        pendingMoveEvents.delete(fp);
+      } else {
+        clean.push(pending);
+        clean.sort((a, b) => a.start.getTime() - b.start.getTime());
+      }
     }
     state.events = clean;
     saveCachedEvents(clean);
