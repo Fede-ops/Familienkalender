@@ -593,12 +593,21 @@ body {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 
-.tab-bar {
+.bottom-bar {
   position: fixed;
   bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
+  pointer-events: none;
   z-index: 100;
+}
+
+.tab-bar {
   background: rgba(30, 30, 32, 0.96);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
@@ -609,6 +618,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
   white-space: nowrap;
+  pointer-events: auto;
 }
 
 .tab-bar__item {
@@ -651,23 +661,23 @@ body {
   border: none;
   cursor: pointer;
   border-radius: 9999px;
-  width: 44px;
-  height: 44px;
+  width: 52px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, #0a84ff 0%, #5e5ce6 100%);
   color: #fff;
-  box-shadow: 0 2px 12px rgba(10, 132, 255, 0.5);
+  box-shadow: 0 4px 16px rgba(10, 132, 255, 0.5);
   transition: transform 0.12s ease;
-  margin-left: 4px;
+  pointer-events: auto;
 }
 .tab-bar__add:active {
   transform: scale(0.92);
 }
 .tab-bar__add svg {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
 }
 
 .month-scroll {

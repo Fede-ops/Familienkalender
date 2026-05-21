@@ -340,17 +340,24 @@ const _TB_ITEMS: { key: TabKey; icon: string; label: string }[] = [
 const _PLUS_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>`;
 const persistentTabBar = document.createElement("nav");
 persistentTabBar.className = "tab-bar";
-persistentTabBar.innerHTML =
-  _TB_ITEMS.map((it) =>
-    `<button class="tab-bar__item" data-tab="${it.key}">
-      <span class="tab-bar__icon">${it.icon}</span>
-      <span class="tab-bar__label">${it.label}</span>
-    </button>`
-  ).join("") +
-  `<button class="tab-bar__add" data-action="add-event" aria-label="Termin hinzufügen">
-    <span class="tab-bar__icon">${_PLUS_SVG}</span>
-  </button>`;
-document.body.appendChild(persistentTabBar);
+persistentTabBar.innerHTML = _TB_ITEMS.map((it) =>
+  `<button class="tab-bar__item" data-tab="${it.key}">
+    <span class="tab-bar__icon">${it.icon}</span>
+    <span class="tab-bar__label">${it.label}</span>
+  </button>`
+).join("");
+
+const addBtn = document.createElement("button");
+addBtn.className = "tab-bar__add";
+addBtn.setAttribute("data-action", "add-event");
+addBtn.setAttribute("aria-label", "Termin hinzufügen");
+addBtn.innerHTML = `<span class="tab-bar__icon">${_PLUS_SVG}</span>`;
+
+const bottomBar = document.createElement("div");
+bottomBar.className = "bottom-bar";
+bottomBar.appendChild(persistentTabBar);
+bottomBar.appendChild(addBtn);
+document.body.appendChild(bottomBar);
 
 function updateTabBarActive(): void {
   persistentTabBar.querySelectorAll<HTMLElement>(".tab-bar__item").forEach((btn) => {
@@ -358,7 +365,7 @@ function updateTabBarActive(): void {
   });
 }
 
-persistentTabBar.addEventListener("click", (e) => {
+bottomBar.addEventListener("click", (e) => {
   if ((e.target as HTMLElement).closest<HTMLElement>("[data-action='add-event']")) {
     state.modal = defaultModalState(state.members);
     render();
@@ -402,11 +409,11 @@ function syncAppBottom(): void {
   // window.innerHeight - rect.top = space the tab bar occupies from the layout
   // viewport bottom upward. This is exact regardless of how iOS positions
   // fixed elements relative to the safe area.
-  const top = persistentTabBar.getBoundingClientRect().top;
+  const top = bottomBar.getBoundingClientRect().top;
   app.style.bottom = `${window.innerHeight - top}px`;
 }
 syncAppBottom();
-new ResizeObserver(syncAppBottom).observe(persistentTabBar);
+new ResizeObserver(syncAppBottom).observe(bottomBar);
 
 const state: AppState = {
   activeTab: "kalender",
