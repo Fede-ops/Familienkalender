@@ -15,6 +15,7 @@ import urllib.error
 import re
 import ssl
 import sys
+import base64
 from email.header import decode_header
 from datetime import datetime, date, timedelta
 
@@ -93,23 +94,34 @@ def parse_ics(text):
             "location": location, "description": desc}
 
 
-def parse_with_claude(text):
-    """Extrahiert Event-Details aus unstrukturiertem Text via Claude API."""
+def parse_with_claude(text, pdf_bytes=None):
+    """Extrahiert Event-Details aus Text oder PDF via Claude API."""
     today = date.today().isoformat()
-    prompt = (
-        f"Today is {today}. Extract the calendar event from this email. "
+    instruction = (
+        f"Today is {today}. Extract the calendar event from this content. "
         "Return ONLY a JSON object with: "
         "summary (string), start (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS), "
         "end (same format), all_day (true/false), location (string or null), "
         "description (string or null). "
-        'If no event is found return {"error":"no event"}.\n\n'
-        f"{text[:3000]}"
+        'If no event is found return {"error":"no event"}.'
     )
+
+    if pdf_bytes:
+        content = [
+            {"type": "text", "text": instruction},
+            {"type": "document", "source": {
+                "type": "base64",
+                "media_type": "application/pdf",
+                "data": base64.standard_b64encode(pdf_bytes).decode(),
+            }},
+        ]
+    else:
+        content = f"{instruction}\n\n{text[:3000]}"
 
     payload = json.dumps({
         "model": "claude-haiku-4-5-20251001",
         "max_tokens": 512,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": [{"role": "user", "content": content}],
     }).encode()
 
     req = urllib.request.Request(
@@ -176,9 +188,10 @@ def create_ha_event(ev):
 
 def process_message(msg):
     """Verarbeitet eine einzelne Email und erstellt einen HA-Event."""
-    subject  = decode_str(msg.get("Subject", "Termin"))
-    ics_data = None
-    body     = ""
+    subject   = decode_str(msg.get("Subject", "Termin"))
+    ics_data  = None
+    pdf_bytes = None
+    body      = ""
 
     if msg.is_multipart():
         for part in msg.walk():
@@ -188,6 +201,9 @@ def process_message(msg):
                 raw = part.get_payload(decode=True)
                 if raw:
                     ics_data = raw.decode("utf-8", errors="replace")
+            elif ctype == "application/pdf" or fname.lower().endswith(".pdf"):
+                if not pdf_bytes:
+                    pdf_bytes = part.get_payload(decode=True)
             elif ctype == "text/plain" and not body:
                 raw = part.get_payload(decode=True)
                 if raw:
@@ -208,7 +224,14 @@ def process_message(msg):
             print(f"  → ICS: {ev['summary']}")
             return create_ha_event(ev)
 
-    # Sonst Claude fragen
+    # PDF-Anhang direkt an Claude schicken
+    if pdf_bytes:
+        ev = parse_with_claude("", pdf_bytes=pdf_bytes)
+        if ev and "error" not in ev:
+            print(f"  → PDF: {ev['summary']}")
+            return create_ha_event(ev)
+
+    # Sonst Email-Text an Claude schicken
     full = f"Subject: {subject}\n\n{body}"
     ev = parse_with_claude(full)
     if ev and "error" not in ev:
