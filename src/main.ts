@@ -1919,14 +1919,15 @@ async function refreshEvents(): Promise<void> {
       if (exp !== undefined && exp > now) return false;
       return !hiddenFps.has(`${e.memberId}|${e.start.getTime()}|${e.summary.toLowerCase()}`);
     });
-    // Pass 3: fingerprint dedup (keep first occurrence per entity+start+summary).
-    const seenFp = new Set<string>();
-    const merged = withoutHidden.filter((e) => {
+    // Pass 3: fingerprint dedup — when duplicates exist, keep the one with the
+    // latest end date (most recent edit wins over stale original that failed to delete).
+    const fpBest = new Map<string, CalendarEvent>();
+    for (const e of withoutHidden) {
       const fp = `${e.memberId}|${e.start.getTime()}|${e.summary.toLowerCase()}`;
-      if (seenFp.has(fp)) return false;
-      seenFp.add(fp);
-      return true;
-    });
+      const cur = fpBest.get(fp);
+      if (!cur || e.end > cur.end) fpBest.set(fp, e);
+    }
+    const merged = [...fpBest.values()].sort((a, b) => a.start.getTime() - b.start.getTime());
     // Auto-deduplicate on every refresh: mark duplicates PERMANENT and re-filter.
     // This runs inline so duplicates are never shown, even on first load after a
     // fresh install where localStorage / sensor may be empty.
