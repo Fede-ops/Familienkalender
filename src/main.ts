@@ -471,6 +471,7 @@ function render(): void {
   }
   bindEvents();
   setupDragDrop();
+  setupFabHide();
   updateTabBarActive();
   if (state.modal) document.getElementById("modal-summary")?.focus();
   // Do NOT auto-focus list-input on render — it opens the iOS keyboard
@@ -531,6 +532,18 @@ function clearListInput(): void {
 }
 
 // ── Drag-and-drop ──────────────────────────────────────────────────────────
+
+let fabHideTimer: ReturnType<typeof setTimeout> | null = null;
+function setupFabHide(): void {
+  const list = app.querySelector<HTMLElement>(".week-list");
+  const fab = app.querySelector<HTMLElement>(".fab");
+  if (!list || !fab) return;
+  list.addEventListener("scroll", () => {
+    fab.classList.add("fab--hidden");
+    if (fabHideTimer) clearTimeout(fabHideTimer);
+    fabHideTimer = setTimeout(() => fab.classList.remove("fab--hidden"), 400);
+  }, { passive: true });
+}
 
 function setupDragDrop(): void {
   app.querySelectorAll<HTMLElement>("[data-action='event-detail'][data-uid]").forEach((el) => {
@@ -1523,7 +1536,7 @@ async function saveEvent(): Promise<void> {
           try {
             await client.deleteEvent(originalMemberId ?? memberId, editUid, originalEvent?.recurrenceId);
           } catch { /* best-effort */ }
-          pendingDeletes.set(editUid, Date.now() + 5 * 60 * 1000);
+          pendingDeletes.set(editUid, Date.now() + 60_000);
           savePendingDeletes(pendingDeletes);
           const moveFp = `${memberId}|${startDate.getTime()}|${summary.trim().toLowerCase()}`;
           pendingMoveEvents.set(moveFp, {
@@ -1537,9 +1550,9 @@ async function saveEvent(): Promise<void> {
               location: location || undefined,
               description: notes || undefined,
             },
-            expiry: Date.now() + 5 * 60 * 1000,
+            expiry: Date.now() + 60_000,
           });
-          setTimeout(() => void refreshEvents(), 10000);
+          setTimeout(() => void refreshEvents(), 10_000);
         }
       } else {
         await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, {
