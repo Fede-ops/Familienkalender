@@ -1506,33 +1506,41 @@ async function saveEvent(): Promise<void> {
     try {
       const client = new HAClient(config);
       if (editUid && !editUid.startsWith("local-")) {
-        // Use create-then-delete for all edits: update_event is not supported
-        // by all calendar backends and fails with 400 on some HA setups.
-        await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, {
-          location: location || undefined,
-          description: notes || undefined,
-        });
-        const originalEvent = state.events.find((e) => e.uid === editUid);
-        try {
-          await client.deleteEvent(originalMemberId ?? memberId, editUid!, originalEvent?.recurrenceId);
-        } catch { /* suppress — already gone or read-only calendar */ }
-        pendingDeletes.set(editUid!, Date.now() + 5 * 60 * 1000);
-        savePendingDeletes(pendingDeletes);
-        const moveFp = `${memberId}|${startDate.getTime()}|${summary.trim().toLowerCase()}`;
-        pendingMoveEvents.set(moveFp, {
-          event: {
-            uid: `local-move-${Date.now()}`,
-            summary: summary.trim(),
-            start: startDate,
-            end: endDate,
-            allDay,
-            memberId,
+        // Try update_event first (seamless, same UID). Falls back to
+        // create+delete when the calendar backend returns 400 (not supported).
+        const updated = await client.updateEvent(
+          memberId, editUid, summary.trim(), startDate, endDate, allDay, {
             location: location || undefined,
             description: notes || undefined,
-          },
-          expiry: Date.now() + 5 * 60 * 1000,
-        });
-        setTimeout(() => void refreshEvents(), 10000);
+          });
+        if (!updated) {
+          // Backend doesn't support update_event — recreate in new position.
+          await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, {
+            location: location || undefined,
+            description: notes || undefined,
+          });
+          const originalEvent = state.events.find((e) => e.uid === editUid);
+          try {
+            await client.deleteEvent(originalMemberId ?? memberId, editUid, originalEvent?.recurrenceId);
+          } catch { /* best-effort */ }
+          pendingDeletes.set(editUid, Date.now() + 5 * 60 * 1000);
+          savePendingDeletes(pendingDeletes);
+          const moveFp = `${memberId}|${startDate.getTime()}|${summary.trim().toLowerCase()}`;
+          pendingMoveEvents.set(moveFp, {
+            event: {
+              uid: `local-move-${Date.now()}`,
+              summary: summary.trim(),
+              start: startDate,
+              end: endDate,
+              allDay,
+              memberId,
+              location: location || undefined,
+              description: notes || undefined,
+            },
+            expiry: Date.now() + 5 * 60 * 1000,
+          });
+          setTimeout(() => void refreshEvents(), 10000);
+        }
       } else {
         await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, {
           location: location || undefined,

@@ -118,7 +118,7 @@ export class HAClient {
     end: Date,
     allDay: boolean,
     opts?: { location?: string; description?: string },
-  ): Promise<void> {
+  ): Promise<boolean> {
     const pad = (n: number) => String(n).padStart(2, "0");
     const fmtDate = (d: Date) =>
       `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -144,7 +144,9 @@ export class HAClient {
       },
       body: JSON.stringify(body),
     });
+    if (res.status === 400) return false; // not supported by this calendar backend
     if (!res.ok) throw new Error(`HA update_event failed: ${res.status}`);
+    return true;
   }
 
   async deleteEvent(entityId: string, uid: string, recurrenceId?: string): Promise<void> {
