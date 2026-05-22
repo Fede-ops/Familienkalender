@@ -170,7 +170,7 @@ export function renderMonthView(viewState: MonthViewState): string {
       const grad = `linear-gradient(160deg,${shade(color, 5)} 0%,${shade(color, -45)} 100%)`;
       const leftPct = (b.startCol / 7) * 100;
       const widthPct = ((b.endCol - b.startCol + 1) / 7) * 100;
-      const top = 28 + b.lane * 16;
+      const top = 34 + b.lane * 16;
       const classes = ["month-bar"];
       if (b.clipLeft) classes.push("month-bar--clip-left");
       if (b.clipRight) classes.push("month-bar--clip-right");
