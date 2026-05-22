@@ -957,11 +957,7 @@ ${forEachItems}
                   {%- set ns.seen = ns.seen + [line] -%}
                 {%- endif -%}
               {%- endfor -%}
-              {%- if ns.lines | length == 0 -%}
-              Heute keine Termine ✓
-              {%- else -%}
               {{ ns.lines | join('\\n') }}
-              {%- endif -%}
             target_services: "{{ repeat.item.services }}"
         - condition: template
           value_template: "{{ evs | length > 0 }}"
