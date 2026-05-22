@@ -5,6 +5,8 @@ const MONTH_NAMES_DE = [
   "Juli", "August", "September", "Oktober", "November", "Dezember",
 ];
 const WEEKDAYS_DE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+const DAY_MS = 86_400_000;
+const MAX_LANES = 3;
 
 function isSameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -16,12 +18,20 @@ function addDays(date: Date, days: number): Date {
   return r;
 }
 
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
 function shade(hex: string, pct: number): string {
   const m = hex.match(/^#([0-9a-f]{6})$/i);
   if (!m) return hex;
   const n = parseInt(m[1], 16);
   const clamp = (v: number) => Math.max(0, Math.min(255, v + Math.round((255 * pct) / 100)));
   return `rgb(${clamp((n >> 16) & 0xff)},${clamp((n >> 8) & 0xff)},${clamp(n & 0xff)})`;
+}
+
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 const ICONS = {
@@ -43,6 +53,80 @@ function toolbarBtn(iconKey: keyof typeof ICONS, label: string, action: string):
   </button>`;
 }
 
+interface WeekBar {
+  event: CalendarEvent;
+  startCol: number;
+  endCol: number;
+  lane: number;
+  clipLeft: boolean;
+  clipRight: boolean;
+}
+
+// Lay out one row's events into horizontal lanes so multi-day events render
+// as a single bar spanning their cells, TimeTree-style. Returns the placed
+// bars plus a per-day count of events that didn't fit into MAX_LANES.
+function layoutWeek(weekStart: Date, events: CalendarEvent[]): { bars: WeekBar[]; overflow: number[] } {
+  const weekEnd = addDays(weekStart, 7); // exclusive
+
+  const weekEvents = events.filter((e) => {
+    if (e.allDay) return e.start < weekEnd && e.end >= weekStart;
+    return e.start < weekEnd && e.end > weekStart;
+  });
+
+  // Longest spans first so multi-day events sit on the top lanes; ties broken
+  // by start time so the visual order is intuitive.
+  weekEvents.sort((a, b) => {
+    const aStart = startOfDay(a.start).getTime();
+    const aLast = a.allDay
+      ? startOfDay(a.end).getTime()
+      : startOfDay(new Date(a.end.getTime() - 1)).getTime();
+    const bStart = startOfDay(b.start).getTime();
+    const bLast = b.allDay
+      ? startOfDay(b.end).getTime()
+      : startOfDay(new Date(b.end.getTime() - 1)).getTime();
+    const aSpan = aLast - aStart;
+    const bSpan = bLast - bStart;
+    if (aSpan !== bSpan) return bSpan - aSpan;
+    return aStart - bStart;
+  });
+
+  const lanes: Array<Array<[number, number]>> = [];
+  const bars: WeekBar[] = [];
+  const overflow: number[] = [0, 0, 0, 0, 0, 0, 0];
+
+  for (const event of weekEvents) {
+    const eventStart = startOfDay(event.start);
+    const eventLast = event.allDay
+      ? startOfDay(event.end)
+      : startOfDay(new Date(event.end.getTime() - 1));
+
+    let startCol = Math.floor((eventStart.getTime() - weekStart.getTime()) / DAY_MS);
+    let endCol = Math.floor((eventLast.getTime() - weekStart.getTime()) / DAY_MS);
+    const clipLeft = startCol < 0;
+    const clipRight = endCol > 6;
+    startCol = Math.max(0, startCol);
+    endCol = Math.min(6, endCol);
+    if (startCol > endCol) continue;
+
+    let lane = 0;
+    while (lane < MAX_LANES) {
+      if (!lanes[lane]) { lanes[lane] = []; break; }
+      const taken = lanes[lane].some(([s, e]) => !(e < startCol || s > endCol));
+      if (!taken) break;
+      lane++;
+    }
+
+    if (lane >= MAX_LANES) {
+      for (let i = startCol; i <= endCol; i++) overflow[i]++;
+      continue;
+    }
+    lanes[lane].push([startCol, endCol]);
+    bars.push({ event, startCol, endCol, lane, clipLeft, clipRight });
+  }
+
+  return { bars, overflow };
+}
+
 
 export interface MonthViewState {
   monthStart: Date;
@@ -62,39 +146,38 @@ export function renderMonthView(viewState: MonthViewState): string {
   const rows: string[] = [];
   for (let w = 0; w < 6; w++) {
     let hasCurrentMonth = false;
+    const weekStart = addDays(gridStart, w * 7);
+    const { bars, overflow } = layoutWeek(weekStart, events);
+
     const cells: string[] = [];
     for (let d = 0; d < 7; d++) {
-      const date = addDays(gridStart, w * 7 + d);
+      const date = addDays(weekStart, d);
       const isOther = date.getMonth() !== monthStart.getMonth();
       if (!isOther) hasCurrentMonth = true;
-      const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-      const dayEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
       const isToday = isSameDay(date, today);
-      const dayEvents = events
-        .filter((e) => e.start < dayEnd && (e.allDay ? e.end >= dayStart : e.end > dayStart))
-        .slice(0, 3);
-
-      const dots = dayEvents.map((ev) => {
-        const m = members.find((x) => x.id === ev.memberId);
-        const color = m?.color ?? "#8E8E93";
-        return `<span class="month-cell__dot" style="background:${color};"></span>`;
-      }).join("");
-
-      const eventPills = dayEvents.map((ev) => {
-        const m = members.find((x) => x.id === ev.memberId);
-        const color = m?.color ?? "#8E8E93";
-        const grad = `linear-gradient(160deg,${shade(color, 5)} 0%,${shade(color, -45)} 100%)`;
-        const label = ev.summary;
-        return `<div class="month-cell__event" style="background:${grad};">${label}</div>`;
-      }).join("");
-
+      const more = overflow[d];
       cells.push(`<div class="month-cell${isOther ? " month-cell--other-month" : ""}${isToday ? " month-cell--today" : ""}" data-action="day-tap" data-date="${date.toISOString()}">
         <span class="month-cell__number">${isToday ? `<span class="month-cell__today-circle">${date.getDate()}</span>` : date.getDate()}</span>
-        ${eventPills}
-        ${!eventPills && dots ? `<div class="month-cell__dots">${dots}</div>` : ""}
+        ${more > 0 ? `<span class="month-cell__more">+${more}</span>` : ""}
       </div>`);
     }
-    if (hasCurrentMonth) rows.push(`<div class="month-row">${cells.join("")}</div>`);
+
+    if (!hasCurrentMonth) continue;
+
+    const eventBars = bars.map((b) => {
+      const m = members.find((x) => x.id === b.event.memberId);
+      const color = m?.color ?? "#8E8E93";
+      const grad = `linear-gradient(160deg,${shade(color, 5)} 0%,${shade(color, -45)} 100%)`;
+      const leftPct = (b.startCol / 7) * 100;
+      const widthPct = ((b.endCol - b.startCol + 1) / 7) * 100;
+      const top = 28 + b.lane * 16;
+      const classes = ["month-bar"];
+      if (b.clipLeft) classes.push("month-bar--clip-left");
+      if (b.clipRight) classes.push("month-bar--clip-right");
+      return `<div class="${classes.join(" ")}" style="left:${leftPct}%;width:${widthPct}%;top:${top}px;background:${grad};" data-action="event-detail" data-uid="${escapeHtml(b.event.uid)}">${escapeHtml(b.event.summary)}</div>`;
+    }).join("");
+
+    rows.push(`<div class="month-row">${cells.join("")}<div class="month-row__bars">${eventBars}</div></div>`);
   }
 
   const weekdayHeader = WEEKDAYS_DE.map(
