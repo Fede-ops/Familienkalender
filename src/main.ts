@@ -2225,16 +2225,15 @@ window.addEventListener("online", () => void refreshEvents());
   app.addEventListener("touchstart", (e: TouchEvent) => {
     if (state.activeTab !== "kalender" || state.modal) return;
     const target = e.target as HTMLElement;
+    // Only block taps on actual buttons (FAB, toolbar). Event items use a div
+    // with data-action and must allow swipe-through — a tap still opens the
+    // event because we only preventDefault once horizontal pan is confirmed.
     if (target.closest("button")) return;
-    // Never claim touches that start inside the scrollable list — let native
-    // scroll handle them unconditionally. Week swipe still works from the
-    // sticky header (outside the list).
-    if (target.closest(".week-list, .month-scroll")) return;
     startX = e.touches[0].clientX;
     startY = e.touches[0].clientY;
     tracking = true;
     panning = false;
-    inScrollArea = false;
+    inScrollArea = Boolean(target.closest(".week-list, .month-scroll"));
     const el = slideEl();
     if (el) { el.style.transition = "none"; el.style.willChange = "transform"; }
   }, { passive: true });
