@@ -963,6 +963,8 @@ ${forEachItems}
               {{ ns.lines | join('\\n') }}
               {%- endif -%}
             target_services: "{{ repeat.item.services }}"
+        - condition: template
+          value_template: "{{ evs | length > 0 }}"
         - repeat:
             for_each: "{{ target_services }}"
             sequence:
