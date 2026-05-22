@@ -596,12 +596,11 @@ body {
 
 .bottom-bar {
   position: fixed;
-  /* Skylight/TimeTree-style: keep only a small visual margin to the screen
-     edge instead of the full safe-area inset. The home indicator is allowed
-     to sit close to (or even slightly behind) the pill — Apple's HIG only
-     requires that interactive content stay above the indicator's hit area,
-     and the pill's own 6px inner padding already provides that. */
-  bottom: max(6px, calc(env(safe-area-inset-bottom) - 22px));
+  /* Anchor the pill flush with the screen bottom — the home indicator is
+     allowed to overlap visually since the pill's own 6px inner padding
+     keeps tap targets above its hit area. Frees the full safe-area inset
+     (~34px) of vertical space for calendar rows. */
+  bottom: 0;
   left: 0;
   right: 0;
   display: grid;
