@@ -6,7 +6,7 @@ const MONTH_NAMES_DE = [
 ];
 const WEEKDAYS_DE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const DAY_MS = 86_400_000;
-const MAX_LANES = 3;
+const MAX_LANES = 4;
 
 function isSameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();

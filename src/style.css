@@ -703,6 +703,7 @@ body {
   display: flex;
   flex-direction: column;
   width: 100%;
+  min-height: 100%;
 }
 
 .month-weekdays {
@@ -723,6 +724,7 @@ body {
 .month-row {
   display: flex;
   position: relative;
+  flex: 1 1 0;
   min-height: 84px;
 }
 
