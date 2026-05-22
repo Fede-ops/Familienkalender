@@ -2234,8 +2234,9 @@ window.addEventListener("online", () => void refreshEvents());
     tracking = true;
     panning = false;
     inScrollArea = Boolean(target.closest(".week-list, .month-scroll"));
-    const el = slideEl();
-    if (el) { el.style.transition = "none"; el.style.willChange = "transform"; }
+    // Do NOT set willChange/transition here — setting willChange:transform on
+    // an overflow:scroll element breaks iOS native scroll compositing.
+    // We defer it to the moment horizontal panning is actually confirmed.
   }, { passive: true });
 
   app.addEventListener("touchmove", (e: TouchEvent) => {
@@ -2252,6 +2253,9 @@ window.addEventListener("online", () => void refreshEvents());
       // Outside scrollable area: cancel only when clearly vertical (>67°).
       if (!inScrollArea && ady > adx * 2.4) { tracking = false; resetSlide(); return; }
       panning = true;
+      // Horizontal swipe confirmed — now safe to set up animation layer.
+      const setupEl = slideEl();
+      if (setupEl) { setupEl.style.transition = "none"; setupEl.style.willChange = "transform"; }
     }
     // Horizontal pan confirmed — prevent iOS history-swipe and native scroll
     e.preventDefault();

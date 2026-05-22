@@ -442,7 +442,6 @@ body {
   padding: 8px 12px 16px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
 }
 
 .week-row {
