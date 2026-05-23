@@ -19,6 +19,9 @@ export interface ModalState {
   location: string;
   notes: string;
   editUid?: string;
+  // Preserved during edit so meta-tags survive a save without being visible to the user
+  seriesId?: string;        // [sid:xxx] from original description
+  seriesRrule?: string;     // [rrule:...] from original description
 }
 
 // Map JS getDay() (0=Sun) → RRULE day code
@@ -212,6 +215,12 @@ export function renderEventModal(state: ModalState, members: FamilyMember[], occ
                </div>`
         }
       </div>
+      ${state.seriesId && !state.rruleFreq ? `<div class="field-group">
+        <div class="field">
+          <span class="field__label" style="color:var(--text-secondary)">Teil einer Serie</span>
+          <span class="field__value" style="color:var(--text-secondary);font-size:13px">Nur dieser Termin wird geändert</span>
+        </div>
+      </div>` : ""}
       <div class="field-group">
         <div class="field">
           <span class="field__label">Wiederholen</span>

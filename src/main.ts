@@ -167,7 +167,7 @@ async function processQueue(): Promise<void> {
 
 // ── Event cache (LocalStorage) ─────────────────────────────────────────────
 
-const EVENTS_CACHE_KEY = "calendar-events-v1";
+const EVENTS_CACHE_KEY = "calendar-events-v2";
 
 function loadCachedEvents(): CalendarEvent[] {
   try {
@@ -1781,23 +1781,56 @@ function openEditModal(ev: CalendarEvent): void {
   const JS_DAY_TO_RRULE = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
   const weekDay = JS_DAY_TO_RRULE[startDate.getDay()];
   const weekPos = Math.min(4, Math.ceil(startDate.getDate() / 7));
+
+  // Restore recurrence settings from the [rrule:...] meta-tag stored in the description.
+  const seriesId = extractSeriesId(ev.description);
+  const rruleRaw = extractSeriesRrule(ev.description);
+  let rruleFreq: string = "";
+  let rruleWeekdays = [weekDay];
+  let rruleUntil = new Date(startDate.getFullYear() + 1, startDate.getMonth(), startDate.getDate());
+  let rruleMonthMode: "monthday" | "weekday" = "monthday";
+  let rruleMonthWeekPos = weekPos;
+  let rruleMonthWeekDay = weekDay;
+  if (rruleRaw) {
+    const freqM = rruleRaw.match(/FREQ=([^;]+)/);
+    if (freqM) rruleFreq = `FREQ=${freqM[1]}`;
+    const bydayM = rruleRaw.match(/BYDAY=([^;]+)/);
+    if (bydayM) {
+      const byday = bydayM[1];
+      // Numeric prefix (e.g. "2MO") → monthly weekday mode
+      if (/^-?\d/.test(byday)) {
+        rruleMonthMode = "weekday";
+        const posM = byday.match(/^(-?\d+)([A-Z]{2})/);
+        if (posM) { rruleMonthWeekPos = Number(posM[1]); rruleMonthWeekDay = posM[2]; }
+      } else {
+        rruleWeekdays = byday.split(",");
+      }
+    }
+    const untilM = rruleRaw.match(/UNTIL=(\d{4})(\d{2})(\d{2})/);
+    if (untilM) {
+      rruleUntil = new Date(Number(untilM[1]), Number(untilM[2]) - 1, Number(untilM[3]));
+    }
+  }
+
   state.modal = {
     tab: "datum",
     summary: ev.summary,
     startDate,
     endDate,
     allDay: ev.allDay,
-    rruleFreq: "",
-    rruleUntil: new Date(startDate.getFullYear() + 1, startDate.getMonth(), startDate.getDate()),
-    rruleWeekdays: [weekDay],
-    rruleMonthMode: "monthday",
-    rruleMonthWeekPos: weekPos,
-    rruleMonthWeekDay: weekDay,
+    rruleFreq: rruleFreq as import("./views/event-modal.ts").RecurrenceFreq,
+    rruleUntil,
+    rruleWeekdays,
+    rruleMonthMode,
+    rruleMonthWeekPos,
+    rruleMonthWeekDay,
     memberId,
     originalMemberId: memberId,
     location: ev.location ?? "",
-    notes: ev.description ?? "",
+    notes: stripMetaTags(ev.description),
     editUid: ev.uid,
+    seriesId: seriesId ?? undefined,
+    seriesRrule: rruleRaw ?? undefined,
   };
   render();
 }
@@ -1813,6 +1846,21 @@ function extractSeriesId(description: string | undefined): string | null {
   const m = description.match(/\[sid:([a-z0-9]+)\]/);
   return m ? m[1] : null;
 }
+
+function extractSeriesRrule(description: string | undefined): string | null {
+  if (!description) return null;
+  const m = description.match(/\[rrule:([^\]]+)\]/);
+  return m ? m[1] : null;
+}
+
+function stripMetaTags(description: string | undefined): string {
+  if (!description) return "";
+  return description
+    .replace(/\n?\[sid:[a-z0-9]+\]/g, "")
+    .replace(/\n?\[rrule:[^\]]+\]/g, "")
+    .trim();
+}
+
 
 function stripSeriesId(description: string | undefined): string {
   if (!description) return "";
@@ -1889,8 +1937,15 @@ function expandRecurrences(
 
 async function saveEvent(): Promise<void> {
   if (!state.modal) return;
-  const { summary, startDate, endDate, allDay, memberId, location, notes } = state.modal;
+  const { summary, startDate, endDate, allDay, memberId, location, seriesId, seriesRrule } = state.modal;
   const rruleStr = buildRruleString(state.modal);
+  // When editing a series event, preserve the [sid:] and [rrule:] meta-tags in the description
+  // so series membership and recurrence info survive the edit.
+  let notes = state.modal.notes;
+  if (seriesId && !rruleStr) {
+    // No new recurrence selected: re-attach existing meta-tags silently
+    notes = notes ? `${notes}\n[sid:${seriesId}]${seriesRrule ? `\n[rrule:${seriesRrule}]` : ""}` : `[sid:${seriesId}]${seriesRrule ? `\n[rrule:${seriesRrule}]` : ""}`;
+  }
 
   if (!summary.trim()) {
     const input = document.getElementById("modal-summary") as HTMLInputElement | null;
@@ -1934,7 +1989,7 @@ async function saveEvent(): Promise<void> {
               uid: `local-move-${Date.now()}`,
               summary: summary.trim(),
               start: startDate,
-              end: endDate,
+              end: allDay ? new Date(endDate.getTime() - 86_400_000) : endDate,
               allDay,
               memberId,
               location: location || undefined,
@@ -1957,9 +2012,11 @@ async function saveEvent(): Promise<void> {
       if (rruleStr && err instanceof Error && err.message.includes("400")) {
         try {
           const modal = state.modal!;
-          const sid = Date.now().toString(36);
+          // Preserve existing series ID when re-creating an edited series, otherwise mint a new one.
+          const sid = modal.seriesId ?? Date.now().toString(36);
           const sidTag = `[sid:${sid}]`;
-          const descWithSid = notes ? `${notes}\n${sidTag}` : sidTag;
+          const rruleTag = `[rrule:${rruleStr}]`;
+          const descWithSid = notes ? `${notes}\n${sidTag}\n${rruleTag}` : `${sidTag}\n${rruleTag}`;
           const occurrences = expandRecurrences(startDate, endDate, modal);
           const creates = await Promise.allSettled(
             occurrences.map(({ start, end }) =>
