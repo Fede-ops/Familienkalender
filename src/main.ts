@@ -574,38 +574,66 @@ function clearListInput(): void {
   if (el) el.value = "";
 }
 
-// ── Long-press on month cells to create event ──────────────────────────────
+// ── Long-press on month cells / week rows to create event ─────────────────
 
 function setupLongPress(): void {
-  if (state.viewMode !== "month") return;
-  app.querySelectorAll<HTMLElement>(".month-cell").forEach((cell) => {
+  const openModal = (dateStr: string) => {
+    navigator.vibrate?.(40);
+    const tapped = new Date(dateStr);
+    state.selectedDate = tapped;
+    state.modal = defaultModalState(state.members, tapped);
+    // Suppress the synthetic click that fires after lifting the finger,
+    // so day-tap / event-detail handlers don't trigger immediately after.
+    const consumeClick = (ev: MouseEvent) => {
+      ev.stopPropagation();
+      document.removeEventListener("click", consumeClick, true);
+    };
+    document.addEventListener("click", consumeClick, true);
+    render();
+  };
+
+  const attachLongPress = (
+    el: HTMLElement,
+    getDateStr: () => string | undefined,
+    ignoreTarget?: (t: HTMLElement) => boolean,
+  ) => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let startX = 0, startY = 0;
-
     const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
 
-    cell.addEventListener("pointerdown", (e) => {
+    el.addEventListener("pointerdown", (e) => {
       if (state.modal) return;
+      if (ignoreTarget?.((e.target as HTMLElement))) return;
       startX = e.clientX; startY = e.clientY;
       timer = setTimeout(() => {
         timer = null;
-        const dateStr = cell.dataset.date;
-        if (!dateStr) return;
-        navigator.vibrate?.(40);
-        const tapped = new Date(dateStr);
-        state.selectedDate = tapped;
-        state.modal = defaultModalState(state.members, tapped);
-        render();
+        const dateStr = getDateStr();
+        if (dateStr) openModal(dateStr);
       }, 500);
     }, { passive: true });
 
-    cell.addEventListener("pointermove", (e) => {
+    el.addEventListener("pointermove", (e) => {
       if (Math.abs(e.clientX - startX) > 8 || Math.abs(e.clientY - startY) > 8) cancel();
     }, { passive: true });
 
-    cell.addEventListener("pointerup", cancel, { passive: true });
-    cell.addEventListener("pointercancel", cancel, { passive: true });
-  });
+    el.addEventListener("pointerup", cancel, { passive: true });
+    el.addEventListener("pointercancel", cancel, { passive: true });
+  };
+
+  if (state.viewMode === "month") {
+    app.querySelectorAll<HTMLElement>(".month-cell").forEach((cell) => {
+      attachLongPress(cell, () => cell.dataset.date);
+    });
+  } else if (state.viewMode === "week") {
+    app.querySelectorAll<HTMLElement>(".week-row").forEach((row) => {
+      attachLongPress(
+        row,
+        () => row.dataset.date,
+        // Don't start a create-timer when the finger lands on an existing event
+        (t) => !!t.closest("[data-action='event-detail']"),
+      );
+    });
+  }
 }
 
 // ── Drag-and-drop ──────────────────────────────────────────────────────────
