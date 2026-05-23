@@ -14,11 +14,11 @@ export interface ModalState {
   editUid?: string;
 }
 
-export function defaultModalState(members: FamilyMember[]): ModalState {
+export function defaultModalState(members: FamilyMember[], date?: Date): ModalState {
   const now = new Date();
-  const start = new Date(now);
+  const start = date ? new Date(date) : new Date(now);
   start.setMinutes(0, 0, 0);
-  start.setHours(start.getHours() + 1);
+  start.setHours(now.getHours() + 1);
   const end = new Date(start);
   end.setHours(end.getHours() + 1);
   return {
