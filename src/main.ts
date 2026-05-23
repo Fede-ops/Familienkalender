@@ -1525,6 +1525,55 @@ function addTodoItem(): void {
 
 // ── Event detail sheet ─────────────────────────────────────────────────────
 
+async function deleteEventSeries(sid: string): Promise<void> {
+  const seriesEvents = state.events.filter((e) => extractSeriesId(e.description) === sid);
+  for (const e of seriesEvents) pendingDeletes.set(e.uid, PERMANENT);
+  savePendingDeletes(pendingDeletes);
+  state.events = state.events.filter((e) => extractSeriesId(e.description) !== sid);
+  saveCachedEvents(state.events);
+  render();
+
+  const config = loadConfig();
+  if (config && navigator.onLine) {
+    const client = new HAClient(config);
+    const results = await Promise.allSettled(
+      seriesEvents
+        .filter((e) => !e.uid.startsWith("local-"))
+        .map((e) => client.deleteEvent(e.memberId ?? "", e.uid, e.recurrenceId)),
+    );
+    const fail = results.filter((r) => r.status === "rejected").length;
+    showTransientBanner(
+      fail > 0
+        ? `${seriesEvents.length - fail} gelöscht · ${fail} fehlgeschlagen`
+        : `${seriesEvents.length} Termine gelöscht ✓`,
+      fail > 0,
+    );
+  } else {
+    showTransientBanner(`${seriesEvents.length} Termine gelöscht ✓`);
+  }
+}
+
+function showDeleteSeriesDialog(ev: CalendarEvent, sid: string, count: number, detailSheet: HTMLElement): void {
+  const dlg = document.createElement("div");
+  dlg.className = "delete-series-backdrop";
+  dlg.innerHTML = `
+    <div class="delete-series-sheet">
+      <p class="delete-series-title">Termin löschen</p>
+      <p class="delete-series-subtitle">„${ev.summary}" ist Teil einer Serie von ${count} Terminen.</p>
+      <button class="delete-series-btn" id="dsd-single">Nur diesen Termin</button>
+      <button class="delete-series-btn delete-series-btn--danger" id="dsd-all">Alle ${count} Termine der Serie löschen</button>
+      <button class="delete-series-btn delete-series-btn--cancel" id="dsd-cancel">Abbrechen</button>
+    </div>`;
+  document.body.appendChild(dlg);
+  dlg.querySelector("#dsd-single")!.addEventListener("click", () => {
+    dlg.remove(); detailSheet.remove(); void deleteEvent(ev);
+  });
+  dlg.querySelector("#dsd-all")!.addEventListener("click", () => {
+    dlg.remove(); detailSheet.remove(); void deleteEventSeries(sid);
+  });
+  dlg.querySelector("#dsd-cancel")!.addEventListener("click", () => dlg.remove());
+}
+
 function showEventDetail(ev: CalendarEvent): void {
   const member = state.members.find((m) => m.id === ev.memberId);
   const color = member?.color ?? "#8E8E93";
@@ -1549,7 +1598,7 @@ function showEventDetail(ev: CalendarEvent): void {
         <p class="detail-meta">${when}</p>
         ${member ? `<div class="detail-member"><span class="detail-avatar" style="background:${grad};">${member.initial}</span><span class="detail-member-name">${member.name}</span></div>` : ""}
         ${ev.location ? `<p class="detail-location">📍 ${ev.location}</p>` : ""}
-        ${ev.description ? `<p class="detail-notes">${ev.description}</p>` : ""}
+        ${stripSeriesId(ev.description) ? `<p class="detail-notes">${stripSeriesId(ev.description)}</p>` : ""}
       </div>
       <div class="detail-actions">
         <button class="detail-edit" data-action="edit-event-from-detail">Bearbeiten</button>
@@ -1570,7 +1619,16 @@ function showEventDetail(ev: CalendarEvent): void {
   sheet.querySelector<HTMLElement>("[data-action='edit-event-from-detail']")
     ?.addEventListener("click", () => { sheet.remove(); openEditModal(ev); });
   sheet.querySelector<HTMLElement>("[data-action='delete-event-from-detail']")
-    ?.addEventListener("click", () => { sheet.remove(); void deleteEvent(ev); });
+    ?.addEventListener("click", () => {
+      const sid = extractSeriesId(ev.description);
+      if (sid) {
+        const count = state.events.filter((e) => extractSeriesId(e.description) === sid).length;
+        showDeleteSeriesDialog(ev, sid, count, sheet);
+      } else {
+        sheet.remove();
+        void deleteEvent(ev);
+      }
+    });
 
   // Swipe-down-to-close anchored to the handle, then tracked on document
   // so the finger can move freely without losing the gesture.
@@ -1641,6 +1699,19 @@ function openEditModal(ev: CalendarEvent): void {
 // ── Recurrence expansion (fallback when HA backend rejects RRULE) ─────────
 
 const RRULE_TO_JS_DAY: Record<string, number> = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+
+// Series ID is embedded in the description as "[sid:xxx]" so all occurrences
+// can be found and bulk-deleted even after a page reload or cross-device sync.
+function extractSeriesId(description: string | undefined): string | null {
+  if (!description) return null;
+  const m = description.match(/\[sid:([a-z0-9]+)\]/);
+  return m ? m[1] : null;
+}
+
+function stripSeriesId(description: string | undefined): string {
+  if (!description) return "";
+  return description.replace(/\n?\[sid:[a-z0-9]+\]/, "").trim();
+}
 
 function nthWeekdayInMonth(year: number, month: number, pos: number, weekday: number): Date {
   if (pos === -1) {
@@ -1776,12 +1847,15 @@ async function saveEvent(): Promise<void> {
       // When HA rejects the RRULE with 400, expand and create each occurrence individually.
       if (rruleStr && err instanceof Error && err.message.includes("400")) {
         const modal = state.modal!;
+        const sid = Date.now().toString(36);
+        const sidTag = `[sid:${sid}]`;
+        const descWithSid = notes ? `${notes}\n${sidTag}` : sidTag;
         const occurrences = expandRecurrences(startDate, endDate, modal);
         const creates = await Promise.allSettled(
           occurrences.map(({ start, end }) =>
             client.createEvent(memberId, summary.trim(), start, end, allDay, {
               location: location || undefined,
-              description: notes || undefined,
+              description: descWithSid,
             })
           )
         );
@@ -1797,7 +1871,7 @@ async function saveEvent(): Promise<void> {
             allDay,
             memberId,
             location: location || undefined,
-            description: notes || undefined,
+            description: descWithSid,
           });
         }
         state.events.sort((a, b) => a.start.getTime() - b.start.getTime());
