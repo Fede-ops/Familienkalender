@@ -339,6 +339,25 @@ async function syncHiddenUidsFromHA(): Promise<void> {
 // uid → expiry ms (-1 = permanent until HA confirms)
 const pendingDeletes: Map<string, number> = loadPendingDeletes();
 
+// Fingerprints of permanently deleted events — stored separately so that
+// events created via the RRULE fallback (pushed to local state with
+// "local-..." UIDs, then re-fetched from HA with real UIDs) are still
+// filtered out even though the real UID was never in pendingDeletes.
+const HIDDEN_FPS_KEY = "nanoclaw-hidden-fps";
+function loadHiddenFps(): Set<string> {
+  try {
+    const raw = localStorage.getItem(HIDDEN_FPS_KEY);
+    return new Set<string>(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch { return new Set(); }
+}
+function saveHiddenFps(fps: Set<string>): void {
+  localStorage.setItem(HIDDEN_FPS_KEY, JSON.stringify([...fps]));
+}
+const hiddenFingerprints: Set<string> = loadHiddenFps();
+function eventFp(e: { memberId?: string; start: Date; summary: string }): string {
+  return `${e.memberId ?? ""}|${e.start.getTime()}|${e.summary.toLowerCase()}`;
+}
+
 const app = document.getElementById("app")!;
 const TODO_FILTER_KEY = "nanoclaw-todo-filter";
 
@@ -941,10 +960,19 @@ function bindEvents(): void {
         document.getElementById("event-detail-sheet")?.remove();
 
       } else if (action === "save-event") {
+        const btn = el as HTMLButtonElement;
+        if (btn.disabled) return;          // Block double-tap while save is in flight
         e.stopPropagation();
         syncModalForm();
+        btn.disabled = true;
+        btn.textContent = "Wird gespeichert…";
         saveEvent().catch((err) => {
           showTransientBanner(`Fehler beim Speichern: ${err instanceof Error ? err.message : String(err)}`, true);
+          // Re-enable only if modal is still open (render() wasn't called on success)
+          if (state.modal) {
+            btn.disabled = false;
+            btn.textContent = state.modal.editUid ? "Aktualisieren" : "Speichern";
+          }
         });
 
       // ── Shopping list ────────────────────────────────────────────────────
@@ -1538,8 +1566,15 @@ function addTodoItem(): void {
 
 async function deleteEventSeries(sid: string): Promise<void> {
   const seriesEvents = state.events.filter((e) => extractSeriesId(e.description) === sid);
-  for (const e of seriesEvents) pendingDeletes.set(e.uid, PERMANENT);
+  for (const e of seriesEvents) {
+    pendingDeletes.set(e.uid, PERMANENT);
+    // Track fingerprint so events that come back from HA under a different
+    // UID (e.g. "local-..." was replaced by a real HA UID after refresh) are
+    // also hidden.
+    hiddenFingerprints.add(eventFp(e));
+  }
   savePendingDeletes(pendingDeletes);
+  saveHiddenFps(hiddenFingerprints);
   state.events = state.events.filter((e) => extractSeriesId(e.description) !== sid);
   saveCachedEvents(state.events);
   render();
@@ -1553,9 +1588,11 @@ async function deleteEventSeries(sid: string): Promise<void> {
         .map((e) => client.deleteEvent(e.memberId ?? "", e.uid, e.recurrenceId)),
     );
     const fail = results.filter((r) => r.status === "rejected").length;
+    const firstErr = (results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined)?.reason;
+    const errMsg = firstErr instanceof Error ? firstErr.message.slice(0, 100) : "";
     showTransientBanner(
       fail > 0
-        ? `${seriesEvents.length - fail} gelöscht · ${fail} fehlgeschlagen`
+        ? `${seriesEvents.length - fail} gelöscht · ${fail} fehlgeschlagen${errMsg ? `: ${errMsg}` : ""}`
         : `${seriesEvents.length} Termine gelöscht ✓`,
       fail > 0,
     );
@@ -1586,6 +1623,7 @@ function showDeleteSeriesDialog(ev: CalendarEvent, sid: string, count: number, d
 }
 
 function showEventDetail(ev: CalendarEvent): void {
+  document.getElementById("event-detail-sheet")?.remove();
   const member = state.members.find((m) => m.id === ev.memberId);
   const color = member?.color ?? "#8E8E93";
   const grad = `linear-gradient(135deg,${color} 0%,${color}88 100%)`;
@@ -2081,7 +2119,9 @@ async function runFullDuplicateCleanup(silent = false): Promise<void> {
       const exp = pendingDeletes.get(e.uid);
       if (exp === PERMANENT) return false;
       if (exp !== undefined && exp > nowMs) return false;
-      return !hiddenFpsCleanup.has(`${e.memberId}|${e.start.getTime()}|${e.summary.toLowerCase()}`);
+      const fp = eventFp(e);
+      if (hiddenFpsCleanup.has(fp) || hiddenFingerprints.has(fp)) return false;
+      return true;
     });
     const seenFpCleanup = new Set<string>();
     const visible = withoutHiddenCleanup.filter((e) => {
@@ -2259,12 +2299,15 @@ async function refreshEvents(): Promise<void> {
         ghostsToRetryDelete.map((e) => client.deleteEvent(e.memberId ?? "", e.uid, e.recurrenceId)),
       );
     }
-    // Pass 2: filter by UID (pendingDeletes) and fingerprint (hiddenFps).
+    // Pass 2: filter by UID (pendingDeletes), transient fingerprints (hiddenFps),
+    // and persistent fingerprints (hiddenFingerprints — covers local-... → real UID transitions).
     const withoutHidden = fresh.filter((e) => {
       const exp = pendingDeletes.get(e.uid);
       if (exp === PERMANENT) return false;
       if (exp !== undefined && exp > now) return false;
-      return !hiddenFps.has(`${e.memberId}|${e.start.getTime()}|${e.summary.toLowerCase()}`);
+      const fp = eventFp(e);
+      if (hiddenFps.has(fp) || hiddenFingerprints.has(fp)) return false;
+      return true;
     });
     // Pass 3: fingerprint dedup — when duplicates exist, keep the one with the
     // latest end date (most recent edit wins over stale original that failed to delete).
