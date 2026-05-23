@@ -1657,8 +1657,8 @@ async function saveEvent(): Promise<void> {
   const config = loadConfig();
   const { editUid, originalMemberId } = state.modal;
   if (config && navigator.onLine) {
+    const client = new HAClient(config);
     try {
-      const client = new HAClient(config);
       if (editUid && !editUid.startsWith("local-")) {
         // Try update_event first (seamless, same UID). Falls back to
         // create+delete when the calendar backend returns 400 (not supported).
@@ -1710,22 +1710,39 @@ async function saveEvent(): Promise<void> {
         showTransientBanner(`Speichern fehlgeschlagen: ${msg}`, true);
         return;
       }
-      // Don't enqueue recurring events when HA rejected with 400 — the backend
-      // likely doesn't support RRULE and retrying will always fail.
+      // When HA rejects the RRULE with 400, retry without recurrence so the
+      // single-occurrence event is still saved.
       if (rruleStr && err instanceof Error && err.message.includes("400")) {
-        showTransientBanner(`Wiederholung nicht unterstützt: ${err.message}`, true);
-        return;
+        try {
+          await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, {
+            location: location || undefined,
+            description: notes || undefined,
+          });
+          showTransientBanner("Terminserie nicht unterstützt – als Einzeltermin gespeichert");
+        } catch {
+          enqueue({
+            entityId: memberId,
+            summary: summary.trim(),
+            start: startDate.toISOString(),
+            end: endDate.toISOString(),
+            allDay,
+            location: location || undefined,
+            description: notes || undefined,
+          });
+        }
+        // Fall through to local state update below
+      } else {
+        enqueue({
+          entityId: memberId,
+          summary: summary.trim(),
+          start: startDate.toISOString(),
+          end: endDate.toISOString(),
+          allDay,
+          location: location || undefined,
+          description: notes || undefined,
+          rrule: rruleStr || undefined,
+        });
       }
-      enqueue({
-        entityId: memberId,
-        summary: summary.trim(),
-        start: startDate.toISOString(),
-        end: endDate.toISOString(),
-        allDay,
-        location: location || undefined,
-        description: notes || undefined,
-        rrule: rruleStr || undefined,
-      });
     }
   } else if (config && !editUid) {
     enqueue({
