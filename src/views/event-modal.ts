@@ -103,7 +103,7 @@ function posLabel(pos: number): string {
   return pos === -1 ? "letzten" : ["ersten","zweiten","dritten","vierten"][pos - 1] ?? `${pos}.`;
 }
 
-export function renderEventModal(state: ModalState, members: FamilyMember[]): string {
+export function renderEventModal(state: ModalState, members: FamilyMember[], occurrenceCount?: number): string {
   const tabsHtml = (["datum", "detail", "erinnerung"] as const)
     .map(
       (key) =>
@@ -220,7 +220,11 @@ export function renderEventModal(state: ModalState, members: FamilyMember[]): st
         ${state.rruleFreq ? `<div class="field field--datetime">
           <span class="field__label">Serie endet am</span>
           <input class="field__input" type="date" id="modal-rrule-until" value="${fmtDateLocal(state.rruleUntil)}" />
-        </div>` : ""}
+        </div>
+        ${occurrenceCount !== undefined ? `<div class="field">
+          <span class="field__label" style="color:var(--text-secondary);font-size:13px">Termine werden angelegt</span>
+          <span class="field__value" style="color:var(--text-secondary)">${occurrenceCount}</span>
+        </div>` : ""}` : ""}
       </div>
       ${weekdayPickerHtml}
       ${monthlyHtml}`;

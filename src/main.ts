@@ -501,6 +501,13 @@ function visibleEvents(): CalendarEvent[] {
 // (which would re-open the iOS keyboard on every weekday-chip tap, etc.)
 let _prevModalOpen = false;
 
+function occurrencePreviewCount(modal: ModalState): number | undefined {
+  if (!modal.rruleFreq) return undefined;
+  try {
+    return expandRecurrences(modal.startDate, modal.endDate, modal).length;
+  } catch { return undefined; }
+}
+
 function render(): void {
   // Cancel any pending drag before replacing the DOM. Without this, the
   // 350ms drag-activation timer can fire after innerHTML is replaced,
@@ -527,7 +534,7 @@ function render(): void {
       members: state.members,
       today: new Date(),
     });
-    if (state.modal) html += renderEventModal(state.modal, state.members);
+    if (state.modal) html += renderEventModal(state.modal, state.members, occurrencePreviewCount(state.modal));
   } else {
     html = renderWeekView({
       weekStart: state.weekStart,
@@ -536,7 +543,7 @@ function render(): void {
       today: new Date(),
       filterActive: state.filterMemberIds.length > 0,
     });
-    if (state.modal) html += renderEventModal(state.modal, state.members);
+    if (state.modal) html += renderEventModal(state.modal, state.members, occurrencePreviewCount(state.modal));
   }
   app.innerHTML = html;
   app.dataset.buildTime = __BUILD_TIME__;
@@ -1047,6 +1054,15 @@ function bindEvents(): void {
       render();
     });
   });
+
+  // "Serie endet am" date input fires "change" after the native picker closes
+  const untilInput = app.querySelector<HTMLInputElement>("#modal-rrule-until");
+  if (untilInput) {
+    untilInput.addEventListener("change", () => {
+      syncModalForm();
+      render();
+    });
+  }
 }
 
 // ── Notification settings sheet ────────────────────────────────────────────
@@ -1626,14 +1642,27 @@ async function deleteEventSeries(sid: string): Promise<void> {
     toDelete.map((e) => client.deleteEvent(e.memberId ?? "", e.uid, e.recurrenceId)),
   );
   const fail = results.filter((r) => r.status === "rejected").length;
-  const firstErr = (results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined)?.reason;
-  const errMsg = firstErr instanceof Error ? firstErr.message.slice(0, 80) : "";
-  showTransientBanner(
-    fail > 0
-      ? `${toDelete.length - fail} gelöscht · ${fail} fehlgeschlagen${errMsg ? `: ${errMsg}` : ""}`
-      : `${allSeriesEvents.length} Termine gelöscht ✓`,
-    fail > 0,
-  );
+  if (fail > 0) {
+    const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+    const all400 = rejected.every(
+      (r) => r.reason instanceof Error && (r.reason as Error & { httpStatus?: number }).httpStatus === 400,
+    );
+    if (all400) {
+      showTransientBanner(
+        `${allSeriesEvents.length} Termine lokal ausgeblendet · Kalender unterstützt keine Löschung via HA API`,
+        true,
+      );
+    } else {
+      const firstErr = rejected[0]?.reason;
+      const errMsg = firstErr instanceof Error ? firstErr.message.slice(0, 80) : "";
+      showTransientBanner(
+        `${toDelete.length - fail} gelöscht · ${fail} fehlgeschlagen${errMsg ? `: ${errMsg}` : ""}`,
+        true,
+      );
+    }
+  } else {
+    showTransientBanner(`${allSeriesEvents.length} Termine gelöscht ✓`, false);
+  }
 }
 
 function showDeleteSeriesDialog(ev: CalendarEvent, sid: string, count: number, detailSheet: HTMLElement): void {
