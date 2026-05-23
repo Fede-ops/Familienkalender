@@ -52,6 +52,7 @@ interface QueuedEvent {
   allDay: boolean;
   location?: string;
   description?: string;
+  rrule?: string;
   attempts: number;
   createdAt: number;
 }
@@ -146,7 +147,7 @@ async function processQueue(): Promise<void> {
           new Date(item.start),
           new Date(item.end),
           item.allDay,
-          { location: item.location, description: item.description },
+          { location: item.location, description: item.description, rrule: item.rrule },
         );
       } catch {
         const updated = { ...item, attempts: (item.attempts ?? 0) + 1 };
@@ -547,6 +548,7 @@ function syncModalForm(): void {
   const endEl = get<HTMLInputElement>("modal-end");
   const locationEl = get<HTMLInputElement>("modal-location");
   const notesEl = get<HTMLTextAreaElement>("modal-notes");
+  const rruleEl = get<HTMLSelectElement>("modal-rrule");
   if (summaryEl) state.modal.summary = summaryEl.value;
   if (startEl?.value) {
     state.modal.startDate = state.modal.allDay
@@ -560,6 +562,7 @@ function syncModalForm(): void {
   }
   if (locationEl) state.modal.location = locationEl.value;
   if (notesEl) state.modal.notes = notesEl.value;
+  if (rruleEl) state.modal.rrule = rruleEl.value as import("./views/event-modal.ts").RecurrenceFreq;
 }
 
 // ── Read list input ────────────────────────────────────────────────────────
@@ -1584,6 +1587,7 @@ function openEditModal(ev: CalendarEvent): void {
     startDate: new Date(ev.start),
     endDate: new Date(ev.end),
     allDay: ev.allDay,
+    rrule: "",
     memberId,
     originalMemberId: memberId,
     location: ev.location ?? "",
@@ -1597,7 +1601,7 @@ function openEditModal(ev: CalendarEvent): void {
 
 async function saveEvent(): Promise<void> {
   if (!state.modal) return;
-  const { summary, startDate, endDate, allDay, memberId, location, notes } = state.modal;
+  const { summary, startDate, endDate, allDay, memberId, location, notes, rrule } = state.modal;
 
   if (!summary.trim()) {
     const input = document.getElementById("modal-summary") as HTMLInputElement | null;
@@ -1620,12 +1624,14 @@ async function saveEvent(): Promise<void> {
           memberId, editUid, summary.trim(), startDate, endDate, allDay, {
             location: location || undefined,
             description: notes || undefined,
+            rrule: rrule || undefined,
           });
         if (!updated) {
           // Backend doesn't support update_event — recreate in new position.
           await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, {
             location: location || undefined,
             description: notes || undefined,
+            rrule: rrule || undefined,
           });
           const originalEvent = state.events.find((e) => e.uid === editUid);
           try {
@@ -1653,6 +1659,7 @@ async function saveEvent(): Promise<void> {
         await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, {
           location: location || undefined,
           description: notes || undefined,
+          rrule: rrule || undefined,
         });
       }
     } catch (err) {
@@ -1669,6 +1676,7 @@ async function saveEvent(): Promise<void> {
         allDay,
         location: location || undefined,
         description: notes || undefined,
+        rrule: rrule || undefined,
       });
     }
   } else if (config && !editUid) {
@@ -1680,6 +1688,7 @@ async function saveEvent(): Promise<void> {
       allDay,
       location: location || undefined,
       description: notes || undefined,
+      rrule: rrule || undefined,
     });
   }
 
