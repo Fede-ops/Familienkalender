@@ -463,6 +463,11 @@ function visibleEvents(): CalendarEvent[] {
 
 // ── Rendering ──────────────────────────────────────────────────────────────
 
+// Track whether the modal was open on the previous render so we only
+// auto-focus the summary input on first open, not on every re-render
+// (which would re-open the iOS keyboard on every weekday-chip tap, etc.)
+let _prevModalOpen = false;
+
 function render(): void {
   // Cancel any pending drag before replacing the DOM. Without this, the
   // 350ms drag-activation timer can fire after innerHTML is replaced,
@@ -517,7 +522,9 @@ function render(): void {
   setupDragDrop();
   setupLongPress();
   updateTabBarActive();
-  if (state.modal) document.getElementById("modal-summary")?.focus();
+  const modalNowOpen = !!state.modal;
+  if (modalNowOpen && !_prevModalOpen) document.getElementById("modal-summary")?.focus();
+  _prevModalOpen = modalNowOpen;
   // Do NOT auto-focus list-input on render — it opens the iOS keyboard
   // automatically on every tab switch and causes the sticky nav to jump.
 }
