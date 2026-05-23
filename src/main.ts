@@ -943,7 +943,9 @@ function bindEvents(): void {
       } else if (action === "save-event") {
         e.stopPropagation();
         syncModalForm();
-        void saveEvent();
+        saveEvent().catch((err) => {
+          showTransientBanner(`Fehler beim Speichern: ${err instanceof Error ? err.message : String(err)}`, true);
+        });
 
       // ── Shopping list ────────────────────────────────────────────────────
       } else if (action === "add-item") {
@@ -1863,39 +1865,45 @@ async function saveEvent(): Promise<void> {
       }
       // When HA rejects the RRULE with 400, expand and create each occurrence individually.
       if (rruleStr && err instanceof Error && err.message.includes("400")) {
-        const modal = state.modal!;
-        const sid = Date.now().toString(36);
-        const sidTag = `[sid:${sid}]`;
-        const descWithSid = notes ? `${notes}\n${sidTag}` : sidTag;
-        const occurrences = expandRecurrences(startDate, endDate, modal);
-        const creates = await Promise.allSettled(
-          occurrences.map(({ start, end }) =>
-            client.createEvent(memberId, summary.trim(), start, end, allDay, {
+        try {
+          const modal = state.modal!;
+          const sid = Date.now().toString(36);
+          const sidTag = `[sid:${sid}]`;
+          const descWithSid = notes ? `${notes}\n${sidTag}` : sidTag;
+          const occurrences = expandRecurrences(startDate, endDate, modal);
+          const creates = await Promise.allSettled(
+            occurrences.map(({ start, end }) =>
+              client.createEvent(memberId, summary.trim(), start, end, allDay, {
+                location: location || undefined,
+                description: descWithSid,
+              })
+            )
+          );
+          const ok = creates.filter((r) => r.status === "fulfilled").length;
+          const fail = creates.filter((r) => r.status === "rejected").length;
+          showTransientBanner(`${ok} Termine angelegt${fail > 0 ? ` · ${fail} fehlgeschlagen` : ""} ✓`);
+          for (const { start, end } of occurrences) {
+            state.events.push({
+              uid: `local-${start.getTime()}`,
+              summary: summary.trim(),
+              start,
+              end,
+              allDay,
+              memberId,
               location: location || undefined,
               description: descWithSid,
-            })
-          )
-        );
-        const ok = creates.filter((r) => r.status === "fulfilled").length;
-        const fail = creates.filter((r) => r.status === "rejected").length;
-        showTransientBanner(`${ok} Termine angelegt${fail > 0 ? ` · ${fail} fehlgeschlagen` : ""} ✓`);
-        for (const { start, end } of occurrences) {
-          state.events.push({
-            uid: `local-${start.getTime()}`,
-            summary: summary.trim(),
-            start,
-            end,
-            allDay,
-            memberId,
-            location: location || undefined,
-            description: descWithSid,
-          });
+            });
+          }
+          state.events.sort((a, b) => a.start.getTime() - b.start.getTime());
+          saveCachedEvents(state.events);
+          state.modal = null;
+          render();
+          return;
+        } catch (expandErr) {
+          const msg = expandErr instanceof Error ? expandErr.message : String(expandErr);
+          showTransientBanner(`Serien-Erstellung fehlgeschlagen: ${msg}`, true);
+          return;
         }
-        state.events.sort((a, b) => a.start.getTime() - b.start.getTime());
-        saveCachedEvents(state.events);
-        state.modal = null;
-        render();
-        return;
       }
       enqueue({
         entityId: memberId,
