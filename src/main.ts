@@ -358,6 +358,20 @@ function eventFp(e: { memberId?: string; start: Date; summary: string }): string
   return `${e.memberId ?? ""}|${e.start.getTime()}|${e.summary.toLowerCase()}`;
 }
 
+// Series IDs that have been fully deleted — any event with this [sid:xxx] in
+// its description is hidden on ALL future fetches, regardless of date range.
+const DELETED_SIDS_KEY = "nanoclaw-deleted-sids";
+function loadDeletedSids(): Set<string> {
+  try {
+    const raw = localStorage.getItem(DELETED_SIDS_KEY);
+    return new Set<string>(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch { return new Set(); }
+}
+function saveDeletedSids(s: Set<string>): void {
+  localStorage.setItem(DELETED_SIDS_KEY, JSON.stringify([...s]));
+}
+const deletedSeriesIds: Set<string> = loadDeletedSids();
+
 const app = document.getElementById("app")!;
 const TODO_FILTER_KEY = "nanoclaw-todo-filter";
 
@@ -1565,40 +1579,61 @@ function addTodoItem(): void {
 // ── Event detail sheet ─────────────────────────────────────────────────────
 
 async function deleteEventSeries(sid: string): Promise<void> {
-  const seriesEvents = state.events.filter((e) => extractSeriesId(e.description) === sid);
-  for (const e of seriesEvents) {
+  // Step 1: immediately hide everything visible in the current view and mark
+  // the series ID as deleted so ALL future fetches (any date range) filter it out.
+  const visibleSeriesEvents = state.events.filter((e) => extractSeriesId(e.description) === sid);
+  for (const e of visibleSeriesEvents) {
     pendingDeletes.set(e.uid, PERMANENT);
-    // Track fingerprint so events that come back from HA under a different
-    // UID (e.g. "local-..." was replaced by a real HA UID after refresh) are
-    // also hidden.
     hiddenFingerprints.add(eventFp(e));
   }
+  deletedSeriesIds.add(sid);
   savePendingDeletes(pendingDeletes);
   saveHiddenFps(hiddenFingerprints);
+  saveDeletedSids(deletedSeriesIds);
   state.events = state.events.filter((e) => extractSeriesId(e.description) !== sid);
   saveCachedEvents(state.events);
   render();
 
   const config = loadConfig();
-  if (config && navigator.onLine) {
-    const client = new HAClient(config);
-    const results = await Promise.allSettled(
-      seriesEvents
-        .filter((e) => !e.uid.startsWith("local-"))
-        .map((e) => client.deleteEvent(e.memberId ?? "", e.uid, e.recurrenceId)),
-    );
-    const fail = results.filter((r) => r.status === "rejected").length;
-    const firstErr = (results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined)?.reason;
-    const errMsg = firstErr instanceof Error ? firstErr.message.slice(0, 100) : "";
-    showTransientBanner(
-      fail > 0
-        ? `${seriesEvents.length - fail} gelöscht · ${fail} fehlgeschlagen${errMsg ? `: ${errMsg}` : ""}`
-        : `${seriesEvents.length} Termine gelöscht ✓`,
-      fail > 0,
-    );
-  } else {
-    showTransientBanner(`${seriesEvents.length} Termine gelöscht ✓`);
+  if (!config || !navigator.onLine) {
+    showTransientBanner(`${visibleSeriesEvents.length} Termine lokal ausgeblendet ✓`);
+    return;
   }
+
+  // Step 2: fetch a wide date range to find ALL occurrences that weren't in the
+  // current view, then delete every one of them from HA.
+  const client = new HAClient(config);
+  let allSeriesEvents = visibleSeriesEvents;
+  try {
+    const wideStart = new Date(Date.now() - 90 * 86_400_000);      // 3 months back
+    const wideEnd   = new Date(Date.now() + 3 * 365 * 86_400_000); // 3 years ahead
+    const broadFetch = await client.getAllEvents(wideStart, wideEnd);
+    const found = broadFetch.filter((e) => extractSeriesId(e.description) === sid);
+    // Track fingerprints and UIDs for the newly discovered events too
+    for (const e of found) {
+      pendingDeletes.set(e.uid, PERMANENT);
+      hiddenFingerprints.add(eventFp(e));
+    }
+    savePendingDeletes(pendingDeletes);
+    saveHiddenFps(hiddenFingerprints);
+    // Merge visible + discovered, deduplicated by uid
+    const seen = new Set(visibleSeriesEvents.map((e) => e.uid));
+    allSeriesEvents = [...visibleSeriesEvents, ...found.filter((e) => !seen.has(e.uid))];
+  } catch { /* network error — fall back to deleting only the visible events */ }
+
+  const toDelete = allSeriesEvents.filter((e) => !e.uid.startsWith("local-"));
+  const results = await Promise.allSettled(
+    toDelete.map((e) => client.deleteEvent(e.memberId ?? "", e.uid, e.recurrenceId)),
+  );
+  const fail = results.filter((r) => r.status === "rejected").length;
+  const firstErr = (results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined)?.reason;
+  const errMsg = firstErr instanceof Error ? firstErr.message.slice(0, 80) : "";
+  showTransientBanner(
+    fail > 0
+      ? `${toDelete.length - fail} gelöscht · ${fail} fehlgeschlagen${errMsg ? `: ${errMsg}` : ""}`
+      : `${allSeriesEvents.length} Termine gelöscht ✓`,
+    fail > 0,
+  );
 }
 
 function showDeleteSeriesDialog(ev: CalendarEvent, sid: string, count: number, detailSheet: HTMLElement): void {
@@ -2121,6 +2156,8 @@ async function runFullDuplicateCleanup(silent = false): Promise<void> {
       if (exp !== undefined && exp > nowMs) return false;
       const fp = eventFp(e);
       if (hiddenFpsCleanup.has(fp) || hiddenFingerprints.has(fp)) return false;
+      const sid = extractSeriesId(e.description);
+      if (sid && deletedSeriesIds.has(sid)) return false;
       return true;
     });
     const seenFpCleanup = new Set<string>();
@@ -2299,14 +2336,15 @@ async function refreshEvents(): Promise<void> {
         ghostsToRetryDelete.map((e) => client.deleteEvent(e.memberId ?? "", e.uid, e.recurrenceId)),
       );
     }
-    // Pass 2: filter by UID (pendingDeletes), transient fingerprints (hiddenFps),
-    // and persistent fingerprints (hiddenFingerprints — covers local-... → real UID transitions).
+    // Pass 2: filter by UID (pendingDeletes), fingerprints, and deleted series IDs.
     const withoutHidden = fresh.filter((e) => {
       const exp = pendingDeletes.get(e.uid);
       if (exp === PERMANENT) return false;
       if (exp !== undefined && exp > now) return false;
       const fp = eventFp(e);
       if (hiddenFps.has(fp) || hiddenFingerprints.has(fp)) return false;
+      const sid = extractSeriesId(e.description);
+      if (sid && deletedSeriesIds.has(sid)) return false;
       return true;
     });
     // Pass 3: fingerprint dedup — when duplicates exist, keep the one with the
