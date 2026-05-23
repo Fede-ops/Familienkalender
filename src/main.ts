@@ -1858,12 +1858,8 @@ async function saveEvent(): Promise<void> {
         });
       }
     } catch (err) {
-      if (editUid) {
-        const msg = err instanceof Error ? err.message : String(err);
-        showTransientBanner(`Speichern fehlgeschlagen: ${msg}`, true);
-        return;
-      }
       // When HA rejects the RRULE with 400, expand and create each occurrence individually.
+      // Check this BEFORE the editUid bail-out so editing + adding recurrence also works.
       if (rruleStr && err instanceof Error && err.message.includes("400")) {
         try {
           const modal = state.modal!;
@@ -1882,12 +1878,14 @@ async function saveEvent(): Promise<void> {
           const ok = creates.filter((r) => r.status === "fulfilled").length;
           const fail = creates.filter((r) => r.status === "rejected").length;
           showTransientBanner(`${ok} Termine angelegt${fail > 0 ? ` · ${fail} fehlgeschlagen` : ""} ✓`);
-          for (const { start, end } of occurrences) {
+          // Inclusive duration per occurrence: allDay end is exclusive, subtract 1 day for local state.
+          const occDuration = (endDate.getTime() - startDate.getTime()) - (allDay ? 86_400_000 : 0);
+          for (const { start } of occurrences) {
             state.events.push({
               uid: `local-${start.getTime()}`,
               summary: summary.trim(),
               start,
-              end,
+              end: new Date(start.getTime() + occDuration),
               allDay,
               memberId,
               location: location || undefined,
@@ -1904,6 +1902,11 @@ async function saveEvent(): Promise<void> {
           showTransientBanner(`Serien-Erstellung fehlgeschlagen: ${msg}`, true);
           return;
         }
+      }
+      if (editUid) {
+        const msg = err instanceof Error ? err.message : String(err);
+        showTransientBanner(`Speichern fehlgeschlagen: ${msg}`, true);
+        return;
       }
       enqueue({
         entityId: memberId,
@@ -1929,13 +1932,16 @@ async function saveEvent(): Promise<void> {
     });
   }
 
+  // Calendar views expect inclusive end; modal.endDate is exclusive for allDay (iCal convention).
+  const stateEnd = allDay ? new Date(endDate.getTime() - 86_400_000) : endDate;
+
   if (editUid) {
     const idx = state.events.findIndex((e) => e.uid === editUid);
     const updated: CalendarEvent = {
       uid: editUid,
       summary: summary.trim(),
       start: startDate,
-      end: endDate,
+      end: stateEnd,
       allDay,
       memberId,
       location: location || undefined,
@@ -1948,7 +1954,7 @@ async function saveEvent(): Promise<void> {
       uid: `local-${Date.now()}`,
       summary: summary.trim(),
       start: startDate,
-      end: endDate,
+      end: stateEnd,
       allDay,
       memberId,
       location: location || undefined,
