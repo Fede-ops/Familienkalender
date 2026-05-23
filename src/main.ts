@@ -1638,6 +1638,69 @@ function openEditModal(ev: CalendarEvent): void {
   render();
 }
 
+// ── Recurrence expansion (fallback when HA backend rejects RRULE) ─────────
+
+const RRULE_TO_JS_DAY: Record<string, number> = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+
+function nthWeekdayInMonth(year: number, month: number, pos: number, weekday: number): Date {
+  if (pos === -1) {
+    const last = new Date(year, month + 1, 0);
+    return new Date(year, month, last.getDate() - (last.getDay() - weekday + 7) % 7);
+  }
+  const first = new Date(year, month, 1);
+  return new Date(year, month, 1 + (weekday - first.getDay() + 7) % 7 + (pos - 1) * 7);
+}
+
+function expandRecurrences(
+  startDate: Date,
+  endDate: Date,
+  modal: ModalState,
+): Array<{ start: Date; end: Date }> {
+  const duration = endDate.getTime() - startDate.getTime();
+  const result: Array<{ start: Date; end: Date }> = [];
+  const shiftDays = (base: Date, days: number): Date =>
+    new Date(base.getFullYear(), base.getMonth(), base.getDate() + days, base.getHours(), base.getMinutes());
+
+  if (modal.rruleFreq === "FREQ=DAILY") {
+    for (let i = 0; i < 90; i++) {
+      const s = shiftDays(startDate, i);
+      result.push({ start: s, end: new Date(s.getTime() + duration) });
+    }
+  } else if (modal.rruleFreq === "FREQ=WEEKLY") {
+    const targetDays = new Set(modal.rruleWeekdays.map((d) => RRULE_TO_JS_DAY[d]));
+    const weekSunday = shiftDays(startDate, -startDate.getDay());
+    for (let w = 0; w < 52; w++) {
+      for (let d = 0; d < 7; d++) {
+        if (!targetDays.has(d)) continue;
+        const s = shiftDays(weekSunday, w * 7 + d);
+        if (s < startDate) continue;
+        result.push({ start: s, end: new Date(s.getTime() + duration) });
+      }
+    }
+  } else if (modal.rruleFreq === "FREQ=MONTHLY") {
+    for (let i = 0; i < 24; i++) {
+      let base: Date;
+      if (modal.rruleMonthMode === "monthday") {
+        base = new Date(startDate.getFullYear(), startDate.getMonth() + i, startDate.getDate());
+      } else {
+        const wd = RRULE_TO_JS_DAY[modal.rruleMonthWeekDay] ?? 1;
+        base = nthWeekdayInMonth(startDate.getFullYear(), startDate.getMonth() + i, modal.rruleMonthWeekPos, wd);
+      }
+      base.setHours(startDate.getHours(), startDate.getMinutes(), 0, 0);
+      if (base < startDate) continue;
+      result.push({ start: base, end: new Date(base.getTime() + duration) });
+    }
+  } else if (modal.rruleFreq === "FREQ=YEARLY") {
+    for (let i = 0; i < 5; i++) {
+      const s = new Date(startDate.getFullYear() + i, startDate.getMonth(), startDate.getDate(),
+        startDate.getHours(), startDate.getMinutes());
+      result.push({ start: s, end: new Date(s.getTime() + duration) });
+    }
+  }
+
+  return result;
+}
+
 // ── Save calendar event ────────────────────────────────────────────────────
 
 async function saveEvent(): Promise<void> {
@@ -1710,39 +1773,49 @@ async function saveEvent(): Promise<void> {
         showTransientBanner(`Speichern fehlgeschlagen: ${msg}`, true);
         return;
       }
-      // When HA rejects the RRULE with 400, retry without recurrence so the
-      // single-occurrence event is still saved.
+      // When HA rejects the RRULE with 400, expand and create each occurrence individually.
       if (rruleStr && err instanceof Error && err.message.includes("400")) {
-        try {
-          await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, {
-            location: location || undefined,
-            description: notes || undefined,
-          });
-          showTransientBanner("Terminserie nicht unterstützt – als Einzeltermin gespeichert");
-        } catch {
-          enqueue({
-            entityId: memberId,
+        const modal = state.modal!;
+        const occurrences = expandRecurrences(startDate, endDate, modal);
+        const creates = await Promise.allSettled(
+          occurrences.map(({ start, end }) =>
+            client.createEvent(memberId, summary.trim(), start, end, allDay, {
+              location: location || undefined,
+              description: notes || undefined,
+            })
+          )
+        );
+        const ok = creates.filter((r) => r.status === "fulfilled").length;
+        const fail = creates.filter((r) => r.status === "rejected").length;
+        showTransientBanner(`${ok} Termine angelegt${fail > 0 ? ` · ${fail} fehlgeschlagen` : ""} ✓`);
+        for (const { start, end } of occurrences) {
+          state.events.push({
+            uid: `local-${start.getTime()}`,
             summary: summary.trim(),
-            start: startDate.toISOString(),
-            end: endDate.toISOString(),
+            start,
+            end,
             allDay,
+            memberId,
             location: location || undefined,
             description: notes || undefined,
           });
         }
-        // Fall through to local state update below
-      } else {
-        enqueue({
-          entityId: memberId,
-          summary: summary.trim(),
-          start: startDate.toISOString(),
-          end: endDate.toISOString(),
-          allDay,
-          location: location || undefined,
-          description: notes || undefined,
-          rrule: rruleStr || undefined,
-        });
+        state.events.sort((a, b) => a.start.getTime() - b.start.getTime());
+        saveCachedEvents(state.events);
+        state.modal = null;
+        render();
+        return;
       }
+      enqueue({
+        entityId: memberId,
+        summary: summary.trim(),
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
+        allDay,
+        location: location || undefined,
+        description: notes || undefined,
+        rrule: rruleStr || undefined,
+      });
     }
   } else if (config && !editUid) {
     enqueue({
