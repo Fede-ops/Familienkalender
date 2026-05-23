@@ -47,51 +47,55 @@ def decode_str(s):
 
 
 def parse_ics(text):
-    """Parst VCALENDAR/.ics direkt ohne externe Bibliothek."""
-    events, current, in_ev = [], {}, False
+    """Parst VCALENDAR/.ics direkt ohne externe Bibliothek.
+    Gibt eine Liste aller VEVENTs zurück (z.B. Hin- und Rückflug)."""
+    raw_events, current, in_ev = [], {}, False
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if line == "BEGIN:VEVENT":
             in_ev, current = True, {}
         elif line == "END:VEVENT":
             if current:
-                events.append(current)
+                raw_events.append(current)
             in_ev = False
         elif in_ev and ":" in line:
             key, _, val = line.partition(":")
-            events and None  # noqa
             current[key.split(";")[0]] = val
 
-    if not events:
-        return None
+    if not raw_events:
+        return []
 
-    ev = events[0]
-    summary  = ev.get("SUMMARY", "Termin")
-    dtstart  = ev.get("DTSTART", "")
-    dtend    = ev.get("DTEND", "")
-    location = ev.get("LOCATION", "")
-    desc     = ev.get("DESCRIPTION", "").replace("\\n", "\n")
+    result = []
+    for ev in raw_events:
+        summary  = ev.get("SUMMARY", "Termin")
+        dtstart  = ev.get("DTSTART", "")
+        dtend    = ev.get("DTEND", "")
+        location = ev.get("LOCATION", "")
+        desc     = ev.get("DESCRIPTION", "").replace("\\n", "\n")
 
-    all_day = len(dtstart) == 8 or (len(dtstart) > 8 and "T" not in dtstart)
+        if not dtstart:
+            continue
 
-    if all_day:
-        start = datetime.strptime(dtstart[:8], "%Y%m%d").date()
-        end   = datetime.strptime(dtend[:8],   "%Y%m%d").date() if dtend else start + timedelta(days=1)
-        return {"summary": summary, "start": start.isoformat(),
-                "end": end.isoformat(), "all_day": True,
-                "location": location, "description": desc}
+        all_day = len(dtstart) == 8 or (len(dtstart) > 8 and "T" not in dtstart)
 
-    try:
-        fmt = "%Y%m%dT%H%M%SZ" if dtstart.endswith("Z") else "%Y%m%dT%H%M%S"
-        dt  = datetime.strptime(dtstart[:15].rstrip("Z"), "%Y%m%dT%H%M%S")
-        dte = datetime.strptime(dtend[:15].rstrip("Z"),   "%Y%m%dT%H%M%S") if dtend else dt + timedelta(hours=1)
-    except ValueError:
-        dt  = datetime.now().replace(minute=0, second=0, microsecond=0)
-        dte = dt + timedelta(hours=1)
+        if all_day:
+            start = datetime.strptime(dtstart[:8], "%Y%m%d").date()
+            end   = datetime.strptime(dtend[:8], "%Y%m%d").date() if dtend else start + timedelta(days=1)
+            result.append({"summary": summary, "start": start.isoformat(),
+                            "end": end.isoformat(), "all_day": True,
+                            "location": location, "description": desc})
+        else:
+            try:
+                dt  = datetime.strptime(dtstart[:15].rstrip("Z"), "%Y%m%dT%H%M%S")
+                dte = datetime.strptime(dtend[:15].rstrip("Z"), "%Y%m%dT%H%M%S") if dtend else dt + timedelta(hours=1)
+            except ValueError:
+                dt  = datetime.now().replace(minute=0, second=0, microsecond=0)
+                dte = dt + timedelta(hours=1)
+            result.append({"summary": summary, "start": dt.isoformat(),
+                            "end": dte.isoformat(), "all_day": False,
+                            "location": location, "description": desc})
 
-    return {"summary": summary, "start": dt.isoformat(),
-            "end": dte.isoformat(), "all_day": False,
-            "location": location, "description": desc}
+    return result
 
 
 def parse_with_claude(text, pdf_bytes=None):
@@ -118,11 +122,11 @@ def parse_with_claude(text, pdf_bytes=None):
             }},
         ]
     else:
-        content = f"{instruction}\n\n{text[:3000]}"
+        content = f"{instruction}\n\n{text[:8000]}"
 
     payload = json.dumps({
         "model": "claude-haiku-4-5-20251001",
-        "max_tokens": 512,
+        "max_tokens": 1024,
         "messages": [{"role": "user", "content": content}],
     }).encode()
 
@@ -234,8 +238,7 @@ def process_message(msg):
 
     # .ics Anhang hat Vorrang (enthält bereits strukturierte Daten)
     if ics_data:
-        ev = parse_ics(ics_data)
-        if ev:
+        for ev in parse_ics(ics_data):
             print(f"  → ICS: {ev['summary']}")
             if create_ha_event(ev):
                 created += 1

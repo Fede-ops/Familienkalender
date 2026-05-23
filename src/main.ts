@@ -1644,22 +1644,14 @@ async function deleteEventSeries(sid: string): Promise<void> {
   const fail = results.filter((r) => r.status === "rejected").length;
   if (fail > 0) {
     const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
-    const all400 = rejected.every(
-      (r) => r.reason instanceof Error && (r.reason as Error & { httpStatus?: number }).httpStatus === 400,
+    // Log every failure to the browser console for debugging.
+    rejected.forEach((r, i) => console.error(`[deleteEventSeries] failure ${i + 1}:`, r.reason));
+    const firstErr = rejected[0]?.reason;
+    const errDetail = firstErr instanceof Error ? firstErr.message : String(firstErr);
+    showTransientBanner(
+      `${toDelete.length - fail} von ${toDelete.length} gelöscht · ${fail} fehlgeschlagen: ${errDetail}`,
+      true,
     );
-    if (all400) {
-      showTransientBanner(
-        `${allSeriesEvents.length} Termine lokal ausgeblendet · Kalender unterstützt keine Löschung via HA API`,
-        true,
-      );
-    } else {
-      const firstErr = rejected[0]?.reason;
-      const errMsg = firstErr instanceof Error ? firstErr.message.slice(0, 80) : "";
-      showTransientBanner(
-        `${toDelete.length - fail} gelöscht · ${fail} fehlgeschlagen${errMsg ? `: ${errMsg}` : ""}`,
-        true,
-      );
-    }
   } else {
     showTransientBanner(`${allSeriesEvents.length} Termine gelöscht ✓`, false);
   }

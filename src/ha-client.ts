@@ -169,20 +169,24 @@ export class HAClient {
     });
     if (!res.ok) {
       // Read once as text so we get whatever HA returned — JSON error body,
-      // HTML error page, or plain text. Then surface it verbatim instead of
-      // collapsing to res.statusText, which loses the actual reason.
-      let body = "";
-      try { body = (await res.text()).trim(); } catch { /* ignore */ }
+      // HTML error page, or plain text. Then surface it verbatim.
+      let rawBody = "";
+      try { rawBody = (await res.text()).trim(); } catch { /* ignore */ }
       // Many HA service errors look like {"message":"..."} — extract that
       // single field if present, otherwise keep the raw body.
-      let detail = body;
+      let detail = rawBody;
       try {
-        const parsed = JSON.parse(body) as { message?: string };
+        const parsed = JSON.parse(rawBody) as { message?: string };
         if (parsed && typeof parsed.message === "string") detail = parsed.message;
       } catch { /* not JSON, keep raw */ }
+      // Log the full details to the browser console for debugging.
+      console.error(
+        `[delete_event] FAILED ${res.status} ${res.statusText}\n` +
+        `  request: ${JSON.stringify(body)}\n` +
+        `  response: ${rawBody || "(empty)"}`,
+      );
       const err = new Error(
-        `HA delete_event ${res.status} ${res.statusText}: ${detail || "(leerer Body)"} ` +
-        `(entity=${entityId} uid=${uid})`,
+        `HA delete_event ${res.status}: ${detail || "(leerer Body)"} (entity=${entityId} uid=${uid})`,
       );
       (err as Error & { httpStatus: number }).httpStatus = res.status;
       throw err;
