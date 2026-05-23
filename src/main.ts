@@ -570,6 +570,8 @@ function syncModalForm(): void {
   if (locationEl) state.modal.location = locationEl.value;
   if (notesEl) state.modal.notes = notesEl.value;
   if (rruleEl) state.modal.rruleFreq = rruleEl.value as RecurrenceFreq;
+  const untilEl = get<HTMLInputElement>("modal-rrule-until");
+  if (untilEl?.value) state.modal.rruleUntil = parseLocalDate(untilEl.value);
   if (monthModeEl) state.modal.rruleMonthMode = monthModeEl.value as "monthday" | "weekday";
   if (monthPosEl) state.modal.rruleMonthWeekPos = Number(monthPosEl.value);
   if (monthWdEl) state.modal.rruleMonthWeekDay = monthWdEl.value;
@@ -1683,6 +1685,7 @@ function openEditModal(ev: CalendarEvent): void {
     endDate,
     allDay: ev.allDay,
     rruleFreq: "",
+    rruleUntil: new Date(startDate.getFullYear() + 1, startDate.getMonth(), startDate.getDate()),
     rruleWeekdays: [weekDay],
     rruleMonthMode: "monthday",
     rruleMonthWeekPos: weekPos,
@@ -1729,27 +1732,33 @@ function expandRecurrences(
 ): Array<{ start: Date; end: Date }> {
   const duration = endDate.getTime() - startDate.getTime();
   const result: Array<{ start: Date; end: Date }> = [];
+  // Set until to end of the until day (23:59:59) so same-day occurrences are included.
+  const until = modal.rruleUntil
+    ? new Date(modal.rruleUntil.getFullYear(), modal.rruleUntil.getMonth(), modal.rruleUntil.getDate(), 23, 59, 59)
+    : new Date(startDate.getFullYear() + 1, startDate.getMonth(), startDate.getDate());
   const shiftDays = (base: Date, days: number): Date =>
     new Date(base.getFullYear(), base.getMonth(), base.getDate() + days, base.getHours(), base.getMinutes());
+  const add = (s: Date) => { if (s >= startDate && s <= until) result.push({ start: s, end: new Date(s.getTime() + duration) }); };
 
   if (modal.rruleFreq === "FREQ=DAILY") {
-    for (let i = 0; i < 90; i++) {
+    for (let i = 0; ; i++) {
       const s = shiftDays(startDate, i);
-      result.push({ start: s, end: new Date(s.getTime() + duration) });
+      if (s > until) break;
+      add(s);
     }
   } else if (modal.rruleFreq === "FREQ=WEEKLY") {
     const targetDays = new Set(modal.rruleWeekdays.map((d) => RRULE_TO_JS_DAY[d]));
     const weekSunday = shiftDays(startDate, -startDate.getDay());
-    for (let w = 0; w < 52; w++) {
+    for (let w = 0; ; w++) {
+      const weekBase = shiftDays(weekSunday, w * 7);
+      if (weekBase > until) break;
       for (let d = 0; d < 7; d++) {
         if (!targetDays.has(d)) continue;
-        const s = shiftDays(weekSunday, w * 7 + d);
-        if (s < startDate) continue;
-        result.push({ start: s, end: new Date(s.getTime() + duration) });
+        add(shiftDays(weekSunday, w * 7 + d));
       }
     }
   } else if (modal.rruleFreq === "FREQ=MONTHLY") {
-    for (let i = 0; i < 24; i++) {
+    for (let i = 0; ; i++) {
       let base: Date;
       if (modal.rruleMonthMode === "monthday") {
         base = new Date(startDate.getFullYear(), startDate.getMonth() + i, startDate.getDate());
@@ -1758,14 +1767,15 @@ function expandRecurrences(
         base = nthWeekdayInMonth(startDate.getFullYear(), startDate.getMonth() + i, modal.rruleMonthWeekPos, wd);
       }
       base.setHours(startDate.getHours(), startDate.getMinutes(), 0, 0);
-      if (base < startDate) continue;
-      result.push({ start: base, end: new Date(base.getTime() + duration) });
+      if (base > until) break;
+      add(base);
     }
   } else if (modal.rruleFreq === "FREQ=YEARLY") {
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; ; i++) {
       const s = new Date(startDate.getFullYear() + i, startDate.getMonth(), startDate.getDate(),
         startDate.getHours(), startDate.getMinutes());
-      result.push({ start: s, end: new Date(s.getTime() + duration) });
+      if (s > until) break;
+      add(s);
     }
   }
 

@@ -9,6 +9,7 @@ export interface ModalState {
   endDate: Date;           // allDay: exclusive iCal end (last_day + 1); timed: actual end
   allDay: boolean;
   rruleFreq: RecurrenceFreq;
+  rruleUntil: Date;        // series end date (inclusive); ignored when rruleFreq is ""
   rruleWeekdays: string[]; // for WEEKLY: ["MO","TU",...] — at least one element
   rruleMonthMode: "monthday" | "weekday"; // for MONTHLY
   rruleMonthWeekPos: number;  // 1..4 or -1 (last)
@@ -34,6 +35,8 @@ export function defaultModalState(members: FamilyMember[], date?: Date): ModalSt
   const weekDay = JS_DAY_TO_RRULE[start.getDay()];
   const weekPos = Math.min(4, Math.ceil(start.getDate() / 7));
 
+  const until = new Date(start.getFullYear() + 1, start.getMonth(), start.getDate());
+
   return {
     tab: "datum",
     summary: "",
@@ -41,6 +44,7 @@ export function defaultModalState(members: FamilyMember[], date?: Date): ModalSt
     endDate: end,
     allDay: false,
     rruleFreq: "",
+    rruleUntil: until,
     rruleWeekdays: [weekDay],
     rruleMonthMode: "monthday",
     rruleMonthWeekPos: weekPos,
@@ -54,13 +58,16 @@ export function defaultModalState(members: FamilyMember[], date?: Date): ModalSt
 /** Builds the RRULE string to send to HA from the current modal state. */
 export function buildRruleString(s: ModalState): string {
   if (!s.rruleFreq) return "";
+  const until = s.rruleUntil
+    ? `;UNTIL=${s.rruleUntil.getFullYear()}${pad(s.rruleUntil.getMonth() + 1)}${pad(s.rruleUntil.getDate())}`
+    : "";
+  let base: string = s.rruleFreq;
   if (s.rruleFreq === "FREQ=WEEKLY" && s.rruleWeekdays.length > 0) {
-    return `${s.rruleFreq};BYDAY=${s.rruleWeekdays.join(",")}`;
+    base = `${s.rruleFreq};BYDAY=${s.rruleWeekdays.join(",")}`;
+  } else if (s.rruleFreq === "FREQ=MONTHLY" && s.rruleMonthMode === "weekday" && s.rruleMonthWeekDay) {
+    base = `${s.rruleFreq};BYDAY=${s.rruleMonthWeekPos}${s.rruleMonthWeekDay}`;
   }
-  if (s.rruleFreq === "FREQ=MONTHLY" && s.rruleMonthMode === "weekday" && s.rruleMonthWeekDay) {
-    return `${s.rruleFreq};BYDAY=${s.rruleMonthWeekPos}${s.rruleMonthWeekDay}`;
-  }
-  return s.rruleFreq;
+  return base + until;
 }
 
 function pad(n: number): string {
@@ -210,6 +217,10 @@ export function renderEventModal(state: ModalState, members: FamilyMember[]): st
           <span class="field__label">Wiederholen</span>
           <select class="field__input field__select" id="modal-rrule" data-action="recur-change">${freqHtml}</select>
         </div>
+        ${state.rruleFreq ? `<div class="field field--datetime">
+          <span class="field__label">Serie endet am</span>
+          <input class="field__input" type="date" id="modal-rrule-until" value="${fmtDateLocal(state.rruleUntil)}" />
+        </div>` : ""}
       </div>
       ${weekdayPickerHtml}
       ${monthlyHtml}`;
