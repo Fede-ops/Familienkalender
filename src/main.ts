@@ -20,8 +20,8 @@ if ("serviceWorker" in navigator) {
 }
 import { addDays, renderWeekView, startOfWeek } from "./views/week.ts";
 import { renderMonthView } from "./views/month.ts";
-import { defaultModalState, renderEventModal } from "./views/event-modal.ts";
-import type { ModalState } from "./views/event-modal.ts";
+import { buildRruleString, defaultModalState, renderEventModal } from "./views/event-modal.ts";
+import type { ModalState, RecurrenceFreq } from "./views/event-modal.ts";
 import {
   categorizeShoppingItem,
   loadShoppingItems,
@@ -549,6 +549,9 @@ function syncModalForm(): void {
   const locationEl = get<HTMLInputElement>("modal-location");
   const notesEl = get<HTMLTextAreaElement>("modal-notes");
   const rruleEl = get<HTMLSelectElement>("modal-rrule");
+  const monthModeEl = get<HTMLSelectElement>("modal-month-mode");
+  const monthPosEl = get<HTMLSelectElement>("modal-month-pos");
+  const monthWdEl = get<HTMLSelectElement>("modal-month-weekday");
   if (summaryEl) state.modal.summary = summaryEl.value;
   if (startEl?.value) {
     state.modal.startDate = state.modal.allDay
@@ -556,13 +559,20 @@ function syncModalForm(): void {
       : parseLocalDateTime(startEl.value);
   }
   if (endEl?.value) {
-    state.modal.endDate = state.modal.allDay
-      ? parseLocalDate(endEl.value)
-      : parseLocalDateTime(endEl.value);
+    if (state.modal.allDay) {
+      // User sees inclusive end; store exclusive iCal end (+1 day)
+      const d = parseLocalDate(endEl.value);
+      state.modal.endDate = new Date(d.getTime() + 86_400_000);
+    } else {
+      state.modal.endDate = parseLocalDateTime(endEl.value);
+    }
   }
   if (locationEl) state.modal.location = locationEl.value;
   if (notesEl) state.modal.notes = notesEl.value;
-  if (rruleEl) state.modal.rrule = rruleEl.value as import("./views/event-modal.ts").RecurrenceFreq;
+  if (rruleEl) state.modal.rruleFreq = rruleEl.value as RecurrenceFreq;
+  if (monthModeEl) state.modal.rruleMonthMode = monthModeEl.value as "monthday" | "weekday";
+  if (monthPosEl) state.modal.rruleMonthWeekPos = Number(monthPosEl.value);
+  if (monthWdEl) state.modal.rruleMonthWeekDay = monthWdEl.value;
 }
 
 // ── Read list input ────────────────────────────────────────────────────────
@@ -902,6 +912,17 @@ function bindEvents(): void {
         if (!state.modal) return;
         state.modal.memberId = el.dataset.memberId ?? state.modal.memberId;
         render();
+      } else if (action === "toggle-weekday") {
+        if (!state.modal) return;
+        const day = el.dataset.day;
+        if (!day) return;
+        const days = state.modal.rruleWeekdays;
+        if (days.includes(day)) {
+          if (days.length > 1) state.modal.rruleWeekdays = days.filter((d) => d !== day);
+        } else {
+          state.modal.rruleWeekdays = [...days, day];
+        }
+        render();
       } else if (action === "event-detail") {
         const uid = el.dataset.uid;
         const ev = state.events.find((x) => x.uid === uid);
@@ -963,6 +984,14 @@ function bindEvents(): void {
       } else if (action === "search") {
         showSearchSheet();
       }
+    });
+  });
+
+  // Recurrence selects fire "change", not "click"
+  app.querySelectorAll<HTMLSelectElement>("select[data-action='recur-change']").forEach((sel) => {
+    sel.addEventListener("change", () => {
+      syncModalForm();
+      render();
     });
   });
 }
@@ -1581,13 +1610,25 @@ function showEventDetail(ev: CalendarEvent): void {
 
 function openEditModal(ev: CalendarEvent): void {
   const memberId = ev.memberId ?? state.members[0]?.id ?? "";
+  const startDate = new Date(ev.start);
+  // ev.end is inclusive (normalizeEvent subtracts 1 day); modal stores allDay end as exclusive
+  const endDate = ev.allDay
+    ? new Date(ev.end.getTime() + 86_400_000)
+    : new Date(ev.end);
+  const JS_DAY_TO_RRULE = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+  const weekDay = JS_DAY_TO_RRULE[startDate.getDay()];
+  const weekPos = Math.min(4, Math.ceil(startDate.getDate() / 7));
   state.modal = {
     tab: "datum",
     summary: ev.summary,
-    startDate: new Date(ev.start),
-    endDate: new Date(ev.end),
+    startDate,
+    endDate,
     allDay: ev.allDay,
-    rrule: "",
+    rruleFreq: "",
+    rruleWeekdays: [weekDay],
+    rruleMonthMode: "monthday",
+    rruleMonthWeekPos: weekPos,
+    rruleMonthWeekDay: weekDay,
     memberId,
     originalMemberId: memberId,
     location: ev.location ?? "",
@@ -1601,7 +1642,8 @@ function openEditModal(ev: CalendarEvent): void {
 
 async function saveEvent(): Promise<void> {
   if (!state.modal) return;
-  const { summary, startDate, endDate, allDay, memberId, location, notes, rrule } = state.modal;
+  const { summary, startDate, endDate, allDay, memberId, location, notes } = state.modal;
+  const rruleStr = buildRruleString(state.modal);
 
   if (!summary.trim()) {
     const input = document.getElementById("modal-summary") as HTMLInputElement | null;
@@ -1624,14 +1666,14 @@ async function saveEvent(): Promise<void> {
           memberId, editUid, summary.trim(), startDate, endDate, allDay, {
             location: location || undefined,
             description: notes || undefined,
-            rrule: rrule || undefined,
+            rrule: rruleStr || undefined,
           });
         if (!updated) {
           // Backend doesn't support update_event — recreate in new position.
           await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, {
             location: location || undefined,
             description: notes || undefined,
-            rrule: rrule || undefined,
+            rrule: rruleStr || undefined,
           });
           const originalEvent = state.events.find((e) => e.uid === editUid);
           try {
@@ -1659,13 +1701,19 @@ async function saveEvent(): Promise<void> {
         await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, {
           location: location || undefined,
           description: notes || undefined,
-          rrule: rrule || undefined,
+          rrule: rruleStr || undefined,
         });
       }
     } catch (err) {
       if (editUid) {
         const msg = err instanceof Error ? err.message : String(err);
         showTransientBanner(`Speichern fehlgeschlagen: ${msg}`, true);
+        return;
+      }
+      // Don't enqueue recurring events when HA rejected with 400 — the backend
+      // likely doesn't support RRULE and retrying will always fail.
+      if (rruleStr && err instanceof Error && err.message.includes("400")) {
+        showTransientBanner(`Wiederholung nicht unterstützt: ${err.message}`, true);
         return;
       }
       enqueue({
@@ -1676,7 +1724,7 @@ async function saveEvent(): Promise<void> {
         allDay,
         location: location || undefined,
         description: notes || undefined,
-        rrule: rrule || undefined,
+        rrule: rruleStr || undefined,
       });
     }
   } else if (config && !editUid) {
@@ -1688,7 +1736,7 @@ async function saveEvent(): Promise<void> {
       allDay,
       location: location || undefined,
       description: notes || undefined,
-      rrule: rrule || undefined,
+      rrule: rruleStr || undefined,
     });
   }
 

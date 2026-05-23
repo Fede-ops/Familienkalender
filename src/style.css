@@ -1046,6 +1046,31 @@ body {
   cursor: pointer;
 }
 
+.weekday-picker {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.weekday-chip {
+  background: rgba(120, 120, 128, 0.2);
+  border: none;
+  border-radius: 20px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px;
+  transition: background 0.15s ease, color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.weekday-chip--active {
+  background: var(--accent-blue);
+  color: #fff;
+}
+
 .field--column {
   flex-direction: column;
   align-items: stretch;

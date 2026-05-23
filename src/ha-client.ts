@@ -223,13 +223,10 @@ function normalizeEvent(raw: RawHAEvent, calendarId: string): CalendarEvent {
   const startDate = parseDateStr(startStr);
   const startMs = startDate.getTime();
   let endDate = parseDateStr(endStr);
-  // HA's local calendar uses inclusive end dates, but events created via the
-  // iCal/email route arrive with exclusive ends (end = last_day + 1). When
-  // an all-day event's end is exactly 1 day after start, that's the exclusive
-  // single-day pattern — normalise it to inclusive so the filter (>=) works
-  // uniformly. Multi-day inclusive events have a gap > 1 day and are unchanged.
-  if (allDay && endDate.getTime() - startDate.getTime() === 86_400_000) {
-    endDate = startDate;
+  // All-day events follow the iCal exclusive DTEND convention (end = last inclusive day + 1).
+  // Subtract 1 day so our filters (>=) and bar layout work with the inclusive last day.
+  if (allDay && endDate > startDate) {
+    endDate = new Date(endDate.getTime() - 86_400_000);
   }
   return {
     // Use epoch ms (not the raw string) so the fallback UID is stable

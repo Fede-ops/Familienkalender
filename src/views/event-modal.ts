@@ -6,16 +6,22 @@ export interface ModalState {
   tab: "datum" | "detail" | "erinnerung";
   summary: string;
   startDate: Date;
-  endDate: Date;
+  endDate: Date;           // allDay: exclusive iCal end (last_day + 1); timed: actual end
   allDay: boolean;
-  rrule: RecurrenceFreq;
+  rruleFreq: RecurrenceFreq;
+  rruleWeekdays: string[]; // for WEEKLY: ["MO","TU",...] — at least one element
+  rruleMonthMode: "monthday" | "weekday"; // for MONTHLY
+  rruleMonthWeekPos: number;  // 1..4 or -1 (last)
+  rruleMonthWeekDay: string;  // "MO"|"TU"|"WE"|"TH"|"FR"|"SA"|"SU"
   memberId: string;
-  // Original member when editing — used to detect a calendar move (delete-from-old + create-in-new).
   originalMemberId?: string;
   location: string;
   notes: string;
   editUid?: string;
 }
+
+// Map JS getDay() (0=Sun) → RRULE day code
+const JS_DAY_TO_RRULE = ["SU","MO","TU","WE","TH","FR","SA"];
 
 export function defaultModalState(members: FamilyMember[], date?: Date): ModalState {
   const now = new Date();
@@ -24,17 +30,37 @@ export function defaultModalState(members: FamilyMember[], date?: Date): ModalSt
   start.setHours(now.getHours() + 1);
   const end = new Date(start);
   end.setHours(end.getHours() + 1);
+
+  const weekDay = JS_DAY_TO_RRULE[start.getDay()];
+  const weekPos = Math.min(4, Math.ceil(start.getDate() / 7));
+
   return {
     tab: "datum",
     summary: "",
     startDate: start,
     endDate: end,
     allDay: false,
-    rrule: "",
+    rruleFreq: "",
+    rruleWeekdays: [weekDay],
+    rruleMonthMode: "monthday",
+    rruleMonthWeekPos: weekPos,
+    rruleMonthWeekDay: weekDay,
     memberId: members[0]?.id ?? "",
     location: "",
     notes: "",
   };
+}
+
+/** Builds the RRULE string to send to HA from the current modal state. */
+export function buildRruleString(s: ModalState): string {
+  if (!s.rruleFreq) return "";
+  if (s.rruleFreq === "FREQ=WEEKLY" && s.rruleWeekdays.length > 0) {
+    return `${s.rruleFreq};BYDAY=${s.rruleWeekdays.join(",")}`;
+  }
+  if (s.rruleFreq === "FREQ=MONTHLY" && s.rruleMonthMode === "weekday" && s.rruleMonthWeekDay) {
+    return `${s.rruleFreq};BYDAY=${s.rruleMonthWeekPos}${s.rruleMonthWeekDay}`;
+  }
+  return s.rruleFreq;
 }
 
 function pad(n: number): string {
@@ -57,6 +83,19 @@ function shade(hex: string, pct: number): string {
   return `rgb(${clamp((n >> 16) & 0xff)},${clamp((n >> 8) & 0xff)},${clamp(n & 0xff)})`;
 }
 
+const DE_WEEKDAY: Record<string, string> = {
+  MO: "Montag", TU: "Dienstag", WE: "Mittwoch",
+  TH: "Donnerstag", FR: "Freitag", SA: "Samstag", SU: "Sonntag",
+};
+const DE_WEEKDAY_SHORT: Record<string, string> = {
+  MO: "Mo", TU: "Di", WE: "Mi", TH: "Do", FR: "Fr", SA: "Sa", SU: "So",
+};
+const RRULE_DAYS_ORDER = ["MO","TU","WE","TH","FR","SA","SU"];
+
+function posLabel(pos: number): string {
+  return pos === -1 ? "letzten" : ["ersten","zweiten","dritten","vierten"][pos - 1] ?? `${pos}.`;
+}
+
 export function renderEventModal(state: ModalState, members: FamilyMember[]): string {
   const tabsHtml = (["datum", "detail", "erinnerung"] as const)
     .map(
@@ -71,16 +110,73 @@ export function renderEventModal(state: ModalState, members: FamilyMember[]): st
 
   if (state.tab === "datum") {
     const isOn = state.allDay;
-    const rruleOptions: { value: RecurrenceFreq; label: string }[] = [
+
+    // allDay end is stored as exclusive iCal (last_day + 1) — show the inclusive last day.
+    const endDisplayDate = isOn ? new Date(state.endDate.getTime() - 86_400_000) : state.endDate;
+
+    // ── Recurrence frequency selector ────────────────────────────────────
+    const freqOptions: { value: RecurrenceFreq; label: string }[] = [
       { value: "", label: "Nie" },
       { value: "FREQ=DAILY", label: "Täglich" },
       { value: "FREQ=WEEKLY", label: "Wöchentlich" },
       { value: "FREQ=MONTHLY", label: "Monatlich" },
       { value: "FREQ=YEARLY", label: "Jährlich" },
     ];
-    const rruleHtml = rruleOptions
-      .map((o) => `<option value="${o.value}"${o.value === state.rrule ? " selected" : ""}>${o.label}</option>`)
+    const freqHtml = freqOptions
+      .map((o) => `<option value="${o.value}"${o.value === state.rruleFreq ? " selected" : ""}>${o.label}</option>`)
       .join("");
+
+    // ── Weekly: weekday chip picker ───────────────────────────────────────
+    const weekdayPickerHtml = state.rruleFreq === "FREQ=WEEKLY"
+      ? `<div class="field-group">
+           <div class="field field--column" style="gap:10px;padding:14px 16px;">
+             <span class="field__label" style="font-size:13px;color:var(--text-secondary)">Wochentage</span>
+             <div class="weekday-picker">
+               ${RRULE_DAYS_ORDER.map((d) =>
+                 `<button class="weekday-chip${state.rruleWeekdays.includes(d) ? " weekday-chip--active" : ""}"
+                    data-action="toggle-weekday" data-day="${d}">${DE_WEEKDAY_SHORT[d]}</button>`
+               ).join("")}
+             </div>
+           </div>
+         </div>`
+      : "";
+
+    // ── Monthly: mode + position + weekday ───────────────────────────────
+    let monthlyHtml = "";
+    if (state.rruleFreq === "FREQ=MONTHLY") {
+      const dayOfMonth = state.startDate.getDate();
+      const dayName = DE_WEEKDAY[state.rruleMonthWeekDay] ?? state.rruleMonthWeekDay;
+      const modeOpts = [
+        { value: "monthday", label: `Am ${dayOfMonth}. des Monats` },
+        { value: "weekday",  label: `Am ${posLabel(state.rruleMonthWeekPos)} ${dayName}` },
+      ].map((o) => `<option value="${o.value}"${o.value === state.rruleMonthMode ? " selected" : ""}>${o.label}</option>`).join("");
+
+      const weekdayOpts = RRULE_DAYS_ORDER
+        .map((d) => `<option value="${d}"${d === state.rruleMonthWeekDay ? " selected" : ""}>${DE_WEEKDAY[d]}</option>`)
+        .join("");
+
+      const posOpts = [1,2,3,4,-1]
+        .map((p) => `<option value="${p}"${p === state.rruleMonthWeekPos ? " selected" : ""}>${posLabel(p).charAt(0).toUpperCase() + posLabel(p).slice(1)}</option>`)
+        .join("");
+
+      monthlyHtml = `
+        <div class="field-group">
+          <div class="field">
+            <span class="field__label">Modus</span>
+            <select class="field__input field__select" id="modal-month-mode" data-action="recur-change">${modeOpts}</select>
+          </div>
+          ${state.rruleMonthMode === "weekday" ? `
+          <div class="field">
+            <span class="field__label">Position</span>
+            <select class="field__input field__select" id="modal-month-pos" data-action="recur-change">${posOpts}</select>
+          </div>
+          <div class="field">
+            <span class="field__label">Wochentag</span>
+            <select class="field__input field__select" id="modal-month-weekday" data-action="recur-change">${weekdayOpts}</select>
+          </div>` : ""}
+        </div>`;
+    }
+
     tabBody = `
       <div class="field-group">
         <div class="field${isOn ? " field--toggle" : " field--toggle field--toggle-off"}">
@@ -97,7 +193,7 @@ export function renderEventModal(state: ModalState, members: FamilyMember[]): st
                </div>
                <div class="field field--datetime">
                 <span class="field__label">Enddatum</span>
-                <input class="field__input" type="date" id="modal-end" value="${fmtDateLocal(state.endDate)}" />
+                <input class="field__input" type="date" id="modal-end" value="${fmtDateLocal(endDisplayDate)}" />
                </div>`
             : `<div class="field field--datetime">
                 <span class="field__label">Beginnt</span>
@@ -112,9 +208,11 @@ export function renderEventModal(state: ModalState, members: FamilyMember[]): st
       <div class="field-group">
         <div class="field">
           <span class="field__label">Wiederholen</span>
-          <select class="field__input field__select" id="modal-rrule">${rruleHtml}</select>
+          <select class="field__input field__select" id="modal-rrule" data-action="recur-change">${freqHtml}</select>
         </div>
-      </div>`;
+      </div>
+      ${weekdayPickerHtml}
+      ${monthlyHtml}`;
   } else if (state.tab === "detail") {
     const membersHtml = members
       .map((m) => {
