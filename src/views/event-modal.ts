@@ -1,11 +1,14 @@
 import type { FamilyMember } from "../types.ts";
 
+export type RecurrenceFreq = "" | "FREQ=DAILY" | "FREQ=WEEKLY" | "FREQ=MONTHLY" | "FREQ=YEARLY";
+
 export interface ModalState {
   tab: "datum" | "detail" | "erinnerung";
   summary: string;
   startDate: Date;
   endDate: Date;
   allDay: boolean;
+  rrule: RecurrenceFreq;
   memberId: string;
   // Original member when editing — used to detect a calendar move (delete-from-old + create-in-new).
   originalMemberId?: string;
@@ -27,6 +30,7 @@ export function defaultModalState(members: FamilyMember[], date?: Date): ModalSt
     startDate: start,
     endDate: end,
     allDay: false,
+    rrule: "",
     memberId: members[0]?.id ?? "",
     location: "",
     notes: "",
@@ -67,6 +71,16 @@ export function renderEventModal(state: ModalState, members: FamilyMember[]): st
 
   if (state.tab === "datum") {
     const isOn = state.allDay;
+    const rruleOptions: { value: RecurrenceFreq; label: string }[] = [
+      { value: "", label: "Nie" },
+      { value: "FREQ=DAILY", label: "Täglich" },
+      { value: "FREQ=WEEKLY", label: "Wöchentlich" },
+      { value: "FREQ=MONTHLY", label: "Monatlich" },
+      { value: "FREQ=YEARLY", label: "Jährlich" },
+    ];
+    const rruleHtml = rruleOptions
+      .map((o) => `<option value="${o.value}"${o.value === state.rrule ? " selected" : ""}>${o.label}</option>`)
+      .join("");
     tabBody = `
       <div class="field-group">
         <div class="field${isOn ? " field--toggle" : " field--toggle field--toggle-off"}">
@@ -94,6 +108,12 @@ export function renderEventModal(state: ModalState, members: FamilyMember[]): st
                 <input class="field__input" type="datetime-local" id="modal-end" value="${fmtDateTimeLocal(state.endDate)}" />
                </div>`
         }
+      </div>
+      <div class="field-group">
+        <div class="field">
+          <span class="field__label">Wiederholen</span>
+          <select class="field__input field__select" id="modal-rrule">${rruleHtml}</select>
+        </div>
       </div>`;
   } else if (state.tab === "detail") {
     const membersHtml = members

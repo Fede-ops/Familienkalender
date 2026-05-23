@@ -80,7 +80,7 @@ export class HAClient {
     start: Date,
     end: Date,
     allDay: boolean,
-    opts?: { location?: string; description?: string },
+    opts?: { location?: string; description?: string; rrule?: string },
   ): Promise<void> {
     const pad = (n: number) => String(n).padStart(2, "0");
     const fmtDate = (d: Date) =>
@@ -98,6 +98,7 @@ export class HAClient {
     }
     if (opts?.location) body.location = opts.location;
     if (opts?.description) body.description = opts.description;
+    if (opts?.rrule) body.rrule = opts.rrule;
 
     const res = await fetch(`${this.config.baseUrl}/api/services/calendar/create_event`, {
       method: "POST",
@@ -117,7 +118,7 @@ export class HAClient {
     start: Date,
     end: Date,
     allDay: boolean,
-    opts?: { location?: string; description?: string },
+    opts?: { location?: string; description?: string; rrule?: string },
   ): Promise<boolean> {
     const pad = (n: number) => String(n).padStart(2, "0");
     const fmtDate = (d: Date) =>
@@ -135,6 +136,7 @@ export class HAClient {
     }
     if (opts?.location) body.location = opts.location;
     if (opts?.description) body.description = opts.description;
+    if (opts?.rrule) body.rrule = opts.rrule;
 
     const res = await fetch(`${this.config.baseUrl}/api/services/calendar/update_event`, {
       method: "POST",
