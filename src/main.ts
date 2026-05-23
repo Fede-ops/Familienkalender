@@ -202,6 +202,7 @@ interface AppState {
   viewMode: "week" | "month";
   weekStart: Date;
   monthStart: Date;
+  selectedDate?: Date;
   events: CalendarEvent[];
   members: FamilyMember[];
   modal: ModalState | null;
@@ -213,6 +214,22 @@ interface AppState {
 
 function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function dateForNewEvent(): Date {
+  if (state.selectedDate) {
+    if (state.viewMode === "month") return state.selectedDate;
+    const ws = state.weekStart.getTime();
+    if (state.selectedDate.getTime() >= ws && state.selectedDate.getTime() < ws + 7 * 86_400_000)
+      return state.selectedDate;
+  }
+  const today = new Date();
+  if (state.viewMode === "week") {
+    const ws = state.weekStart.getTime();
+    if (today.getTime() >= ws && today.getTime() < ws + 7 * 86_400_000) return today;
+    return new Date(state.weekStart);
+  }
+  return today;
 }
 
 function addMonths(date: Date, n: number): Date {
@@ -368,7 +385,7 @@ function updateTabBarActive(): void {
 bottomBar.addEventListener("click", (e) => {
   if ((e.target as HTMLElement).closest<HTMLElement>("[data-action='add-event']")) {
     if (state.activeTab === "kalender") {
-      state.modal = defaultModalState(state.members);
+      state.modal = defaultModalState(state.members, dateForNewEvent());
       render();
     } else if (state.activeTab === "todo") {
       const input = document.getElementById("list-input") as HTMLInputElement | null;
@@ -497,6 +514,7 @@ function render(): void {
   }
   bindEvents();
   setupDragDrop();
+  setupLongPress();
   updateTabBarActive();
   if (state.modal) document.getElementById("modal-summary")?.focus();
   // Do NOT auto-focus list-input on render — it opens the iOS keyboard
@@ -554,6 +572,40 @@ function readListInput(): string {
 function clearListInput(): void {
   const el = document.getElementById("list-input") as HTMLInputElement | null;
   if (el) el.value = "";
+}
+
+// ── Long-press on month cells to create event ──────────────────────────────
+
+function setupLongPress(): void {
+  if (state.viewMode !== "month") return;
+  app.querySelectorAll<HTMLElement>(".month-cell").forEach((cell) => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let startX = 0, startY = 0;
+
+    const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+
+    cell.addEventListener("pointerdown", (e) => {
+      if (state.modal) return;
+      startX = e.clientX; startY = e.clientY;
+      timer = setTimeout(() => {
+        timer = null;
+        const dateStr = cell.dataset.date;
+        if (!dateStr) return;
+        navigator.vibrate?.(40);
+        const tapped = new Date(dateStr);
+        state.selectedDate = tapped;
+        state.modal = defaultModalState(state.members, tapped);
+        render();
+      }, 500);
+    }, { passive: true });
+
+    cell.addEventListener("pointermove", (e) => {
+      if (Math.abs(e.clientX - startX) > 8 || Math.abs(e.clientY - startY) > 8) cancel();
+    }, { passive: true });
+
+    cell.addEventListener("pointerup", cancel, { passive: true });
+    cell.addEventListener("pointercancel", cancel, { passive: true });
+  });
 }
 
 // ── Drag-and-drop ──────────────────────────────────────────────────────────
@@ -787,6 +839,7 @@ function bindEvents(): void {
         const dateStr = el.dataset.date;
         if (dateStr) {
           const tapped = new Date(dateStr);
+          state.selectedDate = tapped;
           state.viewMode = "week";
           state.weekStart = startOfWeek(tapped);
           render();
@@ -795,7 +848,7 @@ function bindEvents(): void {
 
       // ── Event modal ──────────────────────────────────────────────────────
       } else if (action === "add-event") {
-        state.modal = defaultModalState(state.members);
+        state.modal = defaultModalState(state.members, dateForNewEvent());
         render();
       } else if (action === "close-modal") {
         state.modal = null;
