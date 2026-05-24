@@ -986,7 +986,12 @@ function bindEvents(): void {
         e.stopPropagation();
         syncModalForm();
         btn.disabled = true;
-        btn.textContent = "Wird gespeichert…";
+        if (state.modal) {
+          const count = occurrencePreviewCount(state.modal);
+          btn.textContent = count && count > 1 ? `0 / ${count} angelegt…` : "Wird gespeichert…";
+        } else {
+          btn.textContent = "Wird gespeichert…";
+        }
         saveEvent().catch((err) => {
           showTransientBanner(`Fehler beim Speichern: ${err instanceof Error ? err.message : String(err)}`, true);
           // Re-enable only if modal is still open (render() wasn't called on success)
@@ -1935,6 +1940,33 @@ function expandRecurrences(
 
 // ── Save calendar event ────────────────────────────────────────────────────
 
+async function runBatch<T>(
+  tasks: (() => Promise<T>)[],
+  concurrency: number,
+  onProgress?: (done: number, total: number) => void,
+): Promise<{ fulfilled: number; rejected: number }> {
+  let fulfilled = 0;
+  let rejected = 0;
+  let idx = 0;
+  const total = tasks.length;
+
+  async function worker() {
+    while (idx < total) {
+      const i = idx++;
+      try {
+        await tasks[i]();
+        fulfilled++;
+      } catch {
+        rejected++;
+      }
+      onProgress?.(fulfilled + rejected, total);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, total) }, worker));
+  return { fulfilled, rejected };
+}
+
 async function saveEvent(): Promise<void> {
   if (!state.modal) return;
   const { summary, startDate, endDate, allDay, memberId, location, seriesId, seriesRrule } = state.modal;
@@ -2007,9 +2039,9 @@ async function saveEvent(): Promise<void> {
         });
       }
     } catch (err) {
-      // When HA rejects the RRULE with 400, expand and create each occurrence individually.
+      // When HA rejects the RRULE, expand and create each occurrence individually.
       // Check this BEFORE the editUid bail-out so editing + adding recurrence also works.
-      if (rruleStr && err instanceof Error && err.message.includes("400")) {
+      if (rruleStr && err instanceof Error && /\b[45]\d\d\b/.test(err.message)) {
         try {
           const modal = state.modal!;
           // Preserve existing series ID when re-creating an edited series, otherwise mint a new one.
@@ -2018,16 +2050,16 @@ async function saveEvent(): Promise<void> {
           const rruleTag = `[rrule:${rruleStr}]`;
           const descWithSid = notes ? `${notes}\n${sidTag}\n${rruleTag}` : `${sidTag}\n${rruleTag}`;
           const occurrences = expandRecurrences(startDate, endDate, modal);
-          const creates = await Promise.allSettled(
-            occurrences.map(({ start, end }) =>
-              client.createEvent(memberId, summary.trim(), start, end, allDay, {
-                location: location || undefined,
-                description: descWithSid,
-              })
-            )
+          const saveBtn = document.querySelector('[data-action="save-event"]') as HTMLButtonElement | null;
+          const tasks = occurrences.map(({ start, end }) => () =>
+            client.createEvent(memberId, summary.trim(), start, end, allDay, {
+              location: location || undefined,
+              description: descWithSid,
+            })
           );
-          const ok = creates.filter((r) => r.status === "fulfilled").length;
-          const fail = creates.filter((r) => r.status === "rejected").length;
+          const { fulfilled: ok, rejected: fail } = await runBatch(tasks, 5, (done, total) => {
+            if (saveBtn) saveBtn.textContent = `${done} / ${total} angelegt…`;
+          });
           showTransientBanner(`${ok} Termine angelegt${fail > 0 ? ` · ${fail} fehlgeschlagen` : ""} ✓`);
           // Inclusive duration per occurrence: allDay end is exclusive, subtract 1 day for local state.
           const occDuration = (endDate.getTime() - startDate.getTime()) - (allDay ? 86_400_000 : 0);
