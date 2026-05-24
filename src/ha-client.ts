@@ -108,7 +108,16 @@ export class HAClient {
       },
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`HA create_event failed: ${res.status}`);
+    if (!res.ok) {
+      let detail = "";
+      try {
+        const raw = (await res.text()).trim();
+        const parsed = JSON.parse(raw) as { message?: string };
+        detail = typeof parsed.message === "string" ? parsed.message : raw;
+      } catch { /* ignore */ }
+      console.error(`[create_event] FAILED ${res.status}: ${detail || "(empty)"}\n  request: ${JSON.stringify(body)}`);
+      throw new Error(`HA create_event failed: ${res.status}${detail ? `: ${detail}` : ""}`);
+    }
   }
 
   async updateEvent(

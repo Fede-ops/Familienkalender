@@ -1649,7 +1649,6 @@ async function deleteEventSeries(sid: string): Promise<void> {
   const fail = results.filter((r) => r.status === "rejected").length;
   if (fail > 0) {
     const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
-    // Log every failure to the browser console for debugging.
     rejected.forEach((r, i) => console.error(`[deleteEventSeries] failure ${i + 1}:`, r.reason));
     const firstErr = rejected[0]?.reason;
     const errDetail = firstErr instanceof Error ? firstErr.message : String(firstErr);
@@ -1708,7 +1707,7 @@ function showEventDetail(ev: CalendarEvent): void {
         <p class="detail-meta">${when}</p>
         ${member ? `<div class="detail-member"><span class="detail-avatar" style="background:${grad};">${member.initial}</span><span class="detail-member-name">${member.name}</span></div>` : ""}
         ${ev.location ? `<p class="detail-location">📍 ${ev.location}</p>` : ""}
-        ${stripSeriesId(ev.description) ? `<p class="detail-notes">${stripSeriesId(ev.description)}</p>` : ""}
+        ${stripMetaTags(ev.description) ? `<p class="detail-notes">${stripMetaTags(ev.description)}</p>` : ""}
       </div>
       <div class="detail-actions">
         <button class="detail-edit" data-action="edit-event-from-detail">Bearbeiten</button>
@@ -1867,10 +1866,6 @@ function stripMetaTags(description: string | undefined): string {
 }
 
 
-function stripSeriesId(description: string | undefined): string {
-  if (!description) return "";
-  return description.replace(/\n?\[sid:[a-z0-9]+\]/, "").trim();
-}
 
 function nthWeekdayInMonth(year: number, month: number, pos: number, weekday: number): Date {
   if (pos === -1) {
@@ -2057,7 +2052,7 @@ async function saveEvent(): Promise<void> {
               description: descWithSid,
             })
           );
-          const { fulfilled: ok, rejected: fail } = await runBatch(tasks, 5, (done, total) => {
+          const { fulfilled: ok, rejected: fail } = await runBatch(tasks, 20, (done, total) => {
             if (saveBtn) saveBtn.textContent = `${done} / ${total} angelegt…`;
           });
           showTransientBanner(`${ok} Termine angelegt${fail > 0 ? ` · ${fail} fehlgeschlagen` : ""} ✓`);
