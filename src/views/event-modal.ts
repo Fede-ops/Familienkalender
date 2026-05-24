@@ -61,11 +61,15 @@ export function defaultModalState(members: FamilyMember[], date?: Date): ModalSt
 /** Builds the RRULE string to send to HA from the current modal state. */
 export function buildRruleString(s: ModalState): string {
   if (!s.rruleFreq) return "";
-  // Use T235959Z suffix so HA (and dateutil.rrule) accepts the UNTIL value
-  // for both all-day and timed events without a validation error.
-  const until = s.rruleUntil
-    ? `;UNTIL=${s.rruleUntil.getFullYear()}${pad(s.rruleUntil.getMonth() + 1)}${pad(s.rruleUntil.getDate())}T235959Z`
-    : "";
+  // RFC 5545: UNTIL must be DATE for all-day events, DATETIME (UTC) for timed events.
+  // Mixing types causes HA's icalendar to reject the rrule.
+  let until = "";
+  if (s.rruleUntil) {
+    const y = s.rruleUntil.getFullYear();
+    const m = pad(s.rruleUntil.getMonth() + 1);
+    const d = pad(s.rruleUntil.getDate());
+    until = s.allDay ? `;UNTIL=${y}${m}${d}` : `;UNTIL=${y}${m}${d}T235959Z`;
+  }
   let base: string = s.rruleFreq;
   if (s.rruleFreq === "FREQ=WEEKLY" && s.rruleWeekdays.length > 0) {
     base = `${s.rruleFreq};BYDAY=${s.rruleWeekdays.join(",")}`;
