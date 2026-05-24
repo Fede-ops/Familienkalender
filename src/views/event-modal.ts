@@ -61,8 +61,10 @@ export function defaultModalState(members: FamilyMember[], date?: Date): ModalSt
 /** Builds the RRULE string to send to HA from the current modal state. */
 export function buildRruleString(s: ModalState): string {
   if (!s.rruleFreq) return "";
+  // Use T235959Z suffix so HA (and dateutil.rrule) accepts the UNTIL value
+  // for both all-day and timed events without a validation error.
   const until = s.rruleUntil
-    ? `;UNTIL=${s.rruleUntil.getFullYear()}${pad(s.rruleUntil.getMonth() + 1)}${pad(s.rruleUntil.getDate())}`
+    ? `;UNTIL=${s.rruleUntil.getFullYear()}${pad(s.rruleUntil.getMonth() + 1)}${pad(s.rruleUntil.getDate())}T235959Z`
     : "";
   let base: string = s.rruleFreq;
   if (s.rruleFreq === "FREQ=WEEKLY" && s.rruleWeekdays.length > 0) {
