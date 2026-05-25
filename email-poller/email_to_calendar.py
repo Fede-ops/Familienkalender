@@ -206,7 +206,7 @@ def create_ha_event(ev):
 def process_message(msg):
     """Verarbeitet eine einzelne Email und erstellt einen HA-Event."""
     subject   = decode_str(msg.get("Subject", "Termin"))
-    ics_data  = None
+    ics_parts = []   # alle ICS-Anhänge (z.B. Hin- UND Rückflug als separate Dateien)
     pdf_bytes = None
     body      = ""
 
@@ -217,7 +217,7 @@ def process_message(msg):
             if ctype == "text/calendar" or fname.lower().endswith(".ics"):
                 raw = part.get_payload(decode=True)
                 if raw:
-                    ics_data = raw.decode("utf-8", errors="replace")
+                    ics_parts.append(raw.decode("utf-8", errors="replace"))
             elif ctype == "application/pdf" or fname.lower().endswith(".pdf"):
                 if not pdf_bytes:
                     pdf_bytes = part.get_payload(decode=True)
@@ -246,7 +246,8 @@ def process_message(msg):
         return s[:16] if "T" in s else None  # None for all-day events
 
     # .ics zuerst (strukturiert, höchste Priorität)
-    if ics_data:
+    # Alle ICS-Anhänge verarbeiten — manche Buchungen haben je einen Anhang pro Segment.
+    for ics_data in ics_parts:
         for ev in parse_ics(ics_data):
             k = key_of(ev)
             if k in seen:
