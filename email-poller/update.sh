@@ -4,7 +4,7 @@ set -e
 
 SCRIPT="/config/scripts/email_to_calendar.py"
 TMP="/tmp/email_to_calendar_new.py"
-URL="https://raw.githubusercontent.com/fede-ops/nanoclaw/claude/calendar-app-prototype-6bqer/calendar-app/email-poller/email_to_calendar.py"
+URL="https://raw.githubusercontent.com/fede-ops/familienkalender/main/email-poller/email_to_calendar.py"
 
 if [ ! -f "$SCRIPT" ]; then
   echo "Fehler: $SCRIPT nicht gefunden." >&2
