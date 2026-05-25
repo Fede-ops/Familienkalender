@@ -235,34 +235,52 @@ def process_message(msg):
             body = raw.decode("utf-8", errors="replace")
 
     created = 0
+    seen = set()  # (summary_lower, YYYY-MM-DD) — dedup across ICS + PDF + body
 
-    # .ics Anhang hat Vorrang (enthält bereits strukturierte Daten)
+    def key_of(ev):
+        return (ev["summary"].strip().lower(), ev.get("start", "")[:10])
+
+    # .ics zuerst (strukturiert, höchste Priorität)
     if ics_data:
         for ev in parse_ics(ics_data):
+            k = key_of(ev)
+            if k in seen:
+                continue
+            seen.add(k)
             print(f"  → ICS: {ev['summary']}")
             if create_ha_event(ev):
                 created += 1
 
-    # PDF-Anhang direkt an Claude schicken
-    if not created and pdf_bytes:
-        events = parse_with_claude("", pdf_bytes=pdf_bytes)
-        if events:
-            for ev in events:
-                if "error" not in ev:
-                    print(f"  → PDF: {ev['summary']}")
-                    if create_ha_event(ev):
-                        created += 1
+    # PDF IMMER parsen wenn vorhanden — Buchungs-PDFs enthalten oft Hin- UND
+    # Rückflug, während die beigelegte .ics manchmal nur den Hinflug hat.
+    # Duplikate werden über `seen` ausgefiltert.
+    if pdf_bytes:
+        events = parse_with_claude("", pdf_bytes=pdf_bytes) or []
+        for ev in events:
+            if "error" in ev:
+                continue
+            k = key_of(ev)
+            if k in seen:
+                continue
+            seen.add(k)
+            print(f"  → PDF: {ev['summary']}")
+            if create_ha_event(ev):
+                created += 1
 
-    # Email-Text an Claude schicken
+    # Email-Text nur als Fallback, wenn weder ICS noch PDF Events lieferten
     if not created:
-        full   = f"Subject: {subject}\n\n{body}"
-        events = parse_with_claude(full)
-        if events:
-            for ev in events:
-                if "error" not in ev:
-                    print(f"  → Claude: {ev['summary']}")
-                    if create_ha_event(ev):
-                        created += 1
+        full = f"Subject: {subject}\n\n{body}"
+        events = parse_with_claude(full) or []
+        for ev in events:
+            if "error" in ev:
+                continue
+            k = key_of(ev)
+            if k in seen:
+                continue
+            seen.add(k)
+            print(f"  → Claude: {ev['summary']}")
+            if create_ha_event(ev):
+                created += 1
 
     if not created:
         print(f"  → Übersprungen (kein Event): {subject}")

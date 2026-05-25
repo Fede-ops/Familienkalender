@@ -48,7 +48,7 @@ export const TODO_CATEGORIES = [
       "infusion", "injektion", "katheter", "drainage",
       "schmerztherapie", "schmerzbehandlung",
       "chemotherapie", "strahlentherapie",
-      "intensivmedizin", "palliativmedizin",
+      "intensivmedizin", "palliativmedizin", "palliativ",
       "medikamentöse",
       // ── Stationsalltag & Dienste ──────────────────────────────────────
       "visite", "morgenvisite", "abendvisite", "chefarztvisite", "oberarztvisite",
@@ -582,7 +582,7 @@ export const TODO_CATEGORIES = [
     color: "#BF5AF2",
     keywords: [
       // Deutsch
-      "rechnung bezahlen", "rechnung überweisen",
+      "rechnung", "rechnung bezahlen", "rechnung überweisen",
       "steuer", "steuererklärung", "steuern",
       "versicherung", "versicherungsvertrag",
       "bank", "bankkonto", "konto", "sparkonto",
@@ -597,10 +597,15 @@ export const TODO_CATEGORIES = [
       "finanzplan", "finanzberatung",
       "kreditkarte", "lastschrift", "bankomatkarte", "bankomat",
       "auto versicherung", "haftpflicht", "haushaltsversicherung", "gebäudeversicherung",
+      // Österreichische Banken & Versorger
+      "raiffeisen", "sparkasse", "erste bank", "bawag", "volksbank", "hypo",
+      "hse", "tinetz", "tigas", "wienenergie", "evn", "ewe", "iwb", "vkw",
+      "a1", "magenta", "drei", "yesss",
+      "gutschein", "essensgutschein", "tankgutschein",
       // Österreichische Finanzbehörden
       "finanzamt", "arbeitnehmerveranlagung", "steuernummer", "steuerausgleich",
       "sozialversicherung", "gebietskrankenkasse", "svs", "bva",
-      "meldezettel", "anmeldung", "abmeldung",
+      "meldezettel",
       "wohnbeihilfe", "wohnkostenbeihilfe",
       "familienbeihilfe", "kinderbetreuungsgeld", "kindergeld",
       "förderantrag", "förderung",

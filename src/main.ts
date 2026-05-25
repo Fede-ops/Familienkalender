@@ -284,14 +284,17 @@ function savePendingDeletes(map: Map<string, number>): void {
     localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify([...map]));
   } catch { /* ignore */ }
   // Sync permanent deletions to HA so all devices honour the same hidden UIDs.
+  // Cap at 300 most-recently-added UIDs so the HA sensor stays well under the
+  // 16 KB state-attribute limit. Older deletions remain in local localStorage.
   const permanent = [...map].filter(([, exp]) => exp === PERMANENT).map(([uid]) => uid);
+  const syncList = permanent.slice(-300);
   const cfg = loadConfig();
   if (!cfg) return;
   // Always POST — even with empty list — so the sensor always reflects current state.
   void fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_hidden_uids`, {
     method: "POST",
     headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ state: String(permanent.length), attributes: { uids: permanent, ts: Date.now() } }),
+    body: JSON.stringify({ state: String(syncList.length), attributes: { uids: syncList, ts: Date.now() } }),
   }).catch(() => {});
 }
 
@@ -326,11 +329,12 @@ async function syncHiddenUidsFromHA(): Promise<void> {
     // device hidden list quietly disappears whenever HA reboots, and deleted
     // events come back on every device after their localStorage expires.
     const localPermanent = [...pendingDeletes].filter(([, exp]) => exp === PERMANENT).map(([u]) => u);
-    if (localPermanent.length > 0) {
+    const syncList = localPermanent.slice(-300);
+    if (syncList.length > 0) {
       void fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_hidden_uids`, {
         method: "POST",
         headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ state: String(localPermanent.length), attributes: { uids: localPermanent, ts: Date.now() } }),
+        body: JSON.stringify({ state: String(syncList.length), attributes: { uids: syncList, ts: Date.now() } }),
       }).catch(() => {});
     }
   } catch { /* ignore */ }
