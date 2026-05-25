@@ -338,6 +338,10 @@ async function syncHiddenUidsFromHA(): Promise<void> {
 // uid → expiry ms (-1 = permanent until HA confirms)
 const pendingDeletes: Map<string, number> = loadPendingDeletes();
 
+// Tracks how many times ghost-retry has failed for a given UID.
+// After 3 failures we stop retrying (event likely not deletable via API).
+const ghostRetryFails: Map<string, number> = new Map();
+
 // Fingerprints of permanently deleted events — stored separately so that
 // events created via the RRULE fallback (pushed to local state with
 // "local-..." UIDs, then re-fetched from HA with real UIDs) are still
@@ -1657,17 +1661,20 @@ async function deleteEventSeries(sid: string): Promise<void> {
   } catch { /* network error — fall back to deleting only the visible events */ }
 
   const toDelete = allSeriesEvents.filter((e) => !e.uid.startsWith("local-"));
-  const results = await Promise.allSettled(
-    toDelete.map((e) => client.deleteEvent(e.memberId ?? "", e.uid, e.recurrenceId)),
+  let firstErr = "";
+  const tasks = toDelete.map((e) => () =>
+    client.deleteEvent(e.memberId ?? "", e.uid, e.recurrenceId).catch((err: unknown) => {
+      if (!firstErr) firstErr = err instanceof Error ? err.message : String(err);
+      throw err;
+    }),
   );
-  const fail = results.filter((r) => r.status === "rejected").length;
+  const { fulfilled, rejected: fail } = await runBatch(tasks, 5);
   if (fail > 0) {
-    const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
-    rejected.forEach((r, i) => console.error(`[deleteEventSeries] failure ${i + 1}:`, r.reason));
-    const firstErr = rejected[0]?.reason;
-    const errDetail = firstErr instanceof Error ? firstErr.message : String(firstErr);
+    console.error(`[deleteEventSeries] ${fail} failures, first: ${firstErr}`);
+    const cfg = loadConfig();
+    const haLink = cfg ? `<a href="${cfg.baseUrl}/calendar" target="_blank" style="color:#fff;text-decoration:underline">In HA öffnen</a>` : "";
     showTransientBanner(
-      `${toDelete.length - fail} von ${toDelete.length} gelöscht · ${fail} fehlgeschlagen: ${errDetail}`,
+      `${fulfilled} von ${toDelete.length} gelöscht · ${fail} fehlgeschlagen (${firstErr}) ${haLink}`,
       true,
     );
   } else {
@@ -2451,8 +2458,17 @@ async function refreshEvents(): Promise<void> {
       }
     }
     if (ghostsToRetryDelete.length > 0 && navigator.onLine) {
+      const toRetry = ghostsToRetryDelete.filter((e) => (ghostRetryFails.get(e.uid) ?? 0) < 3);
       void Promise.allSettled(
-        ghostsToRetryDelete.map((e) => client.deleteEvent(e.memberId ?? "", e.uid, e.recurrenceId)),
+        toRetry.map((e) =>
+          client.deleteEvent(e.memberId ?? "", e.uid, e.recurrenceId).catch((err) => {
+            ghostRetryFails.set(e.uid, (ghostRetryFails.get(e.uid) ?? 0) + 1);
+            if ((ghostRetryFails.get(e.uid) ?? 0) >= 3) {
+              console.warn(`[ghost-retry] giving up on uid=${e.uid} (${e.summary}) — not deletable via HA API`);
+            }
+            throw err;
+          }),
+        ),
       );
     }
     // Pass 2: filter by UID (pendingDeletes), fingerprints, and deleted series IDs.
