@@ -2073,7 +2073,7 @@ async function saveEvent(): Promise<void> {
               description: descWithSid,
             })
           );
-          const { fulfilled: ok, rejected: fail } = await runBatch(tasks, 20, (done, total) => {
+          const { fulfilled: ok, rejected: fail } = await runBatch(tasks, 3, (done, total) => {
             if (saveBtn) saveBtn.textContent = `${done} / ${total} angelegt…`;
           });
           showTransientBanner(`${ok} Termine angelegt${fail > 0 ? ` · ${fail} fehlgeschlagen` : ""} ✓`);
