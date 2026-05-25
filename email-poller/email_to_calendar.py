@@ -235,10 +235,15 @@ def process_message(msg):
             body = raw.decode("utf-8", errors="replace")
 
     created = 0
-    seen = set()  # (summary_lower, YYYY-MM-DD) — dedup across ICS + PDF + body
+    seen = set()        # (summary_lower, YYYY-MM-DD) — exact dedup
+    seen_times = set()  # YYYY-MM-DDTHH:MM — time-based dedup for PDF/Claude
 
     def key_of(ev):
         return (ev["summary"].strip().lower(), ev.get("start", "")[:10])
+
+    def start_minute(ev):
+        s = ev.get("start", "")
+        return s[:16] if "T" in s else None  # None for all-day events
 
     # .ics zuerst (strukturiert, höchste Priorität)
     if ics_data:
@@ -247,22 +252,30 @@ def process_message(msg):
             if k in seen:
                 continue
             seen.add(k)
+            t = start_minute(ev)
+            if t:
+                seen_times.add(t)
             print(f"  → ICS: {ev['summary']}")
             if create_ha_event(ev):
                 created += 1
 
     # PDF IMMER parsen wenn vorhanden — Buchungs-PDFs enthalten oft Hin- UND
     # Rückflug, während die beigelegte .ics manchmal nur den Hinflug hat.
-    # Duplikate werden über `seen` ausgefiltert.
+    # Doppelte werden per (summary+date) UND per exakter Startzeit gefiltert,
+    # damit z.B. "Flight (Outbound)" bei 14:05 nicht zusätzlich zu
+    # "Flight (Ryanair FR4167)" bei 14:05 aus dem ICS angelegt wird.
     if pdf_bytes:
         events = parse_with_claude("", pdf_bytes=pdf_bytes) or []
         for ev in events:
             if "error" in ev:
                 continue
             k = key_of(ev)
-            if k in seen:
+            t = start_minute(ev)
+            if k in seen or (t and t in seen_times):
                 continue
             seen.add(k)
+            if t:
+                seen_times.add(t)
             print(f"  → PDF: {ev['summary']}")
             if create_ha_event(ev):
                 created += 1
@@ -275,9 +288,12 @@ def process_message(msg):
             if "error" in ev:
                 continue
             k = key_of(ev)
-            if k in seen:
+            t = start_minute(ev)
+            if k in seen or (t and t in seen_times):
                 continue
             seen.add(k)
+            if t:
+                seen_times.add(t)
             print(f"  → Claude: {ev['summary']}")
             if create_ha_event(ev):
                 created += 1

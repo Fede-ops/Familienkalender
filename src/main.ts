@@ -283,19 +283,7 @@ function savePendingDeletes(map: Map<string, number>): void {
   try {
     localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify([...map]));
   } catch { /* ignore */ }
-  // Sync permanent deletions to HA so all devices honour the same hidden UIDs.
-  // Cap at 300 most-recently-added UIDs so the HA sensor stays well under the
-  // 16 KB state-attribute limit. Older deletions remain in local localStorage.
-  const permanent = [...map].filter(([, exp]) => exp === PERMANENT).map(([uid]) => uid);
-  const syncList = permanent.slice(-300);
-  const cfg = loadConfig();
-  if (!cfg) return;
-  // Always POST — even with empty list — so the sensor always reflects current state.
-  void fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_hidden_uids`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ state: String(syncList.length), attributes: { uids: syncList, ts: Date.now() } }),
-  }).catch(() => {});
+  _publishDeletionsToHA();
 }
 
 async function syncHiddenUidsFromHA(): Promise<void> {
@@ -306,11 +294,13 @@ async function syncHiddenUidsFromHA(): Promise<void> {
       headers: { Authorization: `Bearer ${cfg.token}` },
     });
     // 404 means HA was restarted and lost the in-memory sensor state — fall
-    // through so we re-publish our local PERMANENT list below.
+    // through so we re-publish our local lists below.
     let uids: string[] = [];
+    let sids: string[] = [];
     if (res.ok) {
-      const data = (await res.json()) as { attributes?: { uids?: string[] } };
+      const data = (await res.json()) as { attributes?: { uids?: string[]; sids?: string[] } };
       uids = data.attributes?.uids ?? [];
+      sids = data.attributes?.sids ?? [];
     }
     let changed = false;
     for (const uid of uids) {
@@ -319,24 +309,29 @@ async function syncHiddenUidsFromHA(): Promise<void> {
         changed = true;
       }
     }
-    if (changed) {
-      localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify([...pendingDeletes]));
-      state.events = state.events.filter((e) => pendingDeletes.get(e.uid) !== PERMANENT);
+    let sidsChanged = false;
+    for (const sid of sids) {
+      if (!deletedSeriesIds.has(sid)) {
+        deletedSeriesIds.add(sid);
+        sidsChanged = true;
+      }
+    }
+    if (sidsChanged) {
+      // Save directly to avoid a recursive HA publish cycle.
+      localStorage.setItem(DELETED_SIDS_KEY, JSON.stringify([...deletedSeriesIds]));
+    }
+    if (changed || sidsChanged) {
+      if (changed) localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify([...pendingDeletes]));
+      state.events = state.events.filter((e) => {
+        if (pendingDeletes.get(e.uid) === PERMANENT) return false;
+        const sid = extractSeriesId(e.description);
+        if (sid && deletedSeriesIds.has(sid)) return false;
+        return true;
+      });
       render();
     }
-    // Always re-publish our local PERMANENT list. REST-API sensor states do
-    // NOT persist across HA restarts, so without this re-publish the cross-
-    // device hidden list quietly disappears whenever HA reboots, and deleted
-    // events come back on every device after their localStorage expires.
-    const localPermanent = [...pendingDeletes].filter(([, exp]) => exp === PERMANENT).map(([u]) => u);
-    const syncList = localPermanent.slice(-300);
-    if (syncList.length > 0) {
-      void fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_hidden_uids`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ state: String(syncList.length), attributes: { uids: syncList, ts: Date.now() } }),
-      }).catch(() => {});
-    }
+    // Always re-publish so the sensor reflects the merged state from all devices.
+    _publishDeletionsToHA();
   } catch { /* ignore */ }
 }
 
@@ -373,6 +368,21 @@ function loadDeletedSids(): Set<string> {
 }
 function saveDeletedSids(s: Set<string>): void {
   localStorage.setItem(DELETED_SIDS_KEY, JSON.stringify([...s]));
+  // Sync SIDs to HA so other devices also suppress these series.
+  // SIDs are ~8 chars each, so sync ALL of them (negligible size).
+  _publishDeletionsToHA();
+}
+
+function _publishDeletionsToHA(): void {
+  const uids = [...pendingDeletes].filter(([, exp]) => exp === PERMANENT).map(([uid]) => uid).slice(-300);
+  const sids = [...deletedSeriesIds];
+  const cfg = loadConfig();
+  if (!cfg) return;
+  void fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_hidden_uids`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ state: String(uids.length + sids.length), attributes: { uids, sids, ts: Date.now() } }),
+  }).catch(() => {});
 }
 const deletedSeriesIds: Set<string> = loadDeletedSids();
 
