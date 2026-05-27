@@ -2430,8 +2430,9 @@ async function refreshEvents(): Promise<void> {
     let rangeStart: Date;
     let rangeEnd: Date;
     if (state.viewMode === "month") {
-      rangeStart = state.monthStart;
-      rangeEnd = addMonths(state.monthStart, 1);
+      // 2 months back + current + 4 months ahead for instant swiping.
+      rangeStart = addMonths(state.monthStart, -2);
+      rangeEnd = addMonths(state.monthStart, 5);
     } else {
       // Fetch 4 weeks back + current + 8 weeks ahead so swiping shows events
       // instantly from state.events without waiting for the next HA round-trip.
