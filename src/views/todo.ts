@@ -49,6 +49,12 @@ export const TODO_CATEGORIES = [
       "schmerztherapie", "schmerzbehandlung",
       "chemotherapie", "strahlentherapie",
       "intensivmedizin", "palliativmedizin", "palliativ",
+      "hospiz", "hospizbegleitung", "hospizpflege", "hospizteam", "hospizanmeldung",
+      "palliativstation", "palliativteam", "palliativpflege", "palliativversorgung",
+      "pflegeheim", "pflegeheimaufnahme", "pflegeheimplatz", "pflegeplatz",
+      "altenpflege", "seniorenheim", "seniorenpflege", "altenheim",
+      "pflegestufe", "pflegegrad", "pflegeeinstufung",
+      "sterbebegleitung", "trauerbegleitung",
       "medikamentöse",
       // ── Stationsalltag & Dienste ──────────────────────────────────────
       "visite", "morgenvisite", "abendvisite", "chefarztvisite", "oberarztvisite",
@@ -110,6 +116,54 @@ export const TODO_CATEGORIES = [
       "guardia", "turno de noche", "guardia de fin de semana",
       "antibiótico", "antibióticos",
       "oncología", "ortopedia", "neurología", "cardiología",
+      // ── Hospicio & cuidados paliativos (Español) ──────────────────────────
+      "hospicio", "cuidados paliativos", "enfermería", "residencia de mayores",
+    ],
+  },
+  {
+    key: "smarthome",
+    label: "Smart Home",
+    color: "#00C7BE",
+    keywords: [
+      // ── Protokolle & Hardware ─────────────────────────────────────────────
+      "zigbee", "z-wave", "zwave", "matter", "thread", "knx",
+      "shelly", "sonoff", "tasmota", "esphome", "esp8266", "esp32",
+      "hue", "tradfri", "ikea smart", "philips hue",
+      "fritz", "fritzbox", "fritzsmarthome",
+      // ── Home Assistant ────────────────────────────────────────────────────
+      "home assistant", "homeassistant", "hass",
+      "lovelace", "dashboard ha", "automation ha",
+      "addon installieren", "integration einrichten", "integration hinzufügen",
+      // ── Geräte & Aktionen ─────────────────────────────────────────────────
+      "sensor koppeln", "gerät koppeln", "koppeln", "pairen", "einbinden",
+      "sensor anlernen", "gerät anlernen",
+      "rolladen", "rolläden", "jalousie", "markise",
+      "dimmer", "lichtschalter smart",
+      "steckdose smart", "zwischenstecker",
+      "bewegungsmelder", "fensterkontakt", "türkontakt",
+      "türklingel smart", "video türklingel",
+      "thermostat smart", "heizungssteuerung",
+      "überwachungskamera", "kamera einrichten",
+      "lautsprecher smart", "multiroom audio",
+      // ── Automatisierungen ─────────────────────────────────────────────────
+      "automatisierung", "automation erstellen", "szene erstellen",
+      "routine einrichten", "zeitplan einrichten",
+      "licht automatisch", "rolladen automatisch",
+      // ── Voice & Ökosysteme ────────────────────────────────────────────────
+      "alexa", "google home", "siri shortcut",
+      // ── English ───────────────────────────────────────────────────────────
+      "smart home", "smarthome",
+      "home automation",
+      "pair device", "pair sensor", "connect sensor",
+      "add integration", "set up integration",
+      "smart switch", "smart plug", "smart socket",
+      "motion sensor", "door sensor", "window sensor",
+      "smart thermostat", "smart bulb", "smart light",
+      "roller shutter", "blind", "curtain",
+      "doorbell camera", "security camera",
+      "smart speaker", "voice assistant",
+      "automation", "scene", "routine",
+      "add-on", "addon", "integration setup",
     ],
   },
   {
@@ -765,7 +819,7 @@ export type TodoCategoryKey = (typeof TODO_CATEGORIES)[number]["key"];
 
 // Priority: most specific professional terms first, broad household last.
 const CATEGORIZATION_PRIORITY = [
-  "medizin", "technologie", "vertrieb", "natur",
+  "medizin", "smarthome", "technologie", "vertrieb", "natur",
   "freizeit", "familie", "gesundheit", "finanzen", "haushalt",
 ] as const;
 
