@@ -2433,10 +2433,10 @@ async function refreshEvents(): Promise<void> {
       rangeStart = state.monthStart;
       rangeEnd = addMonths(state.monthStart, 1);
     } else {
-      // Fetch prev + current + next week so swiping shows events instantly
-      // from state.events without waiting for the next HA round-trip.
-      rangeStart = addDays(state.weekStart, -7);
-      rangeEnd = addDays(state.weekStart, 14);
+      // Fetch 4 weeks back + current + 8 weeks ahead so swiping shows events
+      // instantly from state.events without waiting for the next HA round-trip.
+      rangeStart = addDays(state.weekStart, -28);
+      rangeEnd = addDays(state.weekStart, 63);
     }
     const fresh = await client.getAllEvents(rangeStart, rangeEnd);
     // getAllEvents only deduplicates by UID; fingerprint dedup happens here,
