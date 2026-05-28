@@ -20,7 +20,7 @@ if ("serviceWorker" in navigator) {
 }
 import { addDays, renderWeekView, startOfWeek } from "./views/week.ts";
 import { renderMonthView } from "./views/month.ts";
-import { buildRruleString, defaultModalState, renderEventModal } from "./views/event-modal.ts";
+import { buildRruleString, defaultModalState, fmtDateTimeLocal, renderEventModal } from "./views/event-modal.ts";
 import type { ModalState, RecurrenceFreq } from "./views/event-modal.ts";
 import {
   categorizeShoppingItem,
@@ -1084,6 +1084,24 @@ function bindEvents(): void {
     untilInput.addEventListener("change", () => {
       syncModalForm();
       render();
+    });
+  }
+
+  // When the start datetime changes, keep the end ≥ start + original duration.
+  // If end would fall before start, snap end to start + 1 h.
+  const modalStartInput = app.querySelector<HTMLInputElement>("#modal-start");
+  const modalEndInput = app.querySelector<HTMLInputElement>("#modal-end");
+  if (modalStartInput && modalEndInput && state.modal && !state.modal.allDay) {
+    modalStartInput.addEventListener("change", () => {
+      if (!state.modal) return;
+      const prevStart = state.modal.startDate.getTime();
+      const prevEnd = state.modal.endDate.getTime();
+      const duration = Math.max(prevEnd - prevStart, 0);
+      const newStart = parseLocalDateTime(modalStartInput.value);
+      const newEnd = new Date(newStart.getTime() + (duration > 0 ? duration : 3_600_000));
+      modalEndInput.value = fmtDateTimeLocal(newEnd);
+      state.modal.startDate = newStart;
+      state.modal.endDate = newEnd;
     });
   }
 }
