@@ -1667,10 +1667,15 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 .detail-title {
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text);
+  overflow-wrap: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .detail-meta {
