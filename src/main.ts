@@ -1750,6 +1750,7 @@ function showEventDetail(ev: CalendarEvent): void {
       </div>
       <div class="detail-actions">
         <button class="detail-edit" data-action="edit-event-from-detail">Bearbeiten</button>
+        <button class="detail-share" data-action="share-event-from-detail">Teilen</button>
         <button class="detail-delete" data-action="delete-event-from-detail">Löschen</button>
       </div>
     </div>
@@ -1766,6 +1767,22 @@ function showEventDetail(ev: CalendarEvent): void {
     ?.addEventListener("click", (e) => e.stopPropagation());
   sheet.querySelector<HTMLElement>("[data-action='edit-event-from-detail']")
     ?.addEventListener("click", () => { sheet.remove(); openEditModal(ev); });
+  sheet.querySelector<HTMLElement>("[data-action='share-event-from-detail']")
+    ?.addEventListener("click", () => {
+      const lines: string[] = [`📅 ${ev.summary}`, `🗓 ${when}`];
+      if (member) lines.push(`👤 ${member.name}`);
+      if (ev.location) lines.push(`📍 ${ev.location}`);
+      const notes = stripMetaTags(ev.description);
+      if (notes) lines.push(`📝 ${notes}`);
+      const text = lines.join("\n");
+      if (navigator.share) {
+        void navigator.share({ title: ev.summary, text }).catch(() => {});
+      } else {
+        void navigator.clipboard.writeText(text).then(() => {
+          showTransientBanner("In Zwischenablage kopiert ✓");
+        });
+      }
+    });
   sheet.querySelector<HTMLElement>("[data-action='delete-event-from-detail']")
     ?.addEventListener("click", () => {
       const sid = extractSeriesId(ev.description);

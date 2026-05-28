@@ -1723,6 +1723,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 .detail-edit,
+.detail-share,
 .detail-delete {
   flex: 1;
   border: none;
@@ -1740,12 +1741,18 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   color: #fff;
 }
 
+.detail-share {
+  background: rgba(255, 159, 10, 0.15);
+  color: #ff9f0a;
+}
+
 .detail-delete {
   background: rgba(255, 45, 85, 0.15);
   color: #ff2d55;
 }
 
-.detail-edit:active { opacity: 0.8; }
+.detail-edit:active,
+.detail-share:active,
 .detail-delete:active { opacity: 0.8; }
 
 .detail-close {
