@@ -2036,6 +2036,11 @@ async function saveEvent(): Promise<void> {
             description: notes || undefined,
             rrule: rruleStr || undefined,
           });
+        if (updated) {
+          // Verify HA persisted the change — local_calendar occasionally
+          // accepts update_event but fails to write the .ics file.
+          setTimeout(() => void refreshEvents(), 8_000);
+        }
         if (!updated) {
           // Backend doesn't support update_event — recreate in new position.
           await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, {
@@ -2047,7 +2052,7 @@ async function saveEvent(): Promise<void> {
           try {
             await client.deleteEvent(originalMemberId ?? memberId, editUid, originalEvent?.recurrenceId);
           } catch { /* best-effort */ }
-          pendingDeletes.set(editUid, Date.now() + 60_000);
+          pendingDeletes.set(editUid, PERMANENT);
           savePendingDeletes(pendingDeletes);
           const moveFp = `${memberId}|${startDate.getTime()}|${summary.trim().toLowerCase()}`;
           pendingMoveEvents.set(moveFp, {
