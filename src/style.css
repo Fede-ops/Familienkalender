@@ -1624,8 +1624,8 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .detail-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  z-index: 100;
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 400;
   display: flex;
   align-items: flex-end;
   justify-content: center;
