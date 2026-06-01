@@ -1789,12 +1789,20 @@ function showEventDetail(ev: CalendarEvent): void {
       const notes = stripMetaTags(ev.description);
       if (notes) lines.push(`📝 ${notes}`);
       const text = lines.join("\n");
-      const icsBlob = new Blob([generateICS(ev)], { type: "text/calendar" });
-      const icsFile = new File([icsBlob], `${ev.summary.replace(/[^a-zA-Z0-9]/g, "_")}.ics`, { type: "text/calendar" });
+      const icsContent = generateICS(ev);
+      const icsFileName = `${ev.summary.replace(/[^a-zA-Z0-9À-ɏ]/g, "_")}.ics`;
+      const icsFile = new File([icsContent], icsFileName, { type: "text/calendar;charset=utf-8" });
       if (navigator.share) {
-        const shareData: ShareData = { title: ev.summary, text };
-        if (navigator.canShare?.({ files: [icsFile] })) shareData.files = [icsFile];
-        void navigator.share(shareData).catch(() => {});
+        const shareBase: ShareData = { title: ev.summary, text };
+        const shareWithFile: ShareData = { ...shareBase, files: [icsFile] };
+        // Pass full share data to canShare so browsers can check title+text+files together
+        const canShareFile = (() => { try { return navigator.canShare?.(shareWithFile) ?? false; } catch { return false; } })();
+        void navigator.share(canShareFile ? shareWithFile : shareBase).catch((err) => {
+          // Ignore user-cancelled shares; show banner for unexpected failures
+          if ((err as { name?: string }).name !== "AbortError") {
+            showTransientBanner("Teilen fehlgeschlagen");
+          }
+        });
       } else {
         void navigator.clipboard.writeText(text).then(() => {
           showTransientBanner("In Zwischenablage kopiert ✓");
@@ -1951,32 +1959,41 @@ function stripMetaTags(description: string | undefined): string {
 
 function generateICS(ev: CalendarEvent): string {
   const pad = (n: number) => String(n).padStart(2, "0");
+  // Local floating time (no Z, no TZID) — calendar apps display in device timezone
   const fmtDt = (d: Date) =>
     `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
   const fmtD = (d: Date) =>
     `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
+  // UTC timestamp for DTSTAMP
+  const fmtUtc = (d: Date) =>
+    `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
+  // Escape special chars in text values per RFC 5545
+  const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
 
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//Familienkalender//DE",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
     "BEGIN:VEVENT",
     `UID:${ev.uid}`,
-    `SUMMARY:${ev.summary}`,
-    `DTSTAMP:${fmtDt(new Date())}Z`,
+    `SUMMARY:${esc(ev.summary)}`,
+    `DTSTAMP:${fmtUtc(new Date())}`,
   ];
   if (ev.allDay) {
     lines.push(`DTSTART;VALUE=DATE:${fmtD(ev.start)}`);
+    // ev.end is inclusive; iCal DTEND for all-day is exclusive (+1 day)
     lines.push(`DTEND;VALUE=DATE:${fmtD(new Date(ev.end.getTime() + 86_400_000))}`);
   } else {
     lines.push(`DTSTART:${fmtDt(ev.start)}`);
     lines.push(`DTEND:${fmtDt(ev.end)}`);
   }
-  if (ev.location) lines.push(`LOCATION:${ev.location}`);
+  if (ev.location) lines.push(`LOCATION:${esc(ev.location)}`);
   const notes = stripMetaTags(ev.description);
-  if (notes) lines.push(`DESCRIPTION:${notes.replace(/\n/g, "\\n")}`);
+  if (notes) lines.push(`DESCRIPTION:${esc(notes)}`);
   lines.push("END:VEVENT", "END:VCALENDAR");
-  return lines.join("\r\n");
+  return lines.join("\r\n") + "\r\n";
 }
 
 

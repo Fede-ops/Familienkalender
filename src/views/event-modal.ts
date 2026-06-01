@@ -114,6 +114,10 @@ function posLabel(pos: number): string {
   return pos === -1 ? "letzten" : ["ersten","zweiten","dritten","vierten"][pos - 1] ?? `${pos}.`;
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 export function renderEventModal(state: ModalState, members: FamilyMember[], occurrenceCount?: number): string {
   const tabsHtml = (["datum", "detail", "erinnerung"] as const)
     .map(
@@ -260,10 +264,10 @@ export function renderEventModal(state: ModalState, members: FamilyMember[], occ
       <div class="member-picker">${membersHtml}</div>
       <div class="field-group">
         <div class="field field--column">
-          <input class="field__input" id="modal-location" placeholder="Ort" value="${state.location}" />
+          <input class="field__input" id="modal-location" placeholder="Ort" value="${escapeHtml(state.location)}" />
         </div>
         <div class="field field--column" style="border-bottom:none;">
-          <textarea class="field__input field__textarea" id="modal-notes" placeholder="Notizen hinzufügen...">${state.notes}</textarea>
+          <textarea class="field__input field__textarea" id="modal-notes" placeholder="Notizen hinzufügen...">${escapeHtml(state.notes)}</textarea>
         </div>
       </div>`;
   } else {
@@ -298,7 +302,7 @@ export function renderEventModal(state: ModalState, members: FamilyMember[], occ
         <button class="modal-header__action" data-action="save-event">${state.editUid ? "Aktualisieren" : "Speichern"}</button>
       </div>
       <div class="modal-title-block">
-        <input class="modal-title-input" id="modal-summary" placeholder="Beschreibung des Events…" value="${state.summary}" autocomplete="off" />
+        <input class="modal-title-input" id="modal-summary" placeholder="Beschreibung des Events…" value="${escapeHtml(state.summary)}" autocomplete="off" />
       </div>
       <div class="modal-tabs">${tabsHtml}</div>
       <div class="modal-body">${tabBody}</div>
