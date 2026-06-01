@@ -739,6 +739,15 @@ function onEventTouchStart(e: TouchEvent, el: HTMLElement): void {
     }
   };
 
+  // If the finger lifts before the 350ms long-press fires, this was a tap
+  // (which opens the detail sheet). Cancel the pending drag so activateDrag
+  // doesn't fire afterwards and leave an orphaned ghost floating over the UI.
+  const earlyEnd = () => {
+    if (drag && !drag.active) cancelDrag();
+  };
+  document.addEventListener("touchend", earlyEnd, { once: true, passive: true });
+  document.addEventListener("touchcancel", earlyEnd, { once: true, passive: true });
+
   drag = {
     uid,
     originalEl: el,
