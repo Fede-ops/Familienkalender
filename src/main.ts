@@ -4,6 +4,7 @@ import {
   fetchMobileAppServices,
   loadNotifConfig,
   prettyServiceName,
+  pushNotifConfigToHA,
   saveNotifConfig,
   sendTestNotification,
   type NotifConfig,
@@ -1937,37 +1938,6 @@ function stripMetaTags(description: string | undefined): string {
     .trim();
 }
 
-// ── Reminder scheduling ────────────────────────────────────────────────────
-
-const scheduledReminders = new Map<string, ReturnType<typeof setTimeout>>();
-
-function scheduleReminders(events: CalendarEvent[]): void {
-  const cfg = loadNotifConfig();
-  if (!cfg) return;
-  const now = Date.now();
-  for (const ev of events) {
-    const minutes = extractReminder(ev.description);
-    if (!minutes) continue;
-    const fireAt = ev.start.getTime() - minutes * 60_000;
-    if (fireAt <= now) continue;
-    const key = `${ev.uid}-${minutes}`;
-    if (scheduledReminders.has(key)) continue;
-    const timer = setTimeout(() => {
-      scheduledReminders.delete(key);
-      const services = cfg.memberServices[ev.memberId ?? ""] ?? [];
-      if (!services.length) return;
-      const pad = (n: number) => String(n).padStart(2, "0");
-      const t = ev.start;
-      const when = ev.allDay ? "" : ` · ${pad(t.getHours())}:${pad(t.getMinutes())} Uhr`;
-      const msg = `In ${minutes} Min.${when}`;
-      for (const svc of services) {
-        sendTestNotification(svc, ev.summary, msg).catch(() => {});
-      }
-    }, fireAt - now);
-    scheduledReminders.set(key, timer);
-  }
-}
-
 // ── ICS generator ──────────────────────────────────────────────────────────
 
 function generateICS(ev: CalendarEvent): string {
@@ -2649,7 +2619,8 @@ async function refreshEvents(): Promise<void> {
     saveCachedEvents(clean);
     dismissHAError();
     if (state.activeTab === "kalender") render();
-    scheduleReminders(clean);
+    // Reminders are sent server-side by reminder_poller.py (HA automation),
+    // so they fire even when the PWA is closed.
     // HA is reachable → try flushing queued events
     void processQueue();
   } catch (err) {
@@ -2847,6 +2818,11 @@ if (demoMode) {
     });
   pullShopping();
   pullTodos();
+  // Mirror the notification config to HA on boot so the server-side reminder
+  // automation has an up-to-date member→service mapping even if it was last
+  // saved before this sync existed.
+  const bootNotifCfg = loadNotifConfig();
+  if (bootNotifCfg) pushNotifConfigToHA(bootNotifCfg);
   // Retry once after 5 s — catches the race where this device boots before the
   // source device has pushed its items to the HA sensor.
   setTimeout(() => { pullShopping(); pullTodos(); }, 5_000);

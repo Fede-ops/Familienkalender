@@ -38,6 +38,7 @@ export function loadNotifConfig(): NotifConfig | null {
 
 export function saveNotifConfig(cfg: NotifConfig): void {
   localStorage.setItem(NOTIF_KEY, JSON.stringify(cfg));
+  pushNotifConfigToHA(cfg);
 }
 
 interface HAConfig { baseUrl: string; token: string }
@@ -47,6 +48,23 @@ function haConfig(): HAConfig | null {
     const raw = localStorage.getItem("ha-config");
     return raw ? (JSON.parse(raw) as HAConfig) : null;
   } catch { return null; }
+}
+
+// Mirror the member→notify-service mapping into a HA sensor so the
+// server-side reminder automation (reminder_poller.py) can read it.
+// The reminder script needs this mapping, which otherwise lives only here.
+export function pushNotifConfigToHA(cfg: NotifConfig): void {
+  const ha = haConfig();
+  if (!ha) return;
+  const ts = Date.now();
+  void fetch(`${ha.baseUrl}/api/states/sensor.familienkalender_notif_config`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${ha.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      state: String(Object.keys(cfg.memberServices).length),
+      attributes: { memberServices: cfg.memberServices, ts },
+    }),
+  }).catch(() => {});
 }
 
 interface HAServiceDomain {

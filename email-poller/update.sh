@@ -36,4 +36,20 @@ python3 -m py_compile "$TMP"
 cp "$TMP" "$SCRIPT"
 rm "$TMP"
 
-echo "✓ Script aktualisiert. Zugangsdaten übernommen."
+echo "✓ email_to_calendar.py aktualisiert. Zugangsdaten übernommen."
+
+# ── Reminder-Poller einrichten/aktualisieren ─────────────────────────────────
+REMINDER="/config/scripts/reminder_poller.py"
+RTMP="/tmp/reminder_poller_new.py"
+RURL="https://raw.githubusercontent.com/fede-ops/familienkalender/main/email-poller/reminder_poller.py"
+
+curl -fsSL "$RURL" -o "$RTMP"
+sed -i "s|HA_TOKEN = \".*\"|HA_TOKEN = \"$HA_TOKEN\"|" "$RTMP"
+python3 -m py_compile "$RTMP"
+cp "$RTMP" "$REMINDER"
+rm "$RTMP"
+
+echo "✓ reminder_poller.py aktualisiert. HA-Token übernommen."
+echo ""
+echo "→ Noch nötig: shell_command + Automation aus ha_setup.yaml übernehmen,"
+echo "  dann 'ha core restart' bzw. Konfiguration neu laden."

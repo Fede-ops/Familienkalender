@@ -1,6 +1,7 @@
 # ── In configuration.yaml einfügen ───────────────────────────────────────────
 shell_command:
   check_calendar_emails: "python3 /config/scripts/email_to_calendar.py >> /config/scripts/email_poller.log 2>&1"
+  check_calendar_reminders: "python3 /config/scripts/reminder_poller.py >> /config/scripts/reminder_poller.log 2>&1"
 
 # ── Als neue Automation in HA anlegen ────────────────────────────────────────
 automation:
@@ -11,4 +12,13 @@ automation:
         minutes: "/10"
     action:
       - service: shell_command.check_calendar_emails
+    mode: single
+
+  - alias: "Familienkalender Reminder-Poller"
+    description: "Jede Minute Kalender prüfen und fällige Erinnerungen senden"
+    trigger:
+      - platform: time_pattern
+        minutes: "/1"
+    action:
+      - service: shell_command.check_calendar_reminders
     mode: single
