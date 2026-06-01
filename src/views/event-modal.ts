@@ -18,6 +18,7 @@ export interface ModalState {
   originalMemberId?: string;
   location: string;
   notes: string;
+  reminderMinutes: number;  // 0 = keine Erinnerung
   editUid?: string;
   // Preserved during edit so meta-tags survive a save without being visible to the user
   seriesId?: string;        // [sid:xxx] from original description
@@ -55,6 +56,7 @@ export function defaultModalState(members: FamilyMember[], date?: Date): ModalSt
     memberId: members[0]?.id ?? "",
     location: "",
     notes: "",
+    reminderMinutes: 0,
   };
 }
 
@@ -265,17 +267,26 @@ export function renderEventModal(state: ModalState, members: FamilyMember[], occ
         </div>
       </div>`;
   } else {
+    const REMINDER_OPTIONS = [
+      { minutes: 0,   label: "Keine" },
+      { minutes: 5,   label: "5 Minuten vorher" },
+      { minutes: 10,  label: "10 Minuten vorher" },
+      { minutes: 15,  label: "15 Minuten vorher" },
+      { minutes: 30,  label: "30 Minuten vorher" },
+      { minutes: 60,  label: "1 Stunde vorher" },
+      { minutes: 120, label: "2 Stunden vorher" },
+    ];
     tabBody = `
+      <div class="section-label">Erinnerung</div>
       <div class="field-group">
-        <div class="field">
-          <span class="field__label">Erinnerung</span>
-          <span class="field__value field__value--accent">15 Min. vorher ›</span>
-        </div>
-        <div class="field">
-          <span class="field__label">Zweite Erinnerung</span>
-          <span class="field__value">Keine ›</span>
-        </div>
-      </div>`;
+        ${REMINDER_OPTIONS.map(({ minutes, label }, i) => `
+          <div class="field field--tap reminder-option${i === REMINDER_OPTIONS.length - 1 ? " field--last" : ""}"
+               data-action="set-reminder" data-minutes="${minutes}">
+            <span class="field__label">${label}</span>
+            ${state.reminderMinutes === minutes ? '<span class="reminder-check">✓</span>' : ''}
+          </div>`).join("")}
+      </div>
+      <p class="field-hint">Push-Benachrichtigung über die Home Assistant App</p>`;
   }
 
   return `<div class="modal-backdrop" data-action="close-modal">

@@ -975,6 +975,10 @@ function bindEvents(): void {
           state.modal.endDate = addDays(state.modal.startDate, 1);
         }
         render();
+      } else if (action === "set-reminder") {
+        if (!state.modal) return;
+        state.modal.reminderMinutes = Number(el.dataset.minutes ?? 0);
+        render();
       } else if (action === "select-member") {
         if (!state.modal) return;
         state.modal.memberId = el.dataset.memberId ?? state.modal.memberId;
@@ -1775,8 +1779,12 @@ function showEventDetail(ev: CalendarEvent): void {
       const notes = stripMetaTags(ev.description);
       if (notes) lines.push(`📝 ${notes}`);
       const text = lines.join("\n");
+      const icsBlob = new Blob([generateICS(ev)], { type: "text/calendar" });
+      const icsFile = new File([icsBlob], `${ev.summary.replace(/[^a-zA-Z0-9]/g, "_")}.ics`, { type: "text/calendar" });
       if (navigator.share) {
-        void navigator.share({ title: ev.summary, text }).catch(() => {});
+        const shareData: ShareData = { title: ev.summary, text };
+        if (navigator.canShare?.({ files: [icsFile] })) shareData.files = [icsFile];
+        void navigator.share(shareData).catch(() => {});
       } else {
         void navigator.clipboard.writeText(text).then(() => {
           showTransientBanner("In Zwischenablage kopiert ✓");
@@ -1891,6 +1899,7 @@ function openEditModal(ev: CalendarEvent): void {
     editUid: ev.uid,
     seriesId: seriesId ?? undefined,
     seriesRrule: rruleRaw ?? undefined,
+    reminderMinutes: extractReminder(ev.description),
   };
   render();
 }
@@ -1913,13 +1922,84 @@ function extractSeriesRrule(description: string | undefined): string | null {
   return m ? m[1] : null;
 }
 
+function extractReminder(description: string | undefined): number {
+  if (!description) return 0;
+  const m = description.match(/\[remind:(\d+)\]/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
 function stripMetaTags(description: string | undefined): string {
   if (!description) return "";
   return description
     .replace(/\n?\[sid:[a-z0-9]+\]/g, "")
     .replace(/\n?\[rrule:[^\]]+\]/g, "")
+    .replace(/\n?\[remind:\d+\]/g, "")
     .trim();
 }
+
+// ── Reminder scheduling ────────────────────────────────────────────────────
+
+const scheduledReminders = new Map<string, ReturnType<typeof setTimeout>>();
+
+function scheduleReminders(events: CalendarEvent[]): void {
+  const cfg = loadNotifConfig();
+  if (!cfg) return;
+  const now = Date.now();
+  for (const ev of events) {
+    const minutes = extractReminder(ev.description);
+    if (!minutes) continue;
+    const fireAt = ev.start.getTime() - minutes * 60_000;
+    if (fireAt <= now) continue;
+    const key = `${ev.uid}-${minutes}`;
+    if (scheduledReminders.has(key)) continue;
+    const timer = setTimeout(() => {
+      scheduledReminders.delete(key);
+      const services = cfg.memberServices[ev.memberId ?? ""] ?? [];
+      if (!services.length) return;
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const t = ev.start;
+      const when = ev.allDay ? "" : ` · ${pad(t.getHours())}:${pad(t.getMinutes())} Uhr`;
+      const msg = `In ${minutes} Min.${when}`;
+      for (const svc of services) {
+        sendTestNotification(svc, ev.summary, msg).catch(() => {});
+      }
+    }, fireAt - now);
+    scheduledReminders.set(key, timer);
+  }
+}
+
+// ── ICS generator ──────────────────────────────────────────────────────────
+
+function generateICS(ev: CalendarEvent): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const fmtDt = (d: Date) =>
+    `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+  const fmtD = (d: Date) =>
+    `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
+
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Familienkalender//DE",
+    "BEGIN:VEVENT",
+    `UID:${ev.uid}`,
+    `SUMMARY:${ev.summary}`,
+    `DTSTAMP:${fmtDt(new Date())}Z`,
+  ];
+  if (ev.allDay) {
+    lines.push(`DTSTART;VALUE=DATE:${fmtD(ev.start)}`);
+    lines.push(`DTEND;VALUE=DATE:${fmtD(new Date(ev.end.getTime() + 86_400_000))}`);
+  } else {
+    lines.push(`DTSTART:${fmtDt(ev.start)}`);
+    lines.push(`DTEND:${fmtDt(ev.end)}`);
+  }
+  if (ev.location) lines.push(`LOCATION:${ev.location}`);
+  const notes = stripMetaTags(ev.description);
+  if (notes) lines.push(`DESCRIPTION:${notes.replace(/\n/g, "\\n")}`);
+  lines.push("END:VEVENT", "END:VCALENDAR");
+  return lines.join("\r\n");
+}
+
 
 
 
@@ -2020,11 +2100,14 @@ async function runBatch<T>(
 
 async function saveEvent(): Promise<void> {
   if (!state.modal) return;
-  const { summary, startDate, endDate, allDay, memberId, location, seriesId, seriesRrule } = state.modal;
+  const { summary, startDate, endDate, allDay, memberId, location, seriesId, seriesRrule, reminderMinutes } = state.modal;
   const rruleStr = buildRruleString(state.modal);
   // When editing a series event, preserve the [sid:] and [rrule:] meta-tags in the description
   // so series membership and recurrence info survive the edit.
   let notes = state.modal.notes;
+  if (reminderMinutes > 0) {
+    notes = notes ? `${notes}\n[remind:${reminderMinutes}]` : `[remind:${reminderMinutes}]`;
+  }
   if (seriesId && !rruleStr) {
     // No new recurrence selected: re-attach existing meta-tags silently
     notes = notes ? `${notes}\n[sid:${seriesId}]${seriesRrule ? `\n[rrule:${seriesRrule}]` : ""}` : `[sid:${seriesId}]${seriesRrule ? `\n[rrule:${seriesRrule}]` : ""}`;
@@ -2566,6 +2649,7 @@ async function refreshEvents(): Promise<void> {
     saveCachedEvents(clean);
     dismissHAError();
     if (state.activeTab === "kalender") render();
+    scheduleReminders(clean);
     // HA is reachable → try flushing queued events
     void processQueue();
   } catch (err) {
