@@ -432,6 +432,16 @@ body {
   to { transform: translateY(0); opacity: 1; }
 }
 
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
 .week-list {
   position: absolute;
   inset: 0;
@@ -1640,6 +1650,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  animation: fadeIn 0.15s ease;
 }
 
 .detail-sheet {
@@ -1654,6 +1665,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.5);
   will-change: transform;
   touch-action: none;
+  animation: slideUp 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 .detail-handle {
