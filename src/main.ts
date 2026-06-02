@@ -190,6 +190,9 @@ function saveCachedEvents(events: CalendarEvent[]): void {
   }
 }
 
+const HOLIDAY_MEMBER_ID = "__feiertage__";
+const HOLIDAY_MEMBER: FamilyMember = { id: HOLIDAY_MEMBER_ID, name: "Feiertage 🇦🇹", initial: "🎉", color: "#FF3B30" };
+
 const DEFAULT_MEMBERS: FamilyMember[] = [
   { id: "calendar.fede", name: "Fede", initial: "F", color: "#0A84FF" },
   { id: "calendar.pita", name: "Pita", initial: "P", color: "#30D158" },
@@ -197,6 +200,7 @@ const DEFAULT_MEMBERS: FamilyMember[] = [
   { id: "calendar.santi", name: "Santi", initial: "S", color: "#FF2D55" },
   { id: "calendar.fede_trabajo", name: "Fede T", initial: "F", color: "#BF5AF2" },
   { id: "calendar.pita_trabajo", name: "Pita T", initial: "P", color: "#64D2FF" },
+  HOLIDAY_MEMBER,
 ];
 
 interface AppState {
@@ -508,9 +512,75 @@ const state: AppState = {
   todoFilterMemberId: localStorage.getItem(TODO_FILTER_KEY) ?? "",
 };
 
+// ── Austrian public holidays ───────────────────────────────────────────────
+
+function easterSunday(year: number): Date {
+  // Meeus/Jones/Butcher algorithm
+  const a = year % 19;
+  const b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+
+function generateAustrianHolidays(year: number): CalendarEvent[] {
+  const easter = easterSunday(year);
+  const addDays = (base: Date, n: number) =>
+    new Date(base.getFullYear(), base.getMonth(), base.getDate() + n);
+  const fixed = (month: number, day: number, name: string) =>
+    ({ name, date: new Date(year, month - 1, day) });
+  const movable = (offset: number, name: string) =>
+    ({ name, date: addDays(easter, offset) });
+
+  const days = [
+    fixed(1,  1,  "Neujahr"),
+    fixed(1,  6,  "Heilige Drei Könige"),
+    movable(1,    "Ostermontag"),
+    fixed(5,  1,  "Staatsfeiertag"),
+    movable(39,   "Christi Himmelfahrt"),
+    movable(50,   "Pfingstmontag"),
+    movable(60,   "Fronleichnam"),
+    fixed(8,  15, "Mariä Himmelfahrt"),
+    fixed(10, 26, "Nationalfeiertag"),
+    fixed(11, 1,  "Allerheiligen"),
+    fixed(12, 8,  "Mariä Empfängnis"),
+    fixed(12, 25, "Weihnachten"),
+    fixed(12, 26, "Stephanitag"),
+  ];
+
+  return days.map(({ name, date }) => ({
+    uid: `__holiday__${year}__${name.replace(/\s+/g, "_")}`,
+    summary: name,
+    start: date,
+    end: date,
+    allDay: true,
+    memberId: HOLIDAY_MEMBER_ID,
+  }));
+}
+
+function holidayEvents(): CalendarEvent[] {
+  const base = state.viewMode === "week" ? state.weekStart : state.monthStart;
+  const y = base.getFullYear();
+  return [y - 1, y, y + 1].flatMap(generateAustrianHolidays);
+}
+
 function visibleEvents(): CalendarEvent[] {
-  if (state.filterMemberIds.length === 0) return state.events;
-  return state.events.filter((e) => state.filterMemberIds.includes(e.memberId ?? ""));
+  const holidays = holidayEvents();
+  if (state.filterMemberIds.length === 0) {
+    return [...state.events, ...holidays];
+  }
+  const regular = state.events.filter((e) => state.filterMemberIds.includes(e.memberId ?? ""));
+  if (state.filterMemberIds.includes(HOLIDAY_MEMBER_ID)) {
+    return [...regular, ...holidays];
+  }
+  return regular;
 }
 
 // ── Rendering ──────────────────────────────────────────────────────────────
@@ -553,7 +623,7 @@ function render(): void {
       members: state.members,
       today: new Date(),
     });
-    if (state.modal) html += renderEventModal(state.modal, state.members, occurrencePreviewCount(state.modal));
+    if (state.modal) html += renderEventModal(state.modal, state.members.filter((m) => m.id !== HOLIDAY_MEMBER_ID), occurrencePreviewCount(state.modal));
   } else {
     html = renderWeekView({
       weekStart: state.weekStart,
@@ -562,7 +632,7 @@ function render(): void {
       today: new Date(),
       filterActive: state.filterMemberIds.length > 0,
     });
-    if (state.modal) html += renderEventModal(state.modal, state.members, occurrencePreviewCount(state.modal));
+    if (state.modal) html += renderEventModal(state.modal, state.members.filter((m) => m.id !== HOLIDAY_MEMBER_ID), occurrencePreviewCount(state.modal));
   }
   app.innerHTML = html;
   app.dataset.buildTime = __BUILD_TIME__;
@@ -728,7 +798,7 @@ function setupDragDrop(): void {
 
 function onEventTouchStart(e: TouchEvent, el: HTMLElement): void {
   const uid = el.dataset.uid;
-  if (!uid || state.modal) return;
+  if (!uid || state.modal || uid.startsWith("__holiday__")) return;
   const touch = e.touches[0];
 
   const earlyMove = (ev: TouchEvent) => {
@@ -1753,6 +1823,21 @@ function showEventDetail(ev: CalendarEvent): void {
     ? (diffDays > 1 ? `${fmtDate(ev.start)} – ${fmtDate(ev.end)}` : fmtDate(ev.start))
     : `${fmtDate(ev.start)}, ${fmtTime(ev.start)} – ${fmtTime(ev.end)}`;
 
+  const isHoliday = ev.memberId === HOLIDAY_MEMBER_ID;
+  const actions = isHoliday
+    ? `<div class="detail-actions">
+        <button class="detail-share" data-action="share-event-from-detail">Teilen</button>
+      </div>`
+    : `<div class="detail-actions">
+        <button class="detail-edit" data-action="edit-event-from-detail">Bearbeiten</button>
+        <button class="detail-share" data-action="share-event-from-detail">Teilen</button>
+        <button class="detail-delete" data-action="delete-event-from-detail">Löschen</button>
+      </div>
+      <div class="detail-actions detail-actions--secondary">
+        <button class="detail-ics" data-action="ics-event-from-detail">ICS-Datei herunterladen</button>
+      </div>
+      <p class="detail-ics-hint">Speichert in Downloads → Signal: + → Datei → Downloads → anhängen</p>`;
+
   const html = `<div id="event-detail-sheet" class="detail-backdrop" data-action="close-detail">
     <div class="detail-sheet" data-stop-propagation>
       <div class="detail-handle"></div>
@@ -1764,15 +1849,7 @@ function showEventDetail(ev: CalendarEvent): void {
         ${ev.location ? `<p class="detail-location">📍 ${ev.location}</p>` : ""}
         ${stripMetaTags(ev.description) ? `<p class="detail-notes">${stripMetaTags(ev.description)}</p>` : ""}
       </div>
-      <div class="detail-actions">
-        <button class="detail-edit" data-action="edit-event-from-detail">Bearbeiten</button>
-        <button class="detail-share" data-action="share-event-from-detail">Teilen</button>
-        <button class="detail-delete" data-action="delete-event-from-detail">Löschen</button>
-      </div>
-      <div class="detail-actions detail-actions--secondary">
-        <button class="detail-ics" data-action="ics-event-from-detail">ICS-Datei herunterladen</button>
-      </div>
-      <p class="detail-ics-hint">Speichert in Downloads → Signal: + → Datei → Downloads → anhängen</p>
+      ${actions}
     </div>
   </div>`;
 
@@ -1785,8 +1862,10 @@ function showEventDetail(ev: CalendarEvent): void {
     ?.addEventListener("click", () => sheet.remove());
   sheet.querySelector<HTMLElement>("[data-stop-propagation]")
     ?.addEventListener("click", (e) => e.stopPropagation());
-  sheet.querySelector<HTMLElement>("[data-action='edit-event-from-detail']")
-    ?.addEventListener("click", () => { sheet.remove(); openEditModal(ev); });
+  if (!isHoliday) {
+    sheet.querySelector<HTMLElement>("[data-action='edit-event-from-detail']")
+      ?.addEventListener("click", () => { sheet.remove(); openEditModal(ev); });
+  }
   sheet.querySelector<HTMLElement>("[data-action='share-event-from-detail']")
     ?.addEventListener("click", () => {
       // Text-only share: formatted event description for messaging apps (WhatsApp, iMessage…)
@@ -1808,35 +1887,37 @@ function showEventDetail(ev: CalendarEvent): void {
         });
       }
     });
-  sheet.querySelector<HTMLElement>("[data-action='ics-event-from-detail']")
-    ?.addEventListener("click", () => {
-      const icsContent = generateICS(ev);
-      const icsFileName = `${ev.summary.replace(/[^a-zA-Z0-9À-ɏ]/g, "_")}.ics`;
-      // Use octet-stream so iOS saves to Downloads instead of intercepting as Calendar.
-      // Signal's share extension converts .ics file paths to text (Signal bug), so the
-      // only reliable path to Signal is: download → Files app → Signal + → Datei.
-      const blob = new Blob([icsContent], { type: "application/octet-stream" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = icsFileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
-      showTransientBanner(`${icsFileName} gespeichert → Signal: + → Datei → Downloads`);
-    });
-  sheet.querySelector<HTMLElement>("[data-action='delete-event-from-detail']")
-    ?.addEventListener("click", () => {
-      const sid = extractSeriesId(ev.description);
-      if (sid) {
-        const count = state.events.filter((e) => extractSeriesId(e.description) === sid).length;
-        showDeleteSeriesDialog(ev, sid, count, sheet);
-      } else {
-        sheet.remove();
-        void deleteEvent(ev);
-      }
-    });
+  if (!isHoliday) {
+    sheet.querySelector<HTMLElement>("[data-action='ics-event-from-detail']")
+      ?.addEventListener("click", () => {
+        const icsContent = generateICS(ev);
+        const icsFileName = `${ev.summary.replace(/[^a-zA-Z0-9À-ɏ]/g, "_")}.ics`;
+        // Use octet-stream so iOS saves to Downloads instead of intercepting as Calendar.
+        // Signal's share extension converts .ics file paths to text (Signal bug), so the
+        // only reliable path to Signal is: download → Files app → Signal + → Datei.
+        const blob = new Blob([icsContent], { type: "application/octet-stream" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = icsFileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        showTransientBanner(`${icsFileName} gespeichert → Signal: + → Datei → Downloads`);
+      });
+    sheet.querySelector<HTMLElement>("[data-action='delete-event-from-detail']")
+      ?.addEventListener("click", () => {
+        const sid = extractSeriesId(ev.description);
+        if (sid) {
+          const count = state.events.filter((e) => extractSeriesId(e.description) === sid).length;
+          showDeleteSeriesDialog(ev, sid, count, sheet);
+        } else {
+          sheet.remove();
+          void deleteEvent(ev);
+        }
+      });
+  }
 
   // Swipe-down-to-close anchored to the handle, then tracked on document
   // so the finger can move freely without losing the gesture.
