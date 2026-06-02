@@ -1808,25 +1808,37 @@ function showEventDetail(ev: CalendarEvent): void {
 
   sheet.querySelector<HTMLElement>("[data-action='ics-event-from-detail']")
     ?.addEventListener("click", () => {
-      // Open the ICS file directly — skip the share sheet entirely.
-      // iOS Safari recognises text/calendar blob URLs and shows the native
-      // "Zum Kalender hinzufügen" prompt without any share-sheet confusion.
+      // Share the ICS file only (no title, no text) so the iOS share sheet shows
+      // only file-aware destinations.  The user can tap "Kopieren" to put the
+      // .ics file in the clipboard for pasting into iMessage/Signal, choose
+      // "In Kalender importieren" directly, or pick any app that handles files.
       const icsContent = generateICS(ev);
       const icsFileName = `${ev.summary.replace(/[^a-zA-Z0-9À-ɏ]/g, "_")}.ics`;
-      const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      // window.open triggered from a direct tap is not blocked by iOS pop-up policy.
-      const w = window.open(url, "_blank");
-      if (!w) {
-        // Fallback for browsers that block window.open: <a download>
+      const icsFile = new File([icsContent], icsFileName, { type: "text/calendar;charset=utf-8" });
+      const shareData: ShareData = { files: [icsFile] };
+      const canShare = (() => { try { return navigator.canShare?.(shareData) ?? false; } catch { return false; } })();
+      if (canShare) {
+        void navigator.share(shareData).catch((err) => {
+          if ((err as { name?: string }).name !== "AbortError") {
+            // Share failed — fall back to opening the blob URL in a new window
+            const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            window.open(url, "_blank");
+            setTimeout(() => URL.revokeObjectURL(url), 15_000);
+          }
+        });
+      } else {
+        // No Web Share file support (desktop etc.) — trigger download
+        const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
         a.download = icsFileName;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 15_000);
       }
-      setTimeout(() => URL.revokeObjectURL(url), 15_000);
     });
   sheet.querySelector<HTMLElement>("[data-action='delete-event-from-detail']")
     ?.addEventListener("click", () => {
