@@ -209,15 +209,15 @@ function saveCachedEvents(events: CalendarEvent[]): void {
 }
 
 const HOLIDAY_MEMBER_ID = "__feiertage__";
-const HOLIDAY_MEMBER: FamilyMember = { id: HOLIDAY_MEMBER_ID, name: "Feiertage 🇦🇹", initial: "🇦🇹", color: "#EBEBF5" };
+const HOLIDAY_MEMBER: FamilyMember = { id: HOLIDAY_MEMBER_ID, name: "Feiertage 🇦🇹", initial: "🇦🇹", color: "#FF3B30" };
 
 const DEFAULT_MEMBERS: FamilyMember[] = [
-  { id: "calendar.fede", name: "Fede", initial: "F", color: "#0A84FF" },
-  { id: "calendar.pita", name: "Pita", initial: "P", color: "#30D158" },
-  { id: "calendar.bebos", name: "Bebos", initial: "B", color: "#FF9F0A" },
-  { id: "calendar.santi", name: "Santi", initial: "S", color: "#FF2D55" },
-  { id: "calendar.fede_trabajo", name: "Fede T", initial: "F", color: "#BF5AF2" },
-  { id: "calendar.pita_trabajo", name: "Pita T", initial: "P", color: "#64D2FF" },
+  { id: "calendar.fede",        name: "Fede",   initial: "F", color: "#0A84FF" },
+  { id: "calendar.pita",        name: "Pita",   initial: "P", color: "#30D158" },
+  { id: "calendar.bebos",       name: "Bebos",  initial: "B", color: "#FF9F0A" },
+  { id: "calendar.santi",       name: "Santi",  initial: "S", color: "#BF5AF2" },
+  { id: "calendar.fede_trabajo", name: "Fede T", initial: "F", color: "#7EB8FF" },
+  { id: "calendar.pita_trabajo", name: "Pita T", initial: "P", color: "#5AC46A" },
   HOLIDAY_MEMBER,
 ];
 
