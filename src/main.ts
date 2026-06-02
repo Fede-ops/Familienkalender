@@ -1768,8 +1768,9 @@ function showEventDetail(ev: CalendarEvent): void {
         <button class="detail-delete" data-action="delete-event-from-detail">Löschen</button>
       </div>
       <div class="detail-actions detail-actions--secondary">
-        <button class="detail-ics" data-action="ics-event-from-detail">📅 Zum Kalender hinzufügen (.ics)</button>
+        <button class="detail-ics" data-action="ics-event-from-detail">ICS-Datei teilen</button>
       </div>
+      <p class="detail-ics-hint">Signal / iMessage antippen → Dateianhang · nicht „Kopieren"</p>
     </div>
   </div>`;
 

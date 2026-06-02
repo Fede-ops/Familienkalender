@@ -1798,6 +1798,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 .detail-ics:active { opacity: 0.8; }
 
+.detail-ics-hint {
+  margin: 0 20px 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.4;
+}
+
 .detail-close {
   margin: 12px 20px 16px;
   background: var(--bg-elev-2);
