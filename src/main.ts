@@ -1793,16 +1793,13 @@ function showEventDetail(ev: CalendarEvent): void {
       const icsFileName = `${ev.summary.replace(/[^a-zA-Z0-9À-ɏ]/g, "_")}.ics`;
       const icsFile = new File([icsContent], icsFileName, { type: "text/calendar;charset=utf-8" });
       if (navigator.share) {
-        // Check if the browser supports file sharing with the full payload
-        const shareWithFile: ShareData = { title: ev.summary, files: [icsFile] };
+        // Always include text so messaging apps (WhatsApp, iMessage) get the
+        // full event description.  Add the ICS file when the browser supports it
+        // so iOS Calendar import also works from the same share sheet.
+        const shareBase: ShareData = { title: ev.summary, text };
+        const shareWithFile: ShareData = { ...shareBase, files: [icsFile] };
         const canShareFile = (() => { try { return navigator.canShare?.(shareWithFile) ?? false; } catch { return false; } })();
-        // When file sharing is available, share ONLY the file (no text body).
-        // Mixing text + file causes iOS to forward only the text to some share
-        // destinations (Messages, WhatsApp), silently dropping the .ics file.
-        // With file-only, iOS offers "Zum Kalender hinzufügen" and proper file
-        // attachment for apps that support it.
-        const payload: ShareData = canShareFile ? shareWithFile : { title: ev.summary, text };
-        void navigator.share(payload).catch((err) => {
+        void navigator.share(canShareFile ? shareWithFile : shareBase).catch((err) => {
           if ((err as { name?: string }).name !== "AbortError") {
             showTransientBanner("Teilen fehlgeschlagen");
           }
