@@ -191,7 +191,7 @@ function saveCachedEvents(events: CalendarEvent[]): void {
 }
 
 const HOLIDAY_MEMBER_ID = "__feiertage__";
-const HOLIDAY_MEMBER: FamilyMember = { id: HOLIDAY_MEMBER_ID, name: "Feiertage 🇦🇹", initial: "🇦🇹", color: "#FFD60A" };
+const HOLIDAY_MEMBER: FamilyMember = { id: HOLIDAY_MEMBER_ID, name: "Feiertage 🇦🇹", initial: "🇦🇹", color: "#EBEBF5" };
 
 const DEFAULT_MEMBERS: FamilyMember[] = [
   { id: "calendar.fede", name: "Fede", initial: "F", color: "#0A84FF" },
