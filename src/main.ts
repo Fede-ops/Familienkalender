@@ -1768,9 +1768,9 @@ function showEventDetail(ev: CalendarEvent): void {
         <button class="detail-delete" data-action="delete-event-from-detail">Löschen</button>
       </div>
       <div class="detail-actions detail-actions--secondary">
-        <button class="detail-ics" data-action="ics-event-from-detail">ICS-Datei teilen</button>
+        <button class="detail-ics" data-action="ics-event-from-detail">ICS-Datei herunterladen</button>
       </div>
-      <p class="detail-ics-hint">Signal / iMessage antippen → Dateianhang · nicht „Kopieren"</p>
+      <p class="detail-ics-hint">Speichert in Downloads → Signal: + → Datei → Downloads → anhängen</p>
     </div>
   </div>`;
 
@@ -1809,37 +1809,21 @@ function showEventDetail(ev: CalendarEvent): void {
 
   sheet.querySelector<HTMLElement>("[data-action='ics-event-from-detail']")
     ?.addEventListener("click", () => {
-      // Share the ICS file only (no title, no text) so the iOS share sheet shows
-      // only file-aware destinations.  The user can tap "Kopieren" to put the
-      // .ics file in the clipboard for pasting into iMessage/Signal, choose
-      // "In Kalender importieren" directly, or pick any app that handles files.
       const icsContent = generateICS(ev);
       const icsFileName = `${ev.summary.replace(/[^a-zA-Z0-9À-ɏ]/g, "_")}.ics`;
-      const icsFile = new File([icsContent], icsFileName, { type: "text/calendar;charset=utf-8" });
-      const shareData: ShareData = { files: [icsFile] };
-      const canShare = (() => { try { return navigator.canShare?.(shareData) ?? false; } catch { return false; } })();
-      if (canShare) {
-        void navigator.share(shareData).catch((err) => {
-          if ((err as { name?: string }).name !== "AbortError") {
-            // Share failed — fall back to opening the blob URL in a new window
-            const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
-            const url = URL.createObjectURL(blob);
-            window.open(url, "_blank");
-            setTimeout(() => URL.revokeObjectURL(url), 15_000);
-          }
-        });
-      } else {
-        // No Web Share file support (desktop etc.) — trigger download
-        const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = icsFileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 15_000);
-      }
+      // Use octet-stream so iOS saves to Downloads instead of intercepting as Calendar.
+      // Signal's share extension converts .ics file paths to text (Signal bug), so the
+      // only reliable path to Signal is: download → Files app → Signal + → Datei.
+      const blob = new Blob([icsContent], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = icsFileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      showTransientBanner(`${icsFileName} gespeichert → Signal: + → Datei → Downloads`);
     });
   sheet.querySelector<HTMLElement>("[data-action='delete-event-from-detail']")
     ?.addEventListener("click", () => {
