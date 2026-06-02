@@ -56,6 +56,13 @@ export const TODO_CATEGORIES = [
       "pflegestufe", "pflegegrad", "pflegeeinstufung",
       "sterbebegleitung", "trauerbegleitung",
       "medikamentöse",
+      // ── Pflege & Wundversorgung ───────────────────────────────────────────
+      "antidecubitus", "dekubitus", "druckwunde", "druckulkus",
+      "wechseldruckmatratze", "wechseldruckauflage", "druckauflage",
+      "dekubitusprophylaxe", "lagerungsprophylaxe", "prophylaxe",
+      "wundauflage", "verbandmaterial", "pflegehilfsmittel",
+      "inkontinenz", "inkontinenzartikel", "inkontinenzversorgung",
+      "pflegebett", "pflegebettlaken", "pflegeartikel",
       // ── Stationsalltag & Dienste ──────────────────────────────────────
       "visite", "morgenvisite", "abendvisite", "chefarztvisite", "oberarztvisite",
       "dienst", "bereitschaftsdienst", "nachtdienst", "wochenenddienst", "spätdienst", "frühdienst",
@@ -717,14 +724,28 @@ export const TODO_CATEGORIES = [
       "küche putzen", "bad putzen", "toilette putzen",
       "fenster putzen", "fenster",
       // Deutsch – Garten & Pflanzen
-      "garten", "rasen mähen", "unkraut jäten",
+      "garten", "rasen mähen", "unkraut jäten", "gras", "rasen",
       "pflanzen", "pflanzen gießen", "blumen gießen", "gießen", "bewässern",
       "umtopfen", "blumenerde", "dünger", "kompost",
       "balkon", "terrasse",
       // Deutsch – Einkauf & Besorgungen
-      "einkaufen", "lebensmittel", "supermarkt",
+      "einkaufen", "einkauf", "lebensmittel", "supermarkt", "billa", "spar", "hofer", "lidl", "merkur", "interspar",
+      "kaufen", "besorgen", "holen", "bestellen",
       "post abholen", "pakete", "pakete abholen",
       "schlüssel", "schlüssel nachmachen",
+      "pfand", "pfandflasche", "pfandflaschen", "leergut", "retournieren", "zurückbringen", "abgeben",
+      "mineralwasser", "wasser", "getränke",
+      // Deutsch – Entsorgung & Recycling
+      "entsorgen", "wegwerfen", "wegbringen", "abgeben",
+      "gras entsorgen", "papier entsorgen", "glasentsorgen",
+      "altpapier", "altglas", "sperrmüll", "sperrgut",
+      "restmüll", "biomüll", "gelber sack", "gelbe tonne", "grüne tonne",
+      "mistplatz", "wertstoffhof", "altstoffsammelzentrum",
+      // Deutsch – Erinnern & Kommunizieren
+      "erinnern", "erinnerung", "erinnere", "anrufen", "anruf",
+      "schreiben", "nachricht", "email", "sagen", "fragen",
+      // Deutsch – Küche & Haushaltswaren
+      "backblech", "kochtopf", "pfanne", "küchenutensilien", "küchenbedarf",
       // Deutsch – Reparatur & Handwerker
       "reparieren", "reparatur",
       "handwerker", "handwerker bestellen", "handwerker anrufen",
