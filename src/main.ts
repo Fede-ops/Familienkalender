@@ -1767,6 +1767,9 @@ function showEventDetail(ev: CalendarEvent): void {
         <button class="detail-share" data-action="share-event-from-detail">Teilen</button>
         <button class="detail-delete" data-action="delete-event-from-detail">Löschen</button>
       </div>
+      <div class="detail-actions detail-actions--secondary">
+        <button class="detail-ics" data-action="ics-event-from-detail">📅 Zum Kalender hinzufügen (.ics)</button>
+      </div>
     </div>
   </div>`;
 
@@ -1783,23 +1786,15 @@ function showEventDetail(ev: CalendarEvent): void {
     ?.addEventListener("click", () => { sheet.remove(); openEditModal(ev); });
   sheet.querySelector<HTMLElement>("[data-action='share-event-from-detail']")
     ?.addEventListener("click", () => {
+      // Text-only share: formatted event description for messaging apps (WhatsApp, iMessage…)
       const lines: string[] = [`📅 ${ev.summary}`, `🗓 ${when}`];
       if (member) lines.push(`👤 ${member.name}`);
       if (ev.location) lines.push(`📍 ${ev.location}`);
       const notes = stripMetaTags(ev.description);
       if (notes) lines.push(`📝 ${notes}`);
       const text = lines.join("\n");
-      const icsContent = generateICS(ev);
-      const icsFileName = `${ev.summary.replace(/[^a-zA-Z0-9À-ɏ]/g, "_")}.ics`;
-      const icsFile = new File([icsContent], icsFileName, { type: "text/calendar;charset=utf-8" });
       if (navigator.share) {
-        // Always include text so messaging apps (WhatsApp, iMessage) get the
-        // full event description.  Add the ICS file when the browser supports it
-        // so iOS Calendar import also works from the same share sheet.
-        const shareBase: ShareData = { title: ev.summary, text };
-        const shareWithFile: ShareData = { ...shareBase, files: [icsFile] };
-        const canShareFile = (() => { try { return navigator.canShare?.(shareWithFile) ?? false; } catch { return false; } })();
-        void navigator.share(canShareFile ? shareWithFile : shareBase).catch((err) => {
+        void navigator.share({ title: ev.summary, text }).catch((err) => {
           if ((err as { name?: string }).name !== "AbortError") {
             showTransientBanner("Teilen fehlgeschlagen");
           }
@@ -1808,6 +1803,35 @@ function showEventDetail(ev: CalendarEvent): void {
         void navigator.clipboard.writeText(text).then(() => {
           showTransientBanner("In Zwischenablage kopiert ✓");
         });
+      }
+    });
+
+  sheet.querySelector<HTMLElement>("[data-action='ics-event-from-detail']")
+    ?.addEventListener("click", () => {
+      // ICS-file-only share: iOS presents "Zum Kalender hinzufügen" as primary action.
+      // Sending ONLY the file (no text) ensures iOS treats this as a file share and
+      // surfaces the Calendar import option at the top of the share sheet.
+      const icsContent = generateICS(ev);
+      const icsFileName = `${ev.summary.replace(/[^a-zA-Z0-9À-ɏ]/g, "_")}.ics`;
+      const icsFile = new File([icsContent], icsFileName, { type: "text/calendar;charset=utf-8" });
+      const shareWithFile: ShareData = { title: ev.summary, files: [icsFile] };
+      const canShareFile = (() => { try { return navigator.canShare?.(shareWithFile) ?? false; } catch { return false; } })();
+      if (canShareFile) {
+        void navigator.share(shareWithFile).catch((err) => {
+          if ((err as { name?: string }).name !== "AbortError") {
+            // Fallback: open blob URL — on iOS Safari this triggers "Add to Calendar"
+            const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            window.open(url, "_blank");
+            setTimeout(() => URL.revokeObjectURL(url), 10_000);
+          }
+        });
+      } else {
+        // No Web Share file support — try direct blob URL navigation
+        const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        window.open(url, "_blank");
+        setTimeout(() => URL.revokeObjectURL(url), 10_000);
       }
     });
   sheet.querySelector<HTMLElement>("[data-action='delete-event-from-detail']")

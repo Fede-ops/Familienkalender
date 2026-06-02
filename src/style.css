@@ -1778,6 +1778,26 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .detail-share:active,
 .detail-delete:active { opacity: 0.8; }
 
+.detail-actions--secondary {
+  padding-top: 0;
+}
+
+.detail-ics {
+  flex: 1;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 12px 13px;
+  cursor: pointer;
+  font-family: inherit;
+  background: rgba(48, 209, 88, 0.12);
+  color: #30d158;
+  letter-spacing: -0.01em;
+}
+
+.detail-ics:active { opacity: 0.8; }
+
 .detail-close {
   margin: 12px 20px 16px;
   background: var(--bg-elev-2);
