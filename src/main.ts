@@ -40,6 +40,10 @@ import {
 } from "./views/todo.ts";
 import type { CalendarEvent, FamilyMember, ShoppingItem, TabKey, TodoItem } from "./types.ts";
 
+function escHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 // ── Offline queue ──────────────────────────────────────────────────────────
 
 const QUEUE_KEY = "calendar-offline-queue";
@@ -169,6 +173,20 @@ async function processQueue(): Promise<void> {
 // ── Event cache (LocalStorage) ─────────────────────────────────────────────
 
 const EVENTS_CACHE_KEY = "calendar-events-v2";
+
+// ── Member color overrides (LocalStorage) ──────────────────────────────────
+
+const MEMBER_COLORS_KEY = "fk_member_colors_v1";
+
+function loadMemberColors(): Record<string, string> {
+  try { return JSON.parse(localStorage.getItem(MEMBER_COLORS_KEY) ?? "{}"); } catch { return {}; }
+}
+
+function saveMemberColor(memberId: string, color: string): void {
+  const colors = loadMemberColors();
+  colors[memberId] = color;
+  localStorage.setItem(MEMBER_COLORS_KEY, JSON.stringify(colors));
+}
 
 function loadCachedEvents(): CalendarEvent[] {
   try {
@@ -504,7 +522,7 @@ const state: AppState = {
   weekStart: startOfWeek(new Date()),
   monthStart: startOfMonth(new Date()),
   events: loadCachedEvents(),
-  members: DEFAULT_MEMBERS,
+  members: (() => { const c = loadMemberColors(); return DEFAULT_MEMBERS.map((m) => c[m.id] ? { ...m, color: c[m.id] } : m); })(),
   modal: null,
   shopping: loadShoppingItems(),
   todos: loadTodoItems(),
@@ -1545,6 +1563,10 @@ function showFilterSheet(): void {
                 : `<span style="font-size:12px;font-weight:600;color:rgba(235,235,245,0.5);">Einrichten ›</span>`;
             })()}
           </button>
+          <button class="filter-row" id="filter-colors-btn">
+            <span class="filter-row__name">🎨 Farben anpassen</span>
+            <span style="font-size:12px;font-weight:600;color:rgba(235,235,245,0.5);">›</span>
+          </button>
         </div>
       </div>
     </div>`;
@@ -1591,9 +1613,137 @@ function showFilterSheet(): void {
       sheet.remove();
       showNotificationsSheet();
     });
+    sheet.querySelector<HTMLElement>("#filter-colors-btn")?.addEventListener("click", () => {
+      sheet.remove();
+      showMemberColorSheet();
+    });
   }
 
   mount();
+}
+
+// ── Member color picker sheet ──────────────────────────────────────────────
+
+const PRESET_COLORS = [
+  "#0A84FF", "#5856D6", "#BF5AF2",
+  "#64D2FF", "#32ADE6", "#30D158",
+  "#34C759", "#00C7BE", "#34AADC",
+  "#FF2D55", "#FF6B35", "#FF9F0A",
+  "#FFD60A", "#FF3B30", "#AC8E68",
+  "#8E8E93", "#636366", "#EBEBF5",
+];
+
+function showMemberColorSheet(): void {
+  document.getElementById("member-colors-sheet")?.remove();
+
+  function showPickerFor(member: FamilyMember): void {
+    document.getElementById("color-picker-sheet")?.remove();
+
+    const swatches = PRESET_COLORS.map((c) => {
+      const active = member.color.toLowerCase() === c.toLowerCase() ? " color-swatch--active" : "";
+      return `<button class="color-swatch${active}" data-color="${c}" style="background:${c};"></button>`;
+    }).join("");
+
+    const html = `<div id="color-picker-sheet" class="sheet-backdrop">
+      <div class="bottom-sheet" data-stop-propagation>
+        <div class="bottom-sheet__handle"></div>
+        <p class="bottom-sheet__title">Farbe: ${escHtml(member.name)}</p>
+        <div class="color-swatch-grid">${swatches}</div>
+        <label class="color-picker-custom-row">
+          <span class="color-picker-custom-label">Eigene Farbe</span>
+          <input type="color" id="color-custom-input" value="${member.color}" class="color-picker-native">
+        </label>
+        <div class="color-picker-actions">
+          <button class="ics-import-cancel" id="color-picker-cancel">Abbrechen</button>
+          <button class="ics-import-confirm" id="color-picker-confirm">Übernehmen</button>
+        </div>
+      </div>
+    </div>`;
+
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = html;
+    const pickerSheet = wrapper.firstElementChild as HTMLElement;
+    document.body.appendChild(pickerSheet);
+
+    let selectedColor = member.color;
+
+    pickerSheet.querySelector<HTMLInputElement>("#color-custom-input")!
+      .addEventListener("input", (e) => {
+        selectedColor = (e.target as HTMLInputElement).value;
+        pickerSheet.querySelectorAll<HTMLElement>(".color-swatch")
+          .forEach((s) => s.classList.remove("color-swatch--active"));
+      });
+
+    pickerSheet.querySelectorAll<HTMLElement>(".color-swatch").forEach((swatch) => {
+      swatch.addEventListener("click", () => {
+        selectedColor = swatch.dataset.color!;
+        pickerSheet.querySelectorAll<HTMLElement>(".color-swatch")
+          .forEach((s) => s.classList.remove("color-swatch--active"));
+        swatch.classList.add("color-swatch--active");
+        pickerSheet.querySelector<HTMLInputElement>("#color-custom-input")!.value = selectedColor;
+      });
+    });
+
+    pickerSheet.querySelector("#color-picker-cancel")!.addEventListener("click", () => {
+      pickerSheet.remove();
+      showMemberColorSheet();
+    });
+
+    pickerSheet.querySelector("#color-picker-confirm")!.addEventListener("click", () => {
+      saveMemberColor(member.id, selectedColor);
+      state.members = state.members.map((m) => m.id === member.id ? { ...m, color: selectedColor } : m);
+      pickerSheet.remove();
+      render();
+      showMemberColorSheet();
+    });
+
+    pickerSheet.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement) === pickerSheet) { pickerSheet.remove(); showMemberColorSheet(); }
+    });
+    pickerSheet.querySelector<HTMLElement>("[data-stop-propagation]")!
+      .addEventListener("click", (e) => e.stopPropagation());
+  }
+
+  const memberRows = state.members.map((m) =>
+    `<button class="filter-row member-color-row" data-member-id="${m.id}">
+      <span class="filter-row__dot" style="background:${m.color};box-shadow:0 0 5px ${m.color}88;"></span>
+      <span class="filter-row__name">${escHtml(m.name)}</span>
+      <span class="member-color-chevron">›</span>
+    </button>`
+  ).join("");
+
+  const html = `<div id="member-colors-sheet" class="sheet-backdrop">
+    <div class="bottom-sheet" data-stop-propagation>
+      <div class="bottom-sheet__handle"></div>
+      <p class="bottom-sheet__title">🎨 Farben anpassen</p>
+      <div class="filter-member-list">${memberRows}</div>
+      <div style="padding:14px 20px 0;">
+        <button class="ics-import-cancel" id="member-colors-close">Schließen</button>
+      </div>
+    </div>
+  </div>`;
+
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = html;
+  const sheet = wrapper.firstElementChild as HTMLElement;
+  document.body.appendChild(sheet);
+
+  sheet.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement) === sheet) sheet.remove();
+  });
+  sheet.querySelector<HTMLElement>("[data-stop-propagation]")!
+    .addEventListener("click", (e) => e.stopPropagation());
+  sheet.querySelector<HTMLElement>("#member-colors-close")!
+    .addEventListener("click", () => sheet.remove());
+
+  sheet.querySelectorAll<HTMLElement>("[data-member-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.memberId!;
+      const member = state.members.find((m) => m.id === id)!;
+      sheet.remove();
+      showPickerFor(member);
+    });
+  });
 }
 
 // ── Search sheet ───────────────────────────────────────────────────────────

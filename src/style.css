@@ -2395,3 +2395,76 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .ics-import-confirm:not(:disabled):active {
   opacity: 0.8;
 }
+
+/* ── Member color picker ─────────────────────────────────────────────────── */
+
+.color-swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+  padding: 16px 20px;
+}
+
+.color-swatch {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  outline: none;
+  transition: transform 0.1s;
+}
+
+.color-swatch:active {
+  transform: scale(0.9);
+}
+
+.color-swatch--active::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2.5px solid #fff;
+  pointer-events: none;
+}
+
+.color-picker-custom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px 14px;
+  border-top: 1px solid var(--separator);
+  cursor: pointer;
+}
+
+.color-picker-custom-label {
+  font-size: 15px;
+  color: var(--text);
+}
+
+.color-picker-native {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background: none;
+  overflow: hidden;
+}
+
+.color-picker-actions {
+  display: flex;
+  gap: 10px;
+  padding: 0 20px 6px;
+}
+
+.member-color-row {
+  justify-content: space-between;
+}
+
+.member-color-chevron {
+  font-size: 20px;
+  color: var(--text-secondary);
+  line-height: 1;
+}
