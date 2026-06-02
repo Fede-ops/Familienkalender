@@ -1808,31 +1808,25 @@ function showEventDetail(ev: CalendarEvent): void {
 
   sheet.querySelector<HTMLElement>("[data-action='ics-event-from-detail']")
     ?.addEventListener("click", () => {
-      // ICS-file-only share: iOS presents "Zum Kalender hinzufügen" as primary action.
-      // Sending ONLY the file (no text) ensures iOS treats this as a file share and
-      // surfaces the Calendar import option at the top of the share sheet.
+      // Open the ICS file directly — skip the share sheet entirely.
+      // iOS Safari recognises text/calendar blob URLs and shows the native
+      // "Zum Kalender hinzufügen" prompt without any share-sheet confusion.
       const icsContent = generateICS(ev);
       const icsFileName = `${ev.summary.replace(/[^a-zA-Z0-9À-ɏ]/g, "_")}.ics`;
-      const icsFile = new File([icsContent], icsFileName, { type: "text/calendar;charset=utf-8" });
-      const shareWithFile: ShareData = { title: ev.summary, files: [icsFile] };
-      const canShareFile = (() => { try { return navigator.canShare?.(shareWithFile) ?? false; } catch { return false; } })();
-      if (canShareFile) {
-        void navigator.share(shareWithFile).catch((err) => {
-          if ((err as { name?: string }).name !== "AbortError") {
-            // Fallback: open blob URL — on iOS Safari this triggers "Add to Calendar"
-            const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
-            const url = URL.createObjectURL(blob);
-            window.open(url, "_blank");
-            setTimeout(() => URL.revokeObjectURL(url), 10_000);
-          }
-        });
-      } else {
-        // No Web Share file support — try direct blob URL navigation
-        const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        window.open(url, "_blank");
-        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      // window.open triggered from a direct tap is not blocked by iOS pop-up policy.
+      const w = window.open(url, "_blank");
+      if (!w) {
+        // Fallback for browsers that block window.open: <a download>
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = icsFileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
       }
+      setTimeout(() => URL.revokeObjectURL(url), 15_000);
     });
   sheet.querySelector<HTMLElement>("[data-action='delete-event-from-detail']")
     ?.addEventListener("click", () => {
