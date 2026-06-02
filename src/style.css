@@ -1751,9 +1751,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   flex: 1;
   border: none;
   border-radius: 12px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
-  padding: 13px;
+  padding: 13px 10px;
   cursor: pointer;
   font-family: inherit;
   letter-spacing: -0.01em;
@@ -2299,4 +2299,99 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .delete-series-btn--cancel {
   color: var(--text-secondary);
   margin-top: 4px;
+}
+
+/* ── ICS import sheet ────────────────────────────────────────────────────── */
+
+.ics-import-member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 20px 14px;
+  border-bottom: 1px solid var(--separator);
+}
+
+.ics-import-label {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.ics-import-select {
+  background: var(--bg-elev-2);
+  border: none;
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 15px;
+  font-family: inherit;
+  padding: 6px 10px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.ics-import-events {
+  max-height: 42vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ics-import-event {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--separator);
+}
+
+.ics-import-event__title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.ics-import-event__when {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.ics-import-actions {
+  display: flex;
+  gap: 10px;
+  padding: 14px 20px 0;
+}
+
+.ics-import-cancel {
+  flex: 1;
+  padding: 14px;
+  border: none;
+  border-radius: 12px;
+  background: var(--bg-elev-2);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  letter-spacing: -0.01em;
+}
+
+.ics-import-confirm {
+  flex: 2;
+  padding: 14px;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent-blue);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  letter-spacing: -0.01em;
+}
+
+.ics-import-confirm:disabled {
+  opacity: 0.6;
+}
+
+.ics-import-cancel:active,
+.ics-import-confirm:not(:disabled):active {
+  opacity: 0.8;
 }

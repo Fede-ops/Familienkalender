@@ -1080,6 +1080,8 @@ function bindEvents(): void {
         showFilterSheet();
       } else if (action === "search") {
         showSearchSheet();
+      } else if (action === "import-ics") {
+        triggerICSImport();
       }
     });
   });
@@ -1806,7 +1808,6 @@ function showEventDetail(ev: CalendarEvent): void {
         });
       }
     });
-
   sheet.querySelector<HTMLElement>("[data-action='ics-event-from-detail']")
     ?.addEventListener("click", () => {
       const icsContent = generateICS(ev);
@@ -1956,12 +1957,6 @@ function extractSeriesRrule(description: string | undefined): string | null {
   return m ? m[1] : null;
 }
 
-function extractReminder(description: string | undefined): number {
-  if (!description) return 0;
-  const m = description.match(/\[remind:(\d+)\]/);
-  return m ? parseInt(m[1], 10) : 0;
-}
-
 function stripMetaTags(description: string | undefined): string {
   if (!description) return "";
   return description
@@ -2014,6 +2009,208 @@ function generateICS(ev: CalendarEvent): string {
 
 
 
+
+// ── ICS import ─────────────────────────────────────────────────────────────
+
+interface ParsedICSEvent {
+  summary: string;
+  start: Date;
+  end: Date;
+  allDay: boolean;
+  location?: string;
+  description?: string;
+}
+
+function parseICS(raw: string): ParsedICSEvent[] {
+  // Unfold continuation lines (RFC 5545 §3.1)
+  const text = raw.replace(/\r\n[ \t]/g, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+  const unesc = (s: string) =>
+    s.replace(/\\n/gi, "\n").replace(/\\,/g, ",").replace(/\\;/g, ";").replace(/\\\\/g, "\\");
+
+  function parseDtValue(val: string, params: string): { date: Date; allDay: boolean } {
+    const isDate = params.includes("VALUE=DATE") && !val.includes("T");
+    if (isDate) {
+      const y = +val.slice(0, 4), m = +val.slice(4, 6) - 1, d = +val.slice(6, 8);
+      return { date: new Date(y, m, d), allDay: true };
+    }
+    const y = +val.slice(0, 4), mo = +val.slice(4, 6) - 1, d = +val.slice(6, 8);
+    const h = +val.slice(9, 11), min = +val.slice(11, 13), s = +(val.slice(13, 15) || "0");
+    const utc = val.endsWith("Z");
+    return {
+      date: utc ? new Date(Date.UTC(y, mo, d, h, min, s)) : new Date(y, mo, d, h, min, s),
+      allDay: false,
+    };
+  }
+
+  const events: ParsedICSEvent[] = [];
+  let inEvent = false;
+  const props: Record<string, string> = {};
+  const params: Record<string, string> = {};
+
+  for (const line of text.split("\n")) {
+    const t = line.trimEnd();
+    if (t === "BEGIN:VEVENT") {
+      inEvent = true;
+      for (const k of Object.keys(props)) delete props[k];
+      for (const k of Object.keys(params)) delete params[k];
+      continue;
+    }
+    if (t === "END:VEVENT") {
+      inEvent = false;
+      if (!props["SUMMARY"] || !props["DTSTART"]) continue;
+      const { date: start, allDay } = parseDtValue(props["DTSTART"], params["DTSTART"] ?? "");
+      let end: Date;
+      if (props["DTEND"]) {
+        const r = parseDtValue(props["DTEND"], params["DTEND"] ?? "");
+        end = allDay ? new Date(r.date.getTime() - 86_400_000) : r.date;
+      } else if (props["DURATION"]) {
+        let ms = 0;
+        const dm = props["DURATION"].match(/(\d+)D/); if (dm) ms += +dm[1] * 86_400_000;
+        const hm = props["DURATION"].match(/(\d+)H/); if (hm) ms += +hm[1] * 3_600_000;
+        const mm = props["DURATION"].match(/(\d+)M/); if (mm) ms += +mm[1] * 60_000;
+        end = allDay ? new Date(start.getTime() + ms - 86_400_000) : new Date(start.getTime() + ms);
+      } else {
+        end = allDay ? new Date(start) : new Date(start.getTime() + 3_600_000);
+      }
+      const ev: ParsedICSEvent = { summary: unesc(props["SUMMARY"]), start, end, allDay };
+      if (props["LOCATION"]) ev.location = unesc(props["LOCATION"]);
+      if (props["DESCRIPTION"]) ev.description = unesc(props["DESCRIPTION"]);
+      events.push(ev);
+      continue;
+    }
+    if (!inEvent) continue;
+    const ci = t.indexOf(":");
+    if (ci === -1) continue;
+    const nameParams = t.slice(0, ci);
+    const value = t.slice(ci + 1);
+    const si = nameParams.indexOf(";");
+    const name = (si === -1 ? nameParams : nameParams.slice(0, si)).toUpperCase();
+    props[name] = value;
+    if (si !== -1) params[name] = nameParams.slice(si + 1).toUpperCase();
+  }
+
+  return events.sort((a, b) => a.start.getTime() - b.start.getTime());
+}
+
+function triggerICSImport(): void {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".ics,text/calendar";
+  input.addEventListener("change", () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      try {
+        const parsed = parseICS(text);
+        showICSImportSheet(parsed);
+      } catch {
+        showTransientBanner("ICS-Datei konnte nicht gelesen werden", true);
+      }
+    };
+    reader.readAsText(file, "utf-8");
+  });
+  input.click();
+}
+
+function showICSImportSheet(events: ParsedICSEvent[]): void {
+  document.getElementById("ics-import-sheet")?.remove();
+
+  if (events.length === 0) {
+    showTransientBanner("Keine Termine in der ICS-Datei gefunden");
+    return;
+  }
+
+  function escH(s: string) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  const fmtD = (d: Date) => `${d.getDate()}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
+  const fmtT = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+  const memberOptions = state.members
+    .map((m) => `<option value="${m.id}">${escH(m.name)}</option>`)
+    .join("");
+
+  const eventRows = events.map((ev) => {
+    const when = ev.allDay
+      ? fmtD(ev.start)
+      : `${fmtD(ev.start)}, ${fmtT(ev.start)} – ${fmtT(ev.end)}`;
+    return `<div class="ics-import-event">
+      <p class="ics-import-event__title">${escH(ev.summary)}</p>
+      <p class="ics-import-event__when">${when}</p>
+    </div>`;
+  }).join("");
+
+  const count = events.length;
+  const html = `<div id="ics-import-sheet" class="sheet-backdrop">
+    <div class="bottom-sheet ics-import-sheet" data-stop-propagation>
+      <div class="bottom-sheet__handle"></div>
+      <p class="bottom-sheet__title">${count} Termin${count !== 1 ? "e" : ""} importieren</p>
+      <div class="ics-import-member-row">
+        <span class="ics-import-label">Kalender</span>
+        <select class="ics-import-select" id="ics-import-member">${memberOptions}</select>
+      </div>
+      <div class="ics-import-events">${eventRows}</div>
+      <div class="ics-import-actions">
+        <button class="ics-import-cancel" id="ics-import-cancel">Abbrechen</button>
+        <button class="ics-import-confirm" id="ics-import-confirm">Alle importieren</button>
+      </div>
+    </div>
+  </div>`;
+
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = html;
+  const sheet = wrapper.firstElementChild as HTMLElement;
+  document.body.appendChild(sheet);
+
+  document.getElementById("ics-import-cancel")!.addEventListener("click", () => sheet.remove());
+  sheet.addEventListener("click", (e) => { if ((e.target as HTMLElement) === sheet) sheet.remove(); });
+  sheet.querySelector<HTMLElement>("[data-stop-propagation]")!
+    .addEventListener("click", (e) => e.stopPropagation());
+
+  document.getElementById("ics-import-confirm")!.addEventListener("click", async () => {
+    const memberId = (document.getElementById("ics-import-member") as HTMLSelectElement).value;
+    const btn = document.getElementById("ics-import-confirm") as HTMLButtonElement;
+    btn.disabled = true;
+    btn.textContent = "Importiere…";
+
+    const config = loadConfig();
+    if (!config) {
+      showTransientBanner("Kein HA-Zugang konfiguriert", true);
+      sheet.remove();
+      return;
+    }
+    const client = new HAClient(config);
+    let ok = 0, fail = 0;
+    for (const ev of events) {
+      try {
+        await client.createEvent(memberId, ev.summary, ev.start, ev.end, ev.allDay, {
+          location: ev.location,
+          description: ev.description,
+        });
+        ok++;
+      } catch {
+        fail++;
+      }
+    }
+    sheet.remove();
+    if (fail === 0) {
+      showTransientBanner(`${ok} Termin${ok !== 1 ? "e" : ""} importiert ✓`);
+    } else {
+      showTransientBanner(`${ok} importiert, ${fail} fehlgeschlagen`, true);
+    }
+    setTimeout(() => void refreshEvents(), 2_000);
+  });
+}
+
+function extractReminder(description: string | undefined): number {
+  if (!description) return 0;
+  const m = description.match(/\[remind:(\d+)\]/);
+  return m ? parseInt(m[1], 10) : 0;
+}
 
 function nthWeekdayInMonth(year: number, month: number, pos: number, weekday: number): Date {
   if (pos === -1) {
