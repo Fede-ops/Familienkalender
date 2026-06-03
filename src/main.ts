@@ -1872,61 +1872,96 @@ function showMemberColorSheet(): void {
 function showBirthdaySettingsSheet(): void {
   document.getElementById("birthday-settings-sheet")?.remove();
 
-  const count = loadBirthdayData().length;
-  const savedUrl = localStorage.getItem(BIRTHDAY_ICS_KEY) ?? "";
+  const MONTHS_DE = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
 
-  const html = `<div id="birthday-settings-sheet" class="sheet-backdrop">
-    <div class="bottom-sheet" data-stop-propagation>
-      <div class="bottom-sheet__handle"></div>
-      <p class="bottom-sheet__title">🎂 Geburtstage</p>
-      <p style="font-size:13px;color:rgba(235,235,245,0.6);padding:0 20px 12px;">
-        iCloud-Kalender-URL (webcal://…) einfügen. Die App liest die Geburtstage aus und speichert sie lokal.
-      </p>
-      <div style="padding:0 20px;">
-        <input id="birthday-ics-input" type="url" inputmode="url"
-          placeholder="webcal://p10-caldav.icloud.com/published/2/…"
-          value="${escHtml(savedUrl)}"
-          style="width:100%;box-sizing:border-box;background:rgba(120,120,128,0.18);border:none;border-radius:10px;padding:11px 13px;font-size:14px;color:#EBEBF5;outline:none;" />
+  function buildSheet(): HTMLElement {
+    const data = loadBirthdayData().slice().sort((a, b) => a.name.localeCompare(b.name));
+    const savedUrl = localStorage.getItem(BIRTHDAY_ICS_KEY) ?? "";
+
+    const listRows = data.length === 0
+      ? `<p style="font-size:13px;color:rgba(235,235,245,0.4);padding:12px 20px;">Noch keine Geburtstage gespeichert.</p>`
+      : data.map((bd, i) =>
+          `<div class="filter-row" style="justify-content:space-between;" data-bd-index="${i}">
+            <span style="font-size:15px;">${escHtml(bd.name)}</span>
+            <span style="display:flex;align-items:center;gap:12px;">
+              <span style="font-size:13px;color:rgba(235,235,245,0.5);">${bd.day}. ${MONTHS_DE[bd.month]}</span>
+              <button data-delete-index="${i}" style="background:none;border:none;padding:4px 6px;cursor:pointer;font-size:16px;color:rgba(235,235,245,0.4);line-height:1;" aria-label="Löschen">✕</button>
+            </span>
+          </div>`
+        ).join("");
+
+    const html = `<div id="birthday-settings-sheet" class="sheet-backdrop">
+      <div class="bottom-sheet" data-stop-propagation style="max-height:85dvh;display:flex;flex-direction:column;">
+        <div class="bottom-sheet__handle"></div>
+        <p class="bottom-sheet__title" style="flex-shrink:0;">🎂 Geburtstage</p>
+        <div style="padding:0 20px 10px;flex-shrink:0;">
+          <input id="birthday-ics-input" type="url" inputmode="url"
+            placeholder="webcal://p10-caldav.icloud.com/published/2/…"
+            value="${escHtml(savedUrl)}"
+            style="width:100%;box-sizing:border-box;background:rgba(120,120,128,0.18);border:none;border-radius:10px;padding:11px 13px;font-size:14px;color:#EBEBF5;outline:none;" />
+        </div>
+        <div style="padding:0 20px 12px;flex-shrink:0;">
+          <button class="ics-import-confirm" id="birthday-fetch" style="width:100%;">Aktualisieren</button>
+        </div>
+        ${data.length > 0 ? `<p style="font-size:12px;color:rgba(235,235,245,0.4);padding:0 20px 4px;flex-shrink:0;">${data.length} Einträge</p>` : ""}
+        <div style="overflow-y:auto;flex:1 1 0;">${listRows}</div>
+        <div style="padding:12px 20px;flex-shrink:0;">
+          <button class="ics-import-cancel" id="birthday-close" style="width:100%;">Schließen</button>
+        </div>
       </div>
-      ${count > 0 ? `<p style="font-size:12px;color:rgba(235,235,245,0.45);padding:8px 20px 0;">${count} Geburtstage gespeichert · werden beim Aktualisieren neu geladen</p>` : ""}
-      <div style="padding:14px 20px 0;display:flex;gap:10px;">
-        <button class="ics-import-cancel" id="birthday-cancel" style="flex:1;">Abbrechen</button>
-        <button class="ics-import-confirm" id="birthday-fetch" style="flex:2;">Aktualisieren</button>
-      </div>
-    </div>
-  </div>`;
+    </div>`;
 
-  const wrapper = document.createElement("div");
-  wrapper.innerHTML = html;
-  const sheet = wrapper.firstElementChild as HTMLElement;
-  document.body.appendChild(sheet);
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = html;
+    return wrapper.firstElementChild as HTMLElement;
+  }
 
-  sheet.addEventListener("click", (e) => { if ((e.target as HTMLElement) === sheet) sheet.remove(); });
-  sheet.querySelector<HTMLElement>("[data-stop-propagation]")!
-    .addEventListener("click", (e) => e.stopPropagation());
-  sheet.querySelector<HTMLElement>("#birthday-cancel")!
-    .addEventListener("click", () => sheet.remove());
+  function mount(): void {
+    document.getElementById("birthday-settings-sheet")?.remove();
+    const sheet = buildSheet();
+    document.body.appendChild(sheet);
 
-  sheet.querySelector<HTMLElement>("#birthday-fetch")!
-    .addEventListener("click", async () => {
-      const input = sheet.querySelector<HTMLInputElement>("#birthday-ics-input")!;
-      const url = input.value.trim();
-      if (!url) { showTransientBanner("Bitte URL eingeben", true); return; }
-      localStorage.setItem(BIRTHDAY_ICS_KEY, url);
-      const btn = sheet.querySelector<HTMLButtonElement>("#birthday-fetch")!;
-      btn.disabled = true;
-      btn.textContent = "Lade…";
-      try {
-        const n = await fetchAndCacheBirthdayICS();
-        sheet.remove();
-        showTransientBanner(`🎂 ${n} Geburtstage geladen`);
+    sheet.addEventListener("click", (e) => { if ((e.target as HTMLElement) === sheet) sheet.remove(); });
+    sheet.querySelector<HTMLElement>("[data-stop-propagation]")!
+      .addEventListener("click", (e) => e.stopPropagation());
+    sheet.querySelector<HTMLElement>("#birthday-close")!
+      .addEventListener("click", () => sheet.remove());
+
+    sheet.querySelector<HTMLElement>("#birthday-fetch")!
+      .addEventListener("click", async () => {
+        const input = sheet.querySelector<HTMLInputElement>("#birthday-ics-input")!;
+        const url = input.value.trim();
+        if (!url) { showTransientBanner("Bitte URL eingeben", true); return; }
+        localStorage.setItem(BIRTHDAY_ICS_KEY, url);
+        const btn = sheet.querySelector<HTMLButtonElement>("#birthday-fetch")!;
+        btn.disabled = true;
+        btn.textContent = "Lade…";
+        try {
+          const n = await fetchAndCacheBirthdayICS();
+          showTransientBanner(`🎂 ${n} Geburtstage geladen`);
+          render();
+          mount();
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = "Aktualisieren";
+          showTransientBanner(`Fehler: ${err instanceof Error ? err.message : String(err)}`, true);
+        }
+      });
+
+    sheet.querySelectorAll<HTMLElement>("[data-delete-index]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.dataset.deleteIndex);
+        const data = loadBirthdayData().slice().sort((a, b) => a.name.localeCompare(b.name));
+        data.splice(idx, 1);
+        localStorage.setItem(BIRTHDAY_DATA_KEY, JSON.stringify(data));
+        pushBirthdayDataToHA(data);
         render();
-      } catch (err) {
-        btn.disabled = false;
-        btn.textContent = "Aktualisieren";
-        showTransientBanner(`Fehler: ${err instanceof Error ? err.message : String(err)}`, true);
-      }
+        mount();
+      });
     });
+  }
+
+  mount();
 }
 
 // ── Search sheet ───────────────────────────────────────────────────────────
