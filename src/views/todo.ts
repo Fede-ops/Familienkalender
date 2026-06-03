@@ -1001,7 +1001,9 @@ export function renderTodoView(viewState: TodoViewState): string {
     `<button class="todo-member-chip${!activeMemberId ? " todo-member-chip--active" : ""}" data-action="todo-filter" data-member-id="">
       <span class="todo-member-chip__label">Alle</span>
     </button>`,
-    ...members.map((m) => {
+    // Holidays (and other virtual members, id prefixed with "__") aren't
+    // assignable to to-do items, so they don't belong in the filter strip.
+    ...members.filter((m) => !m.id.startsWith("__")).map((m) => {
       const grad = `linear-gradient(135deg,${m.color} 0%,${shade(m.color, -30)} 100%)`;
       const active = m.id === activeMemberId;
       return `<button class="todo-member-chip${active ? " todo-member-chip--active" : ""}" data-action="todo-filter" data-member-id="${m.id}" style="${active ? `--chip-accent:${m.color};` : ""}">
