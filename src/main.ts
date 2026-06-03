@@ -211,6 +211,69 @@ function saveCachedEvents(events: CalendarEvent[]): void {
 const HOLIDAY_MEMBER_ID = "__feiertage__";
 const HOLIDAY_MEMBER: FamilyMember = { id: HOLIDAY_MEMBER_ID, name: "Feiertage 🇦🇹", initial: "🇦🇹", color: "#FF3B30" };
 
+const BIRTHDAY_MEMBER_ID = "__geburtstage__";
+const BIRTHDAY_MEMBER: FamilyMember = { id: BIRTHDAY_MEMBER_ID, name: "Geburtstage 🎂", initial: "🎂", color: "#FF2D55" };
+
+const BIRTHDAY_ICS_KEY  = "fk_birthday_ics_url";
+const BIRTHDAY_DATA_KEY = "fk_birthday_data_v1";
+
+interface BirthdayEntry { name: string; month: number; day: number; }
+
+function loadBirthdayData(): BirthdayEntry[] {
+  try { return JSON.parse(localStorage.getItem(BIRTHDAY_DATA_KEY) ?? "[]") as BirthdayEntry[]; }
+  catch { return []; }
+}
+
+async function fetchAndCacheBirthdayICS(): Promise<number> {
+  const raw = localStorage.getItem(BIRTHDAY_ICS_KEY);
+  if (!raw) return 0;
+  const url = raw.replace(/^webcal:\/\//i, "https://");
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text = await res.text();
+  const parsed = parseICS(text);
+  const seen = new Set<string>();
+  const data: BirthdayEntry[] = [];
+  for (const ev of parsed) {
+    if (!ev.allDay) continue;
+    const key = `${ev.summary}|${ev.start.getMonth()}|${ev.start.getDate()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    data.push({ name: ev.summary, month: ev.start.getMonth(), day: ev.start.getDate() });
+  }
+  localStorage.setItem(BIRTHDAY_DATA_KEY, JSON.stringify(data));
+  pushBirthdayDataToHA(data);
+  return data.length;
+}
+
+function pushBirthdayDataToHA(data: BirthdayEntry[]): void {
+  const cfg = loadConfig();
+  if (!cfg) return;
+  void fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_birthdays`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ state: String(data.length), attributes: { birthdays: data, ts: Date.now() } }),
+  }).catch(() => {});
+}
+
+async function syncBirthdaysFromHA(): Promise<void> {
+  const cfg = loadConfig();
+  if (!cfg) return;
+  try {
+    const res = await fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_birthdays`, {
+      headers: { Authorization: `Bearer ${cfg.token}` },
+    });
+    if (!res.ok) return;
+    const data = (await res.json()) as { attributes?: { birthdays?: BirthdayEntry[] } };
+    const birthdays = data.attributes?.birthdays;
+    if (!Array.isArray(birthdays) || birthdays.length === 0) return;
+    const local = loadBirthdayData();
+    if (birthdays.length > local.length) {
+      localStorage.setItem(BIRTHDAY_DATA_KEY, JSON.stringify(birthdays));
+    }
+  } catch { /* ignore */ }
+}
+
 const DEFAULT_MEMBERS: FamilyMember[] = [
   { id: "calendar.fede",        name: "Fede",   initial: "F", color: "#0A84FF" },
   { id: "calendar.pita",        name: "Pita",   initial: "P", color: "#30D158" },
@@ -219,6 +282,7 @@ const DEFAULT_MEMBERS: FamilyMember[] = [
   { id: "calendar.fede_trabajo", name: "Fede T", initial: "F", color: "#7EB8FF" },
   { id: "calendar.pita_trabajo", name: "Pita T", initial: "P", color: "#5AC46A" },
   HOLIDAY_MEMBER,
+  BIRTHDAY_MEMBER,
 ];
 
 interface AppState {
@@ -606,16 +670,39 @@ function holidayEvents(): CalendarEvent[] {
   return [y - 1, y, y + 1].flatMap(generateAustrianHolidays);
 }
 
+function birthdayEvents(): CalendarEvent[] {
+  const data = loadBirthdayData();
+  if (!data.length) return [];
+  const base = state.viewMode === "week" ? state.weekStart : state.monthStart;
+  const year = base.getFullYear();
+  const events: CalendarEvent[] = [];
+  for (const bd of data) {
+    for (const y of [year - 1, year, year + 1]) {
+      events.push({
+        uid: `__birthday__${bd.name.replace(/[^a-zA-Z0-9]/g, "_")}__${bd.month}_${bd.day}`,
+        summary: `🎂 ${bd.name}`,
+        start: new Date(y, bd.month, bd.day),
+        end:   new Date(y, bd.month, bd.day),
+        allDay: true,
+        memberId: BIRTHDAY_MEMBER_ID,
+      });
+    }
+  }
+  return events;
+}
+
 function visibleEvents(): CalendarEvent[] {
   const holidays = holidayEvents();
+  const birthdays = birthdayEvents();
   if (state.filterMemberIds.length === 0) {
-    return [...state.events, ...holidays];
+    return [...state.events, ...holidays, ...birthdays];
   }
   const regular = state.events.filter((e) => state.filterMemberIds.includes(e.memberId ?? ""));
-  if (state.filterMemberIds.includes(HOLIDAY_MEMBER_ID)) {
-    return [...regular, ...holidays];
-  }
-  return regular;
+  return [
+    ...regular,
+    ...(state.filterMemberIds.includes(HOLIDAY_MEMBER_ID)  ? holidays  : []),
+    ...(state.filterMemberIds.includes(BIRTHDAY_MEMBER_ID) ? birthdays : []),
+  ];
 }
 
 // ── Rendering ──────────────────────────────────────────────────────────────
@@ -658,7 +745,7 @@ function render(): void {
       members: state.members,
       today: new Date(),
     });
-    if (state.modal) html += renderEventModal(state.modal, state.members.filter((m) => m.id !== HOLIDAY_MEMBER_ID), occurrencePreviewCount(state.modal));
+    if (state.modal) html += renderEventModal(state.modal, state.members.filter((m) => !m.id.startsWith("__")), occurrencePreviewCount(state.modal));
   } else {
     html = renderWeekView({
       weekStart: state.weekStart,
@@ -667,7 +754,7 @@ function render(): void {
       today: new Date(),
       filterActive: state.filterMemberIds.length > 0,
     });
-    if (state.modal) html += renderEventModal(state.modal, state.members.filter((m) => m.id !== HOLIDAY_MEMBER_ID), occurrencePreviewCount(state.modal));
+    if (state.modal) html += renderEventModal(state.modal, state.members.filter((m) => !m.id.startsWith("__")), occurrencePreviewCount(state.modal));
   }
   app.innerHTML = html;
   app.dataset.buildTime = __BUILD_TIME__;
@@ -834,7 +921,7 @@ function setupDragDrop(): void {
 
 function onEventTouchStart(e: TouchEvent, el: HTMLElement): void {
   const uid = el.dataset.uid;
-  if (!uid || state.modal || uid.startsWith("__holiday__")) return;
+  if (!uid || state.modal || uid.startsWith("__")) return;
   const touch = e.touches[0];
 
   const earlyMove = (ev: TouchEvent) => {
@@ -1588,6 +1675,15 @@ function showFilterSheet(): void {
             <span class="filter-row__name">🎨 Farben anpassen</span>
             <span style="font-size:12px;font-weight:600;color:rgba(235,235,245,0.5);">›</span>
           </button>
+          <button class="filter-row" id="filter-birthday-btn">
+            <span class="filter-row__name">🎂 Geburtstage</span>
+            ${(() => {
+              const count = loadBirthdayData().length;
+              return count > 0
+                ? `<span style="font-size:12px;font-weight:600;color:#FF2D55;">${count} Einträge · Bearbeiten ›</span>`
+                : `<span style="font-size:12px;font-weight:600;color:rgba(235,235,245,0.5);">Einrichten ›</span>`;
+            })()}
+          </button>
         </div>
       </div>
     </div>`;
@@ -1637,6 +1733,10 @@ function showFilterSheet(): void {
     sheet.querySelector<HTMLElement>("#filter-colors-btn")?.addEventListener("click", () => {
       sheet.remove();
       showMemberColorSheet();
+    });
+    sheet.querySelector<HTMLElement>("#filter-birthday-btn")?.addEventListener("click", () => {
+      sheet.remove();
+      showBirthdaySettingsSheet();
     });
   }
 
@@ -1765,6 +1865,68 @@ function showMemberColorSheet(): void {
       showPickerFor(member);
     });
   });
+}
+
+// ── Birthday ICS settings sheet ────────────────────────────────────────────
+
+function showBirthdaySettingsSheet(): void {
+  document.getElementById("birthday-settings-sheet")?.remove();
+
+  const count = loadBirthdayData().length;
+  const savedUrl = localStorage.getItem(BIRTHDAY_ICS_KEY) ?? "";
+
+  const html = `<div id="birthday-settings-sheet" class="sheet-backdrop">
+    <div class="bottom-sheet" data-stop-propagation>
+      <div class="bottom-sheet__handle"></div>
+      <p class="bottom-sheet__title">🎂 Geburtstage</p>
+      <p style="font-size:13px;color:rgba(235,235,245,0.6);padding:0 20px 12px;">
+        iCloud-Kalender-URL (webcal://…) einfügen. Die App liest die Geburtstage aus und speichert sie lokal.
+      </p>
+      <div style="padding:0 20px;">
+        <input id="birthday-ics-input" type="url" inputmode="url"
+          placeholder="webcal://p10-caldav.icloud.com/published/2/…"
+          value="${escHtml(savedUrl)}"
+          style="width:100%;box-sizing:border-box;background:rgba(120,120,128,0.18);border:none;border-radius:10px;padding:11px 13px;font-size:14px;color:#EBEBF5;outline:none;" />
+      </div>
+      ${count > 0 ? `<p style="font-size:12px;color:rgba(235,235,245,0.45);padding:8px 20px 0;">${count} Geburtstage gespeichert · werden beim Aktualisieren neu geladen</p>` : ""}
+      <div style="padding:14px 20px 0;display:flex;gap:10px;">
+        <button class="ics-import-cancel" id="birthday-cancel" style="flex:1;">Abbrechen</button>
+        <button class="ics-import-confirm" id="birthday-fetch" style="flex:2;">Aktualisieren</button>
+      </div>
+    </div>
+  </div>`;
+
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = html;
+  const sheet = wrapper.firstElementChild as HTMLElement;
+  document.body.appendChild(sheet);
+
+  sheet.addEventListener("click", (e) => { if ((e.target as HTMLElement) === sheet) sheet.remove(); });
+  sheet.querySelector<HTMLElement>("[data-stop-propagation]")!
+    .addEventListener("click", (e) => e.stopPropagation());
+  sheet.querySelector<HTMLElement>("#birthday-cancel")!
+    .addEventListener("click", () => sheet.remove());
+
+  sheet.querySelector<HTMLElement>("#birthday-fetch")!
+    .addEventListener("click", async () => {
+      const input = sheet.querySelector<HTMLInputElement>("#birthday-ics-input")!;
+      const url = input.value.trim();
+      if (!url) { showTransientBanner("Bitte URL eingeben", true); return; }
+      localStorage.setItem(BIRTHDAY_ICS_KEY, url);
+      const btn = sheet.querySelector<HTMLButtonElement>("#birthday-fetch")!;
+      btn.disabled = true;
+      btn.textContent = "Lade…";
+      try {
+        const n = await fetchAndCacheBirthdayICS();
+        sheet.remove();
+        showTransientBanner(`🎂 ${n} Geburtstage geladen`);
+        render();
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = "Aktualisieren";
+        showTransientBanner(`Fehler: ${err instanceof Error ? err.message : String(err)}`, true);
+      }
+    });
 }
 
 // ── Search sheet ───────────────────────────────────────────────────────────
@@ -3284,6 +3446,13 @@ if (demoMode) {
   renderConfig();
 } else {
   render();
+  // Sync birthday data from HA (cross-device persistence), then try a fresh ICS fetch.
+  void syncBirthdaysFromHA().then(() => {
+    render();
+    if (localStorage.getItem(BIRTHDAY_ICS_KEY)) {
+      void fetchAndCacheBirthdayICS().then(() => render()).catch(() => {});
+    }
+  });
   // Pull hidden UIDs first, THEN refresh — so deleted events are never
   // momentarily re-shown after a page reload.
   void syncHiddenUidsFromHA().then(() => {
