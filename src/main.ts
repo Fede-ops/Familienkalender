@@ -430,6 +430,7 @@ const _TB_ITEMS: { key: TabKey; icon: string; label: string }[] = [
   { key: "einkauf", icon: _TB_ICONS.cart, label: "Einkauf" },
 ];
 const _PLUS_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>`;
+const _CHECK_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
 const persistentTabBar = document.createElement("nav");
 persistentTabBar.className = "tab-bar";
 persistentTabBar.innerHTML = _TB_ITEMS.map((it) =>
@@ -457,8 +458,24 @@ function updateTabBarActive(): void {
   });
 }
 
+// When the event modal is open the FAB turns into a thumb-reachable
+// confirm/save button (checkmark); otherwise it stays the "+" add button.
+function updateFab(): void {
+  const inModal = !!state.modal;
+  addBtn.classList.toggle("tab-bar__add--confirm", inModal);
+  addBtn.setAttribute("aria-label", inModal ? "Termin speichern" : "Termin hinzufügen");
+  addBtn.innerHTML = `<span class="tab-bar__icon">${inModal ? _CHECK_SVG : _PLUS_SVG}</span>`;
+}
+
 bottomBar.addEventListener("click", (e) => {
   if ((e.target as HTMLElement).closest<HTMLElement>("[data-action='add-event']")) {
+    // While the event modal is open, the FAB acts as a save button — delegate
+    // to the modal's own save button so all its disabled/loading logic applies.
+    if (state.modal) {
+      const saveBtn = app.querySelector<HTMLButtonElement>('[data-action="save-event"]');
+      saveBtn?.click();
+      return;
+    }
     if (state.activeTab === "kalender") {
       state.modal = defaultModalState(state.members, dateForNewEvent());
       render();
@@ -669,6 +686,7 @@ function render(): void {
   setupDragDrop();
   setupLongPress();
   updateTabBarActive();
+  updateFab();
   const modalNowOpen = !!state.modal;
   if (modalNowOpen && !_prevModalOpen) document.getElementById("modal-summary")?.focus();
   _prevModalOpen = modalNowOpen;

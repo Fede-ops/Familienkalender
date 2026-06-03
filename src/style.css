@@ -691,6 +691,10 @@ body {
   transition: transform 0.12s ease;
   pointer-events: auto;
 }
+.tab-bar__add--confirm {
+  background: linear-gradient(135deg, #30d158 0%, #34c759 100%);
+  box-shadow: 0 4px 16px rgba(48, 209, 88, 0.5);
+}
 .tab-bar__add:active {
   transform: scale(0.92);
 }
