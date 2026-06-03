@@ -154,6 +154,85 @@ def get_hidden_uids():
     return set(uids) if isinstance(uids, list) else set()
 
 
+def parse_birthday_ics(raw_bytes):
+    """Parst iCloud-Geburtstags-ICS; gibt Liste von {name, month, day} zurück."""
+    try:
+        text = raw_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        text = raw_bytes.decode("latin-1")
+    text = re.sub(r"\r\n[ \t]", "", text).replace("\r\n", "\n").replace("\r", "\n")
+
+    results, seen, in_event, props = [], set(), False, {}
+    for line in text.split("\n"):
+        line = line.rstrip()
+        if line == "BEGIN:VEVENT":
+            in_event, props = True, {}
+        elif line == "END:VEVENT":
+            in_event = False
+            if "SUMMARY" not in props or "DTSTART" not in props:
+                continue
+            if "FREQ=YEARLY" not in props.get("RRULE", ""):
+                continue
+            m = re.match(r"\d{4}(\d{2})(\d{2})", props["DTSTART"])
+            if not m:
+                continue
+            month, day = int(m.group(1)) - 1, int(m.group(2))
+            name = props["SUMMARY"].replace("\\n", "\n").replace("\\,", ",").replace("\\\\", "\\")
+            key = f"{name}|{month}|{day}"
+            if key not in seen:
+                seen.add(key)
+                results.append({"name": name, "month": month, "day": day})
+        elif in_event:
+            ci = line.find(":")
+            if ci == -1:
+                continue
+            name_params, value = line[:ci], line[ci + 1:]
+            si = name_params.find(";")
+            base = (name_params[:si] if si != -1 else name_params).upper()
+            props[base] = value
+    return results
+
+
+def sync_birthdays():
+    """Liest webcal-URL aus HA-Sensor, fetcht ICS und speichert Geburtstage."""
+    st = ha_state("sensor.familienkalender_birthday_ics_url")
+    if not st:
+        return
+    url = st.get("state", "")
+    if not url or url in ("unknown", "unavailable", ""):
+        return
+    url = re.sub(r"^webcal://", "https://", url, flags=re.IGNORECASE)
+
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Familienkalender/1.0"})
+        with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+            raw = resp.read()
+    except Exception as exc:
+        print(f"  Geburtstage-ICS Abruf fehlgeschlagen: {exc}", file=sys.stderr)
+        return
+
+    birthdays = parse_birthday_ics(raw)
+    if not birthdays:
+        print("  Geburtstage: keine Einträge gefunden.", file=sys.stderr)
+        return
+
+    payload = json.dumps({
+        "state": str(len(birthdays)),
+        "attributes": {"birthdays": birthdays, "ts": datetime.now().isoformat()},
+    }).encode()
+    req = urllib.request.Request(
+        f"{HA_URL}/api/states/sensor.familienkalender_birthdays",
+        data=payload,
+        headers={"Authorization": f"Bearer {HA_TOKEN}", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            if resp.status in (200, 201):
+                print(f"  Geburtstage: {len(birthdays)} Einträge aktualisiert.")
+    except Exception as exc:
+        print(f"  Geburtstage: Sensor-Update fehlgeschlagen: {exc}", file=sys.stderr)
+
+
 def main():
     now = datetime.now()
     member_services = get_member_services()
@@ -234,6 +313,8 @@ def main():
 
     if fired:
         print(f"Familienkalender Reminder: {fired} Benachrichtigung(en) gesendet.")
+
+    sync_birthdays()
 
 
 if __name__ == "__main__":

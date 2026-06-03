@@ -228,22 +228,30 @@ async function fetchAndCacheBirthdayICS(): Promise<number> {
   const raw = localStorage.getItem(BIRTHDAY_ICS_KEY);
   if (!raw) return 0;
   const url = raw.replace(/^webcal:\/\//i, "https://");
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const text = await res.text();
-  const parsed = parseICS(text);
-  const seen = new Set<string>();
-  const data: BirthdayEntry[] = [];
-  for (const ev of parsed) {
-    if (!ev.allDay) continue;
-    const key = `${ev.summary}|${ev.start.getMonth()}|${ev.start.getDate()}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    data.push({ name: ev.summary, month: ev.start.getMonth(), day: ev.start.getDate() });
-  }
-  localStorage.setItem(BIRTHDAY_DATA_KEY, JSON.stringify(data));
-  pushBirthdayDataToHA(data);
-  return data.length;
+
+  const cfg = loadConfig();
+  if (!cfg) throw new Error("HA nicht konfiguriert");
+
+  // Store URL in HA so the server-side poller can fetch it (bypasses browser CORS)
+  await fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_birthday_ics_url`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ state: url, attributes: { ts: Date.now() } }),
+  });
+
+  // Trigger the reminder poller — sync_birthdays() is now called inside main()
+  await fetch(`${cfg.baseUrl}/api/services/shell_command/check_calendar_reminders`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+
+  // Wait for the script to complete, then read result from the HA sensor
+  await new Promise((r) => setTimeout(r, 10_000));
+  await syncBirthdaysFromHA();
+  const count = loadBirthdayData().length;
+  if (count === 0) throw new Error("Keine Einträge gefunden — URL prüfen");
+  return count;
 }
 
 function pushBirthdayDataToHA(data: BirthdayEntry[]): void {
@@ -267,10 +275,7 @@ async function syncBirthdaysFromHA(): Promise<void> {
     const data = (await res.json()) as { attributes?: { birthdays?: BirthdayEntry[] } };
     const birthdays = data.attributes?.birthdays;
     if (!Array.isArray(birthdays) || birthdays.length === 0) return;
-    const local = loadBirthdayData();
-    if (birthdays.length > local.length) {
-      localStorage.setItem(BIRTHDAY_DATA_KEY, JSON.stringify(birthdays));
-    }
+    localStorage.setItem(BIRTHDAY_DATA_KEY, JSON.stringify(birthdays));
   } catch { /* ignore */ }
 }
 
@@ -1935,7 +1940,7 @@ function showBirthdaySettingsSheet(): void {
         localStorage.setItem(BIRTHDAY_ICS_KEY, url);
         const btn = sheet.querySelector<HTMLButtonElement>("#birthday-fetch")!;
         btn.disabled = true;
-        btn.textContent = "Lade…";
+        btn.textContent = "Wird geladen… (~10 Sek.)";
         try {
           const n = await fetchAndCacheBirthdayICS();
           showTransientBanner(`🎂 ${n} Geburtstage geladen`);
