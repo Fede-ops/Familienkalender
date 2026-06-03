@@ -35,7 +35,8 @@ DEFAULT_CALENDARS = [
 ]
 # ─────────────────────────────────────────────────────────────────────────────
 
-SENT_FILE = "/config/scripts/reminder_sent.json"
+SENT_FILE   = "/config/scripts/reminder_sent.json"
+NOTIF_CACHE = "/config/scripts/notif_config_cache.json"
 ctx = ssl.create_default_context()
 
 REMIND_RE = re.compile(r"\[remind:(\d+)\]")
@@ -123,10 +124,26 @@ def get_calendars():
 
 def get_member_services():
     st = ha_state("sensor.familienkalender_notif_config")
-    if not st:
-        return {}
-    ms = (st.get("attributes") or {}).get("memberServices")
-    return ms if isinstance(ms, dict) else {}
+    if st:
+        ms = (st.get("attributes") or {}).get("memberServices")
+        if isinstance(ms, dict) and ms:
+            # Persist to local cache so it survives HA restarts.
+            try:
+                with open(NOTIF_CACHE, "w", encoding="utf-8") as f:
+                    json.dump(ms, f)
+            except Exception:
+                pass
+            return ms
+    # Sensor missing (e.g. after HA restart) — fall back to local cache.
+    try:
+        with open(NOTIF_CACHE, encoding="utf-8") as f:
+            ms = json.load(f)
+        if isinstance(ms, dict) and ms:
+            print("  Hinweis: Sensor nicht erreichbar, nutze lokalen Cache.", file=sys.stderr)
+            return ms
+    except Exception:
+        pass
+    return {}
 
 
 def get_hidden_uids():
