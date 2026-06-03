@@ -1264,24 +1264,27 @@ ${forEachItems}
               {{ ['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'][now().weekday()] }}
             msg_title: "📅 {{ weekday }}, {{ now().strftime('%-d. %-m.') }} – {{ repeat.item.name }}"
             msg_body: >-
-              {%- set ns = namespace(lines=[], seen=[], allday=[]) -%}
+              {%- set ns = namespace(lines=[], seen=[], allday_norm=[]) -%}
               {%- for e in evs -%}
                 {%- if 'T' not in (e.start | string) -%}
-                  {%- set ns.allday = ns.allday + [e.summary | lower] -%}
+                  {%- set ns.allday_norm = ns.allday_norm + [e.summary.lower().split() | sort | join(' ')] -%}
                 {%- endif -%}
               {%- endfor -%}
               {%- for e in evs | sort(attribute='start') -%}
+                {%- set norm = e.summary.lower().split() | sort | join(' ') -%}
                 {%- if 'T' not in (e.start | string) -%}
-                  {%- set line = e.summary + ' – ganztägig' -%}
-                {%- elif (e.summary | lower) in ns.allday -%}
-                  {%- set line = '' -%}
+                  {%- if norm not in ns.seen -%}
+                    {%- set ns.lines = ns.lines + [e.summary + ' – ganztägig'] -%}
+                    {%- set ns.seen = ns.seen + [norm] -%}
+                  {%- endif -%}
+                {%- elif norm in ns.allday_norm -%}
                 {%- else -%}
                   {%- set t = (e.start | as_datetime | as_local).strftime('%H:%M') -%}
                   {%- set line = t + ' ' + e.summary -%}
-                {%- endif -%}
-                {%- if line and line not in ns.seen -%}
-                  {%- set ns.lines = ns.lines + [line] -%}
-                  {%- set ns.seen = ns.seen + [line] -%}
+                  {%- if line not in ns.seen -%}
+                    {%- set ns.lines = ns.lines + [line] -%}
+                    {%- set ns.seen = ns.seen + [line] -%}
+                  {%- endif -%}
                 {%- endif -%}
               {%- endfor -%}
               {{ ns.lines | join('\\n') }}
