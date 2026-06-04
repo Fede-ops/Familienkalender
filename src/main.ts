@@ -231,6 +231,47 @@ function cleanBirthdayName(name: string): string {
     .trim();
 }
 
+interface VCardBirthday { name: string; year: number; }
+
+function parseVCardBirthdays(text: string): VCardBirthday[] {
+  const results: VCardBirthday[] = [];
+  for (const card of text.split(/BEGIN:VCARD/i)) {
+    let name = "";
+    let year = 0;
+    for (const raw of card.split(/\r?\n/)) {
+      const line = raw.trimEnd();
+      const up = line.toUpperCase();
+      if (up.startsWith("FN:")) {
+        name = cleanBirthdayName(line.slice(3).trim());
+      } else if (up.startsWith("BDAY")) {
+        const val = line.includes(":") ? line.split(":").slice(1).join(":").trim() : "";
+        const m = val.match(/^(\d{4})[-]?\d{2}[-]?\d{2}/) ?? val.match(/^(\d{4})/);
+        if (m) { const y = parseInt(m[1]); if (y >= 1900 && y < 2020) year = y; }
+      }
+    }
+    if (name && year) results.push({ name, year });
+  }
+  return results;
+}
+
+function applyVCardYears(vcBirthdays: VCardBirthday[]): number {
+  const data = loadBirthdayData();
+  let updated = 0;
+  for (const bd of data) {
+    const clean = cleanBirthdayName(bd.name).toLowerCase();
+    const match = vcBirthdays.find((v) => v.name.toLowerCase() === clean);
+    if (match && match.year !== bd.year) {
+      bd.year = match.year;
+      updated++;
+    }
+  }
+  if (updated > 0) {
+    localStorage.setItem(BIRTHDAY_DATA_KEY, JSON.stringify(data));
+    pushBirthdayDataToHA(data);
+  }
+  return updated;
+}
+
 async function fetchAndCacheBirthdayICS(): Promise<number> {
   const raw = localStorage.getItem(BIRTHDAY_ICS_KEY);
   if (!raw) return 0;
@@ -1925,6 +1966,12 @@ function showBirthdaySettingsSheet(): void {
         </div>
 
         <div style="border-top:1px solid rgba(120,120,128,0.2);padding:12px 20px 14px;">
+          <p style="font-size:12px;color:rgba(235,235,245,0.4);margin:0 0 8px;">Geburtsjahre aus Kontakten (vCard)</p>
+          <p style="font-size:12px;color:rgba(235,235,245,0.35);margin:0 0 8px;">iCloud.com → Kontakte → Alle auswählen → Zahnrad → vCard exportieren</p>
+          <button class="ics-import-confirm" id="bd-vcf" style="width:100%;background:linear-gradient(135deg,#5856D6,#BF5AF2);">📇 .vcf-Datei hochladen</button>
+        </div>
+
+        <div style="border-top:1px solid rgba(120,120,128,0.2);padding:12px 20px 14px;">
           <p style="font-size:12px;color:rgba(235,235,245,0.4);margin:0 0 8px;">Manuell hinzufügen</p>
           <input id="bd-name" placeholder="Name" style="width:100%;margin-bottom:8px;${iStyle}" autocomplete="off" />
           <div style="display:flex;gap:8px;margin-bottom:8px;">
@@ -1999,6 +2046,27 @@ function showBirthdaySettingsSheet(): void {
         render();
         mount();
       });
+
+    sheet.querySelector<HTMLElement>("#bd-vcf")!.addEventListener("click", () => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".vcf,text/vcard";
+      input.addEventListener("change", () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const text = e.target?.result as string;
+          const vcBirthdays = parseVCardBirthdays(text);
+          const updated = applyVCardYears(vcBirthdays);
+          render();
+          mount();
+          showTransientBanner(updated > 0 ? `📇 ${updated} Geburtsjahre ergänzt` : "Keine neuen Geburtsjahre gefunden");
+        };
+        reader.readAsText(file, "utf-8");
+      });
+      input.click();
+    });
 
     sheet.querySelectorAll<HTMLElement>("[data-delete-index]").forEach((btn) => {
       btn.addEventListener("click", () => {
