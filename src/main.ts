@@ -764,6 +764,14 @@ function render(): void {
   _prevModalOpen = modalNowOpen;
   // Do NOT auto-focus list-input on render — it opens the iOS keyboard
   // automatically on every tab switch and causes the sticky nav to jump.
+
+  if (scrollTodayUntil > Date.now() && state.viewMode === "week" && state.activeTab === "kalender") {
+    requestAnimationFrame(() => {
+      app.querySelector<HTMLElement>(".week-row__day--today")
+        ?.closest(".week-row")
+        ?.scrollIntoView({ block: "start", behavior: "instant" });
+    });
+  }
 }
 
 // ── Sync modal form to state before tab switch / save ──────────────────────
@@ -1114,15 +1122,10 @@ function bindEvents(): void {
         render();
         void refreshEvents();
       } else if (action === "nav-today") {
+        scrollTodayUntil = Date.now() + 3000;
         state.weekStart = startOfWeek(new Date());
         render();
         void refreshEvents();
-        // Double rAF: first frame commits the new DOM, second frame lets the
-        // browser finish layout so scrollIntoView lands on the right position.
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-          const todayRow = app.querySelector<HTMLElement>(".week-row__day--today");
-          todayRow?.closest(".week-row")?.scrollIntoView({ block: "start", behavior: "smooth" });
-        }));
 
       // ── Month navigation ─────────────────────────────────────────────────
       } else if (action === "nav-month-prev") {
@@ -3197,6 +3200,11 @@ function showTransientBanner(text: string, isError = false): void {
 
 let lastFailedAt = 0;
 const RETRY_COOLDOWN_MS = 45_000;
+
+// When the user taps "Heute", every render within the next 3 s scrolls to
+// today's row. This covers both the immediate render AND the refreshEvents
+// re-render that fires after the HA fetch, which would otherwise reset scroll.
+let scrollTodayUntil = 0;
 
 async function refreshEvents(): Promise<void> {
   const config = loadConfig();
