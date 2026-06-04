@@ -4,3 +4,9 @@ dist-ssr
 *.local
 .DS_Store
 .vite
+.env
+.env.*
+!.env.example
+secrets.*
+*.token
+*.secret
