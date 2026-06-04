@@ -176,15 +176,20 @@ def parse_birthday_ics(raw_bytes):
             m = re.match(r"(\d{4})(\d{2})(\d{2})$", dtstart)
             if not m:
                 continue
-            month, day = int(m.group(2)) - 1, int(m.group(3))
+            ics_year, month, day = int(m.group(1)), int(m.group(2)) - 1, int(m.group(3))
             name = props["SUMMARY"].replace("\\n", "\n").replace("\\,", ",").replace("\\\\", "\\")
             name = re.sub(r"\s*\([^)]*\)", "", name)
             name = re.sub(r"\s*[-–]\s*(Geburtstag|Birthday|Cumpleaños|Anniversaire).*", "", name, flags=re.IGNORECASE).strip()
             key = f"{name}|{month}|{day}"
             if key not in seen:
                 seen.add(key)
-                # DTSTART year = next occurrence year, NOT birth year — don't store it
-                results.append({"name": name, "month": month, "day": day})
+                # Use DTSTART year as birth year only when it's historically plausible
+                # (third-party birthday apps typically store the actual birth year there).
+                cur_year = datetime.now().year
+                entry: dict = {"name": name, "month": month, "day": day}
+                if 1900 <= ics_year < cur_year:
+                    entry["year"] = ics_year
+                results.append(entry)
         elif in_event:
             ci = line.find(":")
             if ci == -1:

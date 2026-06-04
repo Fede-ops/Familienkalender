@@ -2472,3 +2472,28 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   color: var(--text-secondary);
   line-height: 1;
 }
+
+/* ── Pull-to-refresh indicator ─────────────────────────────────────────── */
+.ptr-indicator {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+
+.ptr-indicator__circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--card-bg, #fff);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ptr-indicator__circle svg {
+  transition: transform 0.08s linear;
+}
