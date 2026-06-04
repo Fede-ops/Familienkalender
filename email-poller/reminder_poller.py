@@ -20,9 +20,24 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta
 
-# ── Konfiguration — vom Benutzer ausfüllen ────────────────────────────────────
-HA_URL   = "http://homeassistant:8123"
-HA_TOKEN = "DEIN_HA_LONG_LIVED_TOKEN"
+# ── Konfiguration ────────────────────────────────────────────────────────────
+# Token und URL werden aus /config/scripts/poller_config.json gelesen,
+# damit sie nach einem curl-Update des Skripts nicht neu eingetragen werden müssen.
+# Format: {"ha_url": "http://homeassistant:8123", "ha_token": "eyJ..."}
+_CFG_FILE = "/config/scripts/poller_config.json"
+try:
+    with open(_CFG_FILE, encoding="utf-8") as _f:
+        _cfg = json.load(_f)
+    HA_URL   = _cfg.get("ha_url",   "http://homeassistant:8123")
+    HA_TOKEN = _cfg.get("ha_token", "")
+except Exception:
+    # Fallback: direkt im Skript eintragen (nur wenn poller_config.json fehlt)
+    HA_URL   = "http://homeassistant:8123"
+    HA_TOKEN = "DEIN_HA_LONG_LIVED_TOKEN"
+
+if not HA_TOKEN or HA_TOKEN == "DEIN_HA_LONG_LIVED_TOKEN":
+    print("FEHLER: Kein HA-Token konfiguriert. Bitte /config/scripts/poller_config.json anlegen.", file=sys.stderr)
+    sys.exit(1)
 
 # Fallback-Kalenderliste, falls sensor.familienkalender_entities fehlt.
 DEFAULT_CALENDARS = [
