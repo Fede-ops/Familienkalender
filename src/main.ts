@@ -214,7 +214,6 @@ const HOLIDAY_MEMBER: FamilyMember = { id: HOLIDAY_MEMBER_ID, name: "Feiertage �
 const BIRTHDAY_MEMBER_ID = "__geburtstage__";
 const BIRTHDAY_MEMBER: FamilyMember = { id: BIRTHDAY_MEMBER_ID, name: "Geburtstage 🎂", initial: "🎂", color: "#FF2D55" };
 
-const BIRTHDAY_ICS_KEY  = "fk_birthday_ics_url";
 const BIRTHDAY_DATA_KEY = "fk_birthday_data_v1";
 
 interface BirthdayEntry { name: string; month: number; day: number; year?: number; }
@@ -231,76 +230,7 @@ function cleanBirthdayName(name: string): string {
     .trim();
 }
 
-interface VCardBirthday { name: string; year: number; }
 
-function parseVCardBirthdays(text: string): VCardBirthday[] {
-  const results: VCardBirthday[] = [];
-  for (const card of text.split(/BEGIN:VCARD/i)) {
-    let name = "";
-    let year = 0;
-    for (const raw of card.split(/\r?\n/)) {
-      const line = raw.trimEnd();
-      const up = line.toUpperCase();
-      if (up.startsWith("FN:")) {
-        name = cleanBirthdayName(line.slice(3).trim());
-      } else if (up.startsWith("BDAY")) {
-        const val = line.includes(":") ? line.split(":").slice(1).join(":").trim() : "";
-        const m = val.match(/^(\d{4})[-]?\d{2}[-]?\d{2}/) ?? val.match(/^(\d{4})/);
-        if (m) { const y = parseInt(m[1]); if (y >= 1900 && y < 2020) year = y; }
-      }
-    }
-    if (name && year) results.push({ name, year });
-  }
-  return results;
-}
-
-function applyVCardYears(vcBirthdays: VCardBirthday[]): number {
-  const data = loadBirthdayData();
-  let updated = 0;
-  for (const bd of data) {
-    const clean = cleanBirthdayName(bd.name).toLowerCase();
-    const match = vcBirthdays.find((v) => v.name.toLowerCase() === clean);
-    if (match && match.year !== bd.year) {
-      bd.year = match.year;
-      updated++;
-    }
-  }
-  if (updated > 0) {
-    localStorage.setItem(BIRTHDAY_DATA_KEY, JSON.stringify(data));
-    pushBirthdayDataToHA(data);
-  }
-  return updated;
-}
-
-async function fetchAndCacheBirthdayICS(): Promise<number> {
-  const raw = localStorage.getItem(BIRTHDAY_ICS_KEY);
-  if (!raw) return 0;
-  const url = raw.replace(/^webcal:\/\//i, "https://");
-
-  const cfg = loadConfig();
-  if (!cfg) throw new Error("HA nicht konfiguriert");
-
-  // Store URL in HA so the server-side poller can fetch it (bypasses browser CORS)
-  await fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_birthday_ics_url`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ state: url, attributes: { ts: Date.now() } }),
-  });
-
-  // Trigger the reminder poller — sync_birthdays() is now called inside main()
-  await fetch(`${cfg.baseUrl}/api/services/shell_command/check_calendar_reminders`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({}),
-  });
-
-  // Wait for the script to complete, then read result from the HA sensor
-  await new Promise((r) => setTimeout(r, 10_000));
-  await syncBirthdaysFromHA();
-  const count = loadBirthdayData().length;
-  if (count === 0) throw new Error("Keine Einträge gefunden — URL prüfen");
-  return count;
-}
 
 function pushBirthdayDataToHA(data: BirthdayEntry[]): void {
   const cfg = loadConfig();
@@ -1931,8 +1861,6 @@ function showBirthdaySettingsSheet(): void {
 
   function buildSheet(): HTMLElement {
     const data = loadBirthdayData().slice().sort((a, b) => a.name.localeCompare(b.name));
-    const savedUrl = localStorage.getItem(BIRTHDAY_ICS_KEY) ?? "";
-
     const monthOpts = MONTHS_DE.map((m, i) => `<option value="${i}">${m}</option>`).join("");
 
     const listRows = data.length === 0
@@ -1955,22 +1883,6 @@ function showBirthdaySettingsSheet(): void {
         <div class="bottom-sheet__handle"></div>
         <p class="bottom-sheet__title">🎂 Geburtstage</p>
 
-        <div style="padding:0 20px 10px;">
-          <input id="birthday-ics-input" type="url" inputmode="url"
-            placeholder="webcal://p10-caldav.icloud.com/published/2/…"
-            value="${escHtml(savedUrl)}"
-            style="width:100%;${iStyle}" />
-        </div>
-        <div style="padding:0 20px 14px;">
-          <button class="ics-import-confirm" id="birthday-fetch" style="width:100%;">Aktualisieren via iCloud</button>
-        </div>
-
-        <div style="border-top:1px solid rgba(120,120,128,0.2);padding:12px 20px 14px;">
-          <p style="font-size:12px;color:rgba(235,235,245,0.4);margin:0 0 8px;">Geburtsjahre aus Kontakten (vCard)</p>
-          <p style="font-size:12px;color:rgba(235,235,245,0.35);margin:0 0 8px;">iCloud.com → Kontakte → Alle auswählen → Zahnrad → vCard exportieren</p>
-          <button class="ics-import-confirm" id="bd-vcf" style="width:100%;background:linear-gradient(135deg,#5856D6,#BF5AF2);">📇 .vcf-Datei hochladen</button>
-        </div>
-
         <div style="border-top:1px solid rgba(120,120,128,0.2);padding:12px 20px 14px;">
           <p style="font-size:12px;color:rgba(235,235,245,0.4);margin:0 0 8px;">Manuell hinzufügen</p>
           <input id="bd-name" placeholder="Name" style="width:100%;margin-bottom:8px;${iStyle}" autocomplete="off" />
@@ -1983,7 +1895,7 @@ function showBirthdaySettingsSheet(): void {
         </div>
 
         ${data.length > 0 ? `<p style="font-size:12px;color:rgba(235,235,245,0.4);padding:0 20px 4px;">${data.length} Einträge</p>` : ""}
-        <div style="overflow-y:auto;max-height:35vh;">${listRows}</div>
+        <div style="overflow-y:auto;max-height:40vh;">${listRows}</div>
         <div style="padding:12px 20px;">
           <button class="ics-import-cancel" id="birthday-close" style="width:100%;">Schließen</button>
         </div>
@@ -2006,27 +1918,6 @@ function showBirthdaySettingsSheet(): void {
     sheet.querySelector<HTMLElement>("#birthday-close")!
       .addEventListener("click", () => sheet.remove());
 
-    sheet.querySelector<HTMLElement>("#birthday-fetch")!
-      .addEventListener("click", async () => {
-        const input = sheet.querySelector<HTMLInputElement>("#birthday-ics-input")!;
-        const url = input.value.trim();
-        if (!url) { showTransientBanner("Bitte URL eingeben", true); return; }
-        localStorage.setItem(BIRTHDAY_ICS_KEY, url);
-        const btn = sheet.querySelector<HTMLButtonElement>("#birthday-fetch")!;
-        btn.disabled = true;
-        btn.textContent = "Wird geladen… (~10 Sek.)";
-        try {
-          const n = await fetchAndCacheBirthdayICS();
-          showTransientBanner(`🎂 ${n} Geburtstage geladen`);
-          render();
-          mount();
-        } catch (err) {
-          btn.disabled = false;
-          btn.textContent = "Aktualisieren";
-          showTransientBanner(`Fehler: ${err instanceof Error ? err.message : String(err)}`, true);
-        }
-      });
-
     sheet.querySelector<HTMLElement>("#bd-add")!
       .addEventListener("click", () => {
         const name = (sheet.querySelector<HTMLInputElement>("#bd-name")!).value.trim();
@@ -2046,27 +1937,6 @@ function showBirthdaySettingsSheet(): void {
         render();
         mount();
       });
-
-    sheet.querySelector<HTMLElement>("#bd-vcf")!.addEventListener("click", () => {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = ".vcf,text/vcard";
-      input.addEventListener("change", () => {
-        const file = input.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const text = e.target?.result as string;
-          const vcBirthdays = parseVCardBirthdays(text);
-          const updated = applyVCardYears(vcBirthdays);
-          render();
-          mount();
-          showTransientBanner(updated > 0 ? `📇 ${updated} Geburtsjahre ergänzt` : "Keine neuen Geburtsjahre gefunden");
-        };
-        reader.readAsText(file, "utf-8");
-      });
-      input.click();
-    });
 
     sheet.querySelectorAll<HTMLElement>("[data-delete-index]").forEach((btn) => {
       btn.addEventListener("click", () => {
