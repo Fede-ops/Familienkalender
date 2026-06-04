@@ -3808,37 +3808,54 @@ window.addEventListener("online", () => void refreshEvents());
     svg.style.transform = `rotate(${progress * 270}deg)`;
   }
 
+  let startX = 0;
+  let armed = false; // touch began near the top of the calendar list
+
   app.addEventListener("touchstart", (e: TouchEvent) => {
+    armed = false;
+    scrollEl = null;
     if (state.activeTab !== "kalender" || state.modal || drag) return;
-    const el = (e.target as HTMLElement).closest<HTMLElement>(".week-list, .month-scroll");
+    if ((e.target as HTMLElement).closest("button")) return;
+    // Locate the scroll container directly — the pull may start anywhere
+    // (header, day cell, event), not necessarily inside the list itself.
+    const el = app.querySelector<HTMLElement>(".week-list, .month-scroll");
     if (!el || el.scrollTop > 2) return;
+    startX = e.touches[0].clientX;
     startY = e.touches[0].clientY;
     curY = startY;
     scrollEl = el;
+    armed = true;
   }, { passive: true });
 
   app.addEventListener("touchmove", (e: TouchEvent) => {
-    if (!scrollEl) return;
+    if (!armed || !scrollEl) return;
     curY = e.touches[0].clientY;
-    if (scrollEl.scrollTop > 2) { scrollEl = null; removeIndicator(); return; }
     const dy = curY - startY;
+    const dx = e.touches[0].clientX - startX;
+    // Once the list scrolls away from the top, abandon the gesture.
+    if (scrollEl.scrollTop > 2) { armed = false; scrollEl = null; removeIndicator(); return; }
+    // Horizontal-dominant → it's a calendar swipe, not a pull. Bail out.
+    if (Math.abs(dx) > Math.abs(dy)) { armed = false; scrollEl = null; removeIndicator(); return; }
     if (dy > 8) updateIndicator(dy); else removeIndicator();
   }, { passive: true });
 
   app.addEventListener("touchend", () => {
-    if (!scrollEl) return;
+    if (!armed || !scrollEl) { removeIndicator(); return; }
     const dy = curY - startY;
     const doRefresh = dy >= THRESHOLD && scrollEl.scrollTop <= 2;
+    armed = false;
     scrollEl = null;
     removeIndicator();
     if (doRefresh) {
       showTransientBanner("Wird aktualisiert…");
+      lastFailedAt = 0; // clear any cooldown so a manual pull always refetches
       void refreshEvents();
       void syncBirthdaysFromHA().then(() => render());
+      void syncHiddenUidsFromHA().then(() => void refreshEvents());
     }
   }, { passive: true });
 
-  app.addEventListener("touchcancel", () => { scrollEl = null; removeIndicator(); }, { passive: true });
+  app.addEventListener("touchcancel", () => { armed = false; scrollEl = null; removeIndicator(); }, { passive: true });
 })();
 
 // ── Service Worker reload on update ───────────────────────────────────────
