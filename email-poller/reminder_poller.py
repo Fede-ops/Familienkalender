@@ -154,13 +154,49 @@ def get_hidden_uids():
     return set(uids) if isinstance(uids, list) else set()
 
 
+def extract_birth_year(description, occ_month, occ_day):
+    """Liest das echte Geburtsjahr aus dem DESCRIPTION-Feld.
+
+    Birthday-Apps (z.B. BirthdaysPro) kodieren das volle Geburtsdatum im
+    Notizen-/Beschreibungsfeld, z.B.:
+        tech=oad1432|20250923104456+0200|19910601|birthday|1|Ferdi|Solar
+    Der Token 19910601 = YYYYMMDD ist das Geburtsdatum. DTSTART enthält nur
+    das nächste Vorkommen (aktuelles/nächstes Jahr), nicht das Geburtsjahr.
+    """
+    if not description:
+        return None
+    desc = description.replace("\\n", "\n").replace("\\,", ",").replace("\\\\", "\\")
+    cur_year = datetime.now().year
+    tokens = re.split(r"[|;,\s]+", desc)
+    # Bevorzugt: reiner 8-stelliger YYYYMMDD-Token, dessen Monat/Tag exakt zum
+    # Vorkommen passt — so treffen wir das Geburtsdatum, nicht einen Zeitstempel.
+    for token in tokens:
+        m = re.match(r"^(\d{4})(\d{2})(\d{2})$", token)
+        if not m:
+            continue
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if 1900 <= y <= cur_year and mo - 1 == occ_month and d == occ_day:
+            return y
+    # Fallback: erster plausible YYYYMMDD-Token mit Jahr < aktuelles Jahr.
+    for token in tokens:
+        m = re.match(r"^(\d{4})(\d{2})(\d{2})$", token)
+        if not m:
+            continue
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if 1900 <= y < cur_year and 1 <= mo <= 12 and 1 <= d <= 31:
+            return y
+    return None
+
+
 def parse_birthday_ics(raw_bytes):
-    """Parst iCloud-Geburtstags-ICS; gibt Liste von {name, month, day} zurück."""
+    """Parst iCloud-Geburtstags-ICS; gibt Liste von {name, month, day, year?} zurück."""
     try:
         text = raw_bytes.decode("utf-8")
     except UnicodeDecodeError:
         text = raw_bytes.decode("latin-1")
-    text = re.sub(r"\r\n[ \t]", "", text).replace("\r\n", "\n").replace("\r", "\n")
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    # Gefaltete Fortsetzungszeilen (Zeile beginnt mit Space/Tab) zusammenführen.
+    text = re.sub(r"\n[ \t]", "", text)
 
     results, seen, in_event, props = [], set(), False, {}
     for line in text.split("\n"):
@@ -183,12 +219,15 @@ def parse_birthday_ics(raw_bytes):
             key = f"{name}|{month}|{day}"
             if key not in seen:
                 seen.add(key)
-                # Use DTSTART year as birth year only when it's historically plausible
-                # (third-party birthday apps typically store the actual birth year there).
-                cur_year = datetime.now().year
                 entry: dict = {"name": name, "month": month, "day": day}
-                if 1900 <= ics_year < cur_year:
-                    entry["year"] = ics_year
+                # Geburtsjahr: 1. aus DESCRIPTION (volles Geburtsdatum), 2. aus
+                # DTSTART falls historisch plausibel (manche Feeds nutzen das).
+                cur_year = datetime.now().year
+                year = extract_birth_year(props.get("DESCRIPTION", ""), month, day)
+                if year is None and 1900 <= ics_year < cur_year:
+                    year = ics_year
+                if year is not None:
+                    entry["year"] = year
                 results.append(entry)
         elif in_event:
             ci = line.find(":")
