@@ -3529,6 +3529,7 @@ if (demoMode) {
 } else if (!config) {
   renderConfig();
 } else {
+  scrollTodayUntil = Date.now() + 5000;
   render();
   // Sync birthday data from HA (cross-device persistence).
   // Do NOT auto-fetch the ICS on boot — that would overwrite manual cleanup
