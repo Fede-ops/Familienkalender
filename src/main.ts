@@ -217,11 +217,18 @@ const BIRTHDAY_MEMBER: FamilyMember = { id: BIRTHDAY_MEMBER_ID, name: "Geburtsta
 const BIRTHDAY_ICS_KEY  = "fk_birthday_ics_url";
 const BIRTHDAY_DATA_KEY = "fk_birthday_data_v1";
 
-interface BirthdayEntry { name: string; month: number; day: number; }
+interface BirthdayEntry { name: string; month: number; day: number; year?: number; }
 
 function loadBirthdayData(): BirthdayEntry[] {
   try { return JSON.parse(localStorage.getItem(BIRTHDAY_DATA_KEY) ?? "[]") as BirthdayEntry[]; }
   catch { return []; }
+}
+
+function cleanBirthdayName(name: string): string {
+  return name
+    .replace(/\s*\([^)]*\)/g, "")
+    .replace(/\s*[-–]\s*(Geburtstag|Birthday|Cumpleaños|Anniversaire).*/i, "")
+    .trim();
 }
 
 async function fetchAndCacheBirthdayICS(): Promise<number> {
@@ -683,9 +690,11 @@ function birthdayEvents(): CalendarEvent[] {
   const events: CalendarEvent[] = [];
   for (const bd of data) {
     for (const y of [year - 1, year, year + 1]) {
+      const age = bd.year && bd.year >= 1900 ? y - bd.year : null;
+      const displayName = cleanBirthdayName(bd.name);
       events.push({
         uid: `__birthday__${bd.name.replace(/[^a-zA-Z0-9]/g, "_")}__${bd.month}_${bd.day}`,
-        summary: `🎂 ${bd.name}`,
+        summary: age !== null ? `🎂 ${displayName} → ${age}` : `🎂 ${displayName}`,
         start: new Date(y, bd.month, bd.day),
         end:   new Date(y, bd.month, bd.day),
         allDay: true,
@@ -1883,33 +1892,51 @@ function showBirthdaySettingsSheet(): void {
     const data = loadBirthdayData().slice().sort((a, b) => a.name.localeCompare(b.name));
     const savedUrl = localStorage.getItem(BIRTHDAY_ICS_KEY) ?? "";
 
+    const monthOpts = MONTHS_DE.map((m, i) => `<option value="${i}">${m}</option>`).join("");
+
     const listRows = data.length === 0
       ? `<p style="font-size:13px;color:rgba(235,235,245,0.4);padding:12px 20px;">Noch keine Geburtstage gespeichert.</p>`
-      : data.map((bd, i) =>
-          `<div class="filter-row" style="justify-content:space-between;" data-bd-index="${i}">
-            <span style="font-size:15px;">${escHtml(bd.name)}</span>
+      : data.map((bd, i) => {
+          const yearStr = bd.year && bd.year >= 1900 ? ` ${bd.year}` : "";
+          return `<div class="filter-row" style="justify-content:space-between;">
+            <span style="font-size:15px;">${escHtml(cleanBirthdayName(bd.name))}</span>
             <span style="display:flex;align-items:center;gap:12px;">
-              <span style="font-size:13px;color:rgba(235,235,245,0.5);">${bd.day}. ${MONTHS_DE[bd.month]}</span>
+              <span style="font-size:13px;color:rgba(235,235,245,0.5);">${bd.day}. ${MONTHS_DE[bd.month]}${yearStr}</span>
               <button data-delete-index="${i}" style="background:none;border:none;padding:4px 6px;cursor:pointer;font-size:16px;color:rgba(235,235,245,0.4);line-height:1;" aria-label="Löschen">✕</button>
             </span>
-          </div>`
-        ).join("");
+          </div>`;
+        }).join("");
+
+    const iStyle = "background:rgba(120,120,128,0.18);border:none;border-radius:10px;padding:10px 12px;font-size:14px;color:#EBEBF5;outline:none;box-sizing:border-box;";
 
     const html = `<div id="birthday-settings-sheet" class="sheet-backdrop">
       <div class="bottom-sheet" data-stop-propagation>
         <div class="bottom-sheet__handle"></div>
         <p class="bottom-sheet__title">🎂 Geburtstage</p>
+
         <div style="padding:0 20px 10px;">
           <input id="birthday-ics-input" type="url" inputmode="url"
             placeholder="webcal://p10-caldav.icloud.com/published/2/…"
             value="${escHtml(savedUrl)}"
-            style="width:100%;box-sizing:border-box;background:rgba(120,120,128,0.18);border:none;border-radius:10px;padding:11px 13px;font-size:14px;color:#EBEBF5;outline:none;" />
+            style="width:100%;${iStyle}" />
         </div>
-        <div style="padding:0 20px 12px;">
-          <button class="ics-import-confirm" id="birthday-fetch" style="width:100%;">Aktualisieren</button>
+        <div style="padding:0 20px 14px;">
+          <button class="ics-import-confirm" id="birthday-fetch" style="width:100%;">Aktualisieren via iCloud</button>
         </div>
-        ${data.length > 0 ? `<p style="font-size:12px;color:rgba(235,235,245,0.4);padding:0 20px 4px;">${data.length} Einträge · nach unten scrollen zum Löschen</p>` : ""}
-        <div style="overflow-y:auto;max-height:40vh;">${listRows}</div>
+
+        <div style="border-top:1px solid rgba(120,120,128,0.2);padding:12px 20px 14px;">
+          <p style="font-size:12px;color:rgba(235,235,245,0.4);margin:0 0 8px;">Manuell hinzufügen</p>
+          <input id="bd-name" placeholder="Name" style="width:100%;margin-bottom:8px;${iStyle}" autocomplete="off" />
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <input id="bd-day" type="number" placeholder="Tag" min="1" max="31" style="flex:1;${iStyle}" />
+            <select id="bd-month" style="flex:2;${iStyle}">${monthOpts}</select>
+            <input id="bd-year" type="number" placeholder="Jahr" min="1900" max="2025" style="flex:2;${iStyle}" />
+          </div>
+          <button class="ics-import-confirm" id="bd-add" style="width:100%;">+ Hinzufügen</button>
+        </div>
+
+        ${data.length > 0 ? `<p style="font-size:12px;color:rgba(235,235,245,0.4);padding:0 20px 4px;">${data.length} Einträge</p>` : ""}
+        <div style="overflow-y:auto;max-height:35vh;">${listRows}</div>
         <div style="padding:12px 20px;">
           <button class="ics-import-cancel" id="birthday-close" style="width:100%;">Schließen</button>
         </div>
@@ -1951,6 +1978,26 @@ function showBirthdaySettingsSheet(): void {
           btn.textContent = "Aktualisieren";
           showTransientBanner(`Fehler: ${err instanceof Error ? err.message : String(err)}`, true);
         }
+      });
+
+    sheet.querySelector<HTMLElement>("#bd-add")!
+      .addEventListener("click", () => {
+        const name = (sheet.querySelector<HTMLInputElement>("#bd-name")!).value.trim();
+        const day  = parseInt((sheet.querySelector<HTMLInputElement>("#bd-day")!).value, 10);
+        const month = parseInt((sheet.querySelector<HTMLSelectElement>("#bd-month")!).value, 10);
+        const yearVal = parseInt((sheet.querySelector<HTMLInputElement>("#bd-year")!).value, 10);
+        if (!name || !day || isNaN(day) || day < 1 || day > 31) {
+          showTransientBanner("Name und gültiger Tag erforderlich", true);
+          return;
+        }
+        const entry: BirthdayEntry = { name, month, day };
+        if (!isNaN(yearVal) && yearVal >= 1900 && yearVal <= new Date().getFullYear()) entry.year = yearVal;
+        const data = loadBirthdayData();
+        data.push(entry);
+        localStorage.setItem(BIRTHDAY_DATA_KEY, JSON.stringify(data));
+        pushBirthdayDataToHA(data);
+        render();
+        mount();
       });
 
     sheet.querySelectorAll<HTMLElement>("[data-delete-index]").forEach((btn) => {

@@ -173,15 +173,21 @@ def parse_birthday_ics(raw_bytes):
                 continue
             # Accept events with RRULE:FREQ=YEARLY OR plain all-day events (8-digit date)
             dtstart = props["DTSTART"].strip()
-            m = re.match(r"\d{4}(\d{2})(\d{2})$", dtstart)
+            m = re.match(r"(\d{4})(\d{2})(\d{2})$", dtstart)
             if not m:
                 continue
-            month, day = int(m.group(1)) - 1, int(m.group(2))
+            birth_year = int(m.group(1))
+            month, day = int(m.group(2)) - 1, int(m.group(3))
             name = props["SUMMARY"].replace("\\n", "\n").replace("\\,", ",").replace("\\\\", "\\")
+            name = re.sub(r"\s*\([^)]*\)", "", name)
+            name = re.sub(r"\s*[-–]\s*(Geburtstag|Birthday|Cumpleaños|Anniversaire).*", "", name, flags=re.IGNORECASE).strip()
             key = f"{name}|{month}|{day}"
             if key not in seen:
                 seen.add(key)
-                results.append({"name": name, "month": month, "day": day})
+                entry = {"name": name, "month": month, "day": day}
+                if birth_year >= 1900:
+                    entry["year"] = birth_year
+                results.append(entry)
         elif in_event:
             ci = line.find(":")
             if ci == -1:
