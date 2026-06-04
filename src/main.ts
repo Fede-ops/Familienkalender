@@ -3775,6 +3775,72 @@ window.addEventListener("online", () => void refreshEvents());
   }, { passive: true });
 })();
 
+// ── Pull-to-refresh ────────────────────────────────────────────────────────
+(function setupPullToRefresh(): void {
+  const THRESHOLD = 72;
+  let startY = 0;
+  let curY = 0;
+  let scrollEl: HTMLElement | null = null;
+  let ind: HTMLElement | null = null;
+
+  function getIndicator(): HTMLElement {
+    if (!ind) {
+      ind = document.createElement("div");
+      ind.className = "ptr-indicator";
+      ind.innerHTML = `<div class="ptr-indicator__circle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#007AFF" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></div>`;
+      document.body.appendChild(ind);
+    }
+    return ind;
+  }
+
+  function removeIndicator(): void {
+    ind?.remove();
+    ind = null;
+  }
+
+  function updateIndicator(dy: number): void {
+    const progress = Math.min(1, dy / THRESHOLD);
+    const indicator = getIndicator();
+    const topPx = -18 + dy * 0.55;
+    indicator.style.top = `${topPx}px`;
+    indicator.style.opacity = String(Math.min(1, dy / 36));
+    const svg = indicator.querySelector("svg")!;
+    svg.style.transform = `rotate(${progress * 270}deg)`;
+  }
+
+  app.addEventListener("touchstart", (e: TouchEvent) => {
+    if (state.activeTab !== "kalender" || state.modal || drag) return;
+    const el = (e.target as HTMLElement).closest<HTMLElement>(".week-list, .month-scroll");
+    if (!el || el.scrollTop > 2) return;
+    startY = e.touches[0].clientY;
+    curY = startY;
+    scrollEl = el;
+  }, { passive: true });
+
+  app.addEventListener("touchmove", (e: TouchEvent) => {
+    if (!scrollEl) return;
+    curY = e.touches[0].clientY;
+    if (scrollEl.scrollTop > 2) { scrollEl = null; removeIndicator(); return; }
+    const dy = curY - startY;
+    if (dy > 8) updateIndicator(dy); else removeIndicator();
+  }, { passive: true });
+
+  app.addEventListener("touchend", () => {
+    if (!scrollEl) return;
+    const dy = curY - startY;
+    const doRefresh = dy >= THRESHOLD && scrollEl.scrollTop <= 2;
+    scrollEl = null;
+    removeIndicator();
+    if (doRefresh) {
+      showTransientBanner("Wird aktualisiert…");
+      void refreshEvents();
+      void syncBirthdaysFromHA().then(() => render());
+    }
+  }, { passive: true });
+
+  app.addEventListener("touchcancel", () => { scrollEl = null; removeIndicator(); }, { passive: true });
+})();
+
 // ── Service Worker reload on update ───────────────────────────────────────
 // When a new SW activates and claims this client it sends "sw-reload".
 // Reloading here ensures the page picks up the new SW's cached assets
