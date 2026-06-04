@@ -35,8 +35,9 @@ DEFAULT_CALENDARS = [
 ]
 # ─────────────────────────────────────────────────────────────────────────────
 
-SENT_FILE   = "/config/scripts/reminder_sent.json"
-NOTIF_CACHE = "/config/scripts/notif_config_cache.json"
+SENT_FILE         = "/config/scripts/reminder_sent.json"
+NOTIF_CACHE       = "/config/scripts/notif_config_cache.json"
+BIRTHDAY_DATA_FILE = "/config/scripts/birthday_data.json"
 ctx = ssl.create_default_context()
 
 REMIND_RE = re.compile(r"\[remind:(\d+)\]")
@@ -240,13 +241,90 @@ def parse_birthday_ics(raw_bytes):
     return results
 
 
+def _write_birthdays(birthdays):
+    """Schreibt Geburtstage in HA-Sensor UND als persistente Datei auf Disk."""
+    payload = json.dumps({
+        "state": str(len(birthdays)),
+        "attributes": {"birthdays": birthdays, "ts": datetime.now().isoformat()},
+    }).encode()
+    req = urllib.request.Request(
+        f"{HA_URL}/api/states/sensor.familienkalender_birthdays",
+        data=payload,
+        headers={"Authorization": f"Bearer {HA_TOKEN}", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            if resp.status in (200, 201):
+                print(f"  Geburtstage: {len(birthdays)} Einträge im Sensor gespeichert.")
+    except Exception as exc:
+        print(f"  Geburtstage: Sensor-Update fehlgeschlagen: {exc}", file=sys.stderr)
+    # Persistent backup — survives HA restarts.
+    try:
+        with open(BIRTHDAY_DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(birthdays, f)
+    except Exception as exc:
+        print(f"  Geburtstage: Datei-Backup fehlgeschlagen: {exc}", file=sys.stderr)
+
+
+def sync_birthday_persistence():
+    """Sichert Geburtstage auf Disk; stellt sie nach HA-Neustart wieder her.
+
+    Läuft jede Minute:
+    - Sensor hat Daten  → auf Disk sichern (Backup).
+    - Sensor leer       → aus Disk-Datei in Sensor laden (Restore nach Neustart).
+    """
+    st = ha_state("sensor.familienkalender_birthdays")
+    current = (st.get("attributes") or {}).get("birthdays") if st else None
+
+    if isinstance(current, list) and current:
+        # Sensor OK → Backup auf Disk aktualisieren.
+        try:
+            with open(BIRTHDAY_DATA_FILE, "w", encoding="utf-8") as f:
+                json.dump(current, f)
+        except Exception:
+            pass
+        return
+
+    # Sensor leer (z.B. nach HA-Neustart) → aus Datei wiederherstellen.
+    try:
+        with open(BIRTHDAY_DATA_FILE, encoding="utf-8") as f:
+            saved = json.load(f)
+    except Exception:
+        return
+    if not isinstance(saved, list) or not saved:
+        return
+
+    payload = json.dumps({
+        "state": str(len(saved)),
+        "attributes": {"birthdays": saved, "ts": datetime.now().isoformat()},
+    }).encode()
+    req = urllib.request.Request(
+        f"{HA_URL}/api/states/sensor.familienkalender_birthdays",
+        data=payload,
+        headers={"Authorization": f"Bearer {HA_TOKEN}", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            if resp.status in (200, 201):
+                print(f"  Geburtstage: {len(saved)} Einträge nach HA-Neustart wiederhergestellt.")
+    except Exception as exc:
+        print(f"  Geburtstage: Wiederherstellung fehlgeschlagen: {exc}", file=sys.stderr)
+
+
 def sync_birthdays():
-    """Liest webcal-URL aus HA-Sensor, fetcht ICS und speichert Geburtstage."""
+    """Importiert Geburtstage von ICS-URL — nur wenn die App einen neuen Import ausgelöst hat.
+
+    Der Sensor sensor.familienkalender_birthday_ics_url wird von der App auf die
+    URL gesetzt, wenn der User "Aktualisieren via iCloud" drückt. Nach erfolgreichem
+    Import setzt der Poller den Sensor auf "imported", damit er nicht jede Minute
+    erneut die gesamte URL lädt und manuelle Bereinigungen überschreibt.
+    """
     st = ha_state("sensor.familienkalender_birthday_ics_url")
     if not st:
         return
     url = st.get("state", "")
-    if not url or url in ("unknown", "unavailable", ""):
+    # "imported" = bereits verarbeitet; leer/unbekannt = nie konfiguriert.
+    if not url or url in ("unknown", "unavailable", "", "imported"):
         return
     url = re.sub(r"^webcal://", "https://", url, flags=re.IGNORECASE)
 
@@ -263,21 +341,21 @@ def sync_birthdays():
         print("  Geburtstage: keine Einträge gefunden.", file=sys.stderr)
         return
 
-    payload = json.dumps({
-        "state": str(len(birthdays)),
-        "attributes": {"birthdays": birthdays, "ts": datetime.now().isoformat()},
-    }).encode()
-    req = urllib.request.Request(
-        f"{HA_URL}/api/states/sensor.familienkalender_birthdays",
-        data=payload,
+    _write_birthdays(birthdays)
+
+    # URL-Sensor auf "imported" setzen → kein erneuter Import beim nächsten Minuten-Lauf.
+    # Die Original-URL liegt im localStorage der App und bleibt für künftige
+    # manuelle Re-Importe ("Aktualisieren via iCloud") erhalten.
+    done = json.dumps({"state": "imported"}).encode()
+    done_req = urllib.request.Request(
+        f"{HA_URL}/api/states/sensor.familienkalender_birthday_ics_url",
+        data=done,
         headers={"Authorization": f"Bearer {HA_TOKEN}", "Content-Type": "application/json"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            if resp.status in (200, 201):
-                print(f"  Geburtstage: {len(birthdays)} Einträge aktualisiert.")
-    except Exception as exc:
-        print(f"  Geburtstage: Sensor-Update fehlgeschlagen: {exc}", file=sys.stderr)
+        urllib.request.urlopen(done_req, timeout=10)
+    except Exception:
+        pass
 
 
 def main():
@@ -361,6 +439,8 @@ def main():
     if fired:
         print(f"Familienkalender Reminder: {fired} Benachrichtigung(en) gesendet.")
 
+    # Geburtstage: zuerst Persistenz sichern/wiederherstellen, dann ggf. neu von ICS laden.
+    sync_birthday_persistence()
     sync_birthdays()
 
 
