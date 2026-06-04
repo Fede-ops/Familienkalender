@@ -752,7 +752,6 @@ body {
   background-color: #000000;
   border: none;
   border-right: 0.5px solid rgba(120, 120, 128, 0.55);
-  border-bottom: 0.5px solid rgba(120, 120, 128, 0.55);
   position: relative;
   user-select: none;
   -webkit-user-select: none;
@@ -763,7 +762,13 @@ body {
   border-left: 0.5px solid rgba(120, 120, 128, 0.55);
 }
 
-.month-row:first-child .month-cell {
+/* Horizontal lines live on the row container — one border per gap, no doubling */
+.month-row {
+  border-bottom: 0.5px solid rgba(120, 120, 128, 0.55);
+}
+
+/* Top outer edge: first .month-row follows .month-weekdays */
+.month-weekdays + .month-row {
   border-top: 0.5px solid rgba(120, 120, 128, 0.55);
 }
 
