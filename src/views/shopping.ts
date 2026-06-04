@@ -30,11 +30,19 @@ export const SHOPPING_CATEGORIES = [
       "salbei", "minze", "dill", "estragon", "oregano frisch", "gemüse", "frisches gemüse",
       "blattsalat", "rucola", "chicorée", "endivie", "grünkohl", "staudensellerie",
       // Österreichische Begriffe
-      "marille", "marillen", "zwetschke", "zwetschken", "ribisel",
+      "marille", "marillen", "zwetschke", "zwetschken", "ribisel", "ribisel",
       "paradeiser", "paradeisern", "fisolen", "karfiol", "erdäpfel", "erdapfel",
       "kukuruz", "vogerlsalat", "vogerl", "kren",
       "weintrauben", "trauben", "beeren",
       "maracuja", "yam", "süßkartoffeln",
+      "kohlsprossen", "zuckermais", "rote rübe", "gelbe rübe",
+      "jungzwiebel", "lauchzwiebel", "porree",
+      "stangensellerie", "knollensellerie", "zuckerhut",
+      "rispentomaten", "cocktailtomaten", "cherrytomaten", "strauchtomaten",
+      "salatherz", "endiviensalat", "batavia", "lollo rosso", "lollo bionda",
+      "minigurke", "snackgurke", "landgurke", "schlangengurke",
+      "frühkartoffel", "mehligkochend", "festkochend",
+      "süßkartoffel", "yamswurzel", "ingwerknolle",
       // English – Fruit
       "apple", "pear", "banana", "orange", "mandarin", "clementine", "grapefruit",
       "grape", "strawberry", "raspberry", "blackberry", "blueberry", "cranberry",
@@ -90,12 +98,16 @@ export const SHOPPING_CATEGORIES = [
       "cheddar", "brie", "camembert", "emmentaler", "gruyère", "feta", "halloumi",
       "raclette", "manchego", "bergkäse", "tilsiter",
       "eier", "freilandeier", "bioeier",
+      // Österreichische Molkerei-Spezifika
+      "magertopfen", "körniger frischkäse", "schlagobers light",
+      "obers light", "kochsahne", "kochcreme", "kochrahm", "leichtquark",
       // Kühlregal Extras
       "tofu", "seidentofu", "räuchertofu", "tempeh",
-      "tzatziki", "hummus", "guacamole",
-      "aufschnitt", "wurst aufschnitt", "kassler", "pastete",
+      "tzatziki", "hummus", "guacamole", "baba ganoush",
+      "aufschnitt", "wurst aufschnitt", "kassler", "pastete", "leberpastete",
+      "lachspastete", "thunfischpastete",
       "sojajoghurt", "kokosjoghurt", "hafermilchjoghurt", "mandeljoghurt",
-      "pflanzenmilch",
+      "pflanzenmilch", "reismilch", "erbsenmilch",
       // English
       "milk", "whole milk", "skimmed milk", "semi-skimmed", "oat milk", "almond milk",
       "soy milk", "coconut milk drink", "butter", "margarine", "cream", "whipping cream",
@@ -139,6 +151,12 @@ export const SHOPPING_CATEGORIES = [
       "hack", "hackfleisch", "wurst", "bratwurst", "currywurst", "weißwurst", "wiener",
       "schinken", "kochschinken", "rohschinken", "parmaschinken", "speck", "pancetta",
       "salami", "pepperoni", "chorizo", "mortadella", "leberwurst", "blutwurst", "faschiertes", "faschiertes fleisch", "leberkäse", "leberkässemmel", "extrawurst", "käsekrainer", "debreziner", "cabanossi", "surschnitzel", "geselchtes", "selchfleisch", "grammelschmalz", "zunge", "lunge",
+      "blunzn", "blunzen", "grillwurst", "grillhendl", "brathendl", "backhendl",
+      "ganslbraten", "entenkeule", "putenschnitzel", "kalbsschnitzel",
+      "tafelspitz", "siedfleisch", "rindsgulasch", "stelze", "krustenbraten",
+      "zwiebelrostbraten", "beiried", "lungenbraten", "filet mignon",
+      "lammfleisch", "lammkeule", "lammkoteletts",
+      "wildgulasch", "rehkeule", "hirschbraten",
       "fleischkäse", "lyoner", "schnitzel", "steak", "filet", "kotelett", "spare ribs",
       "fisch", "lachs", "lachsfilet", "räucherlachs", "thunfisch", "forelle", "makrele",
       "hering", "sardine", "kabeljau", "dorsch", "seelachs", "pangasius", "tilapia",
@@ -193,10 +211,15 @@ export const SHOPPING_CATEGORIES = [
       "reis", "basmatireis", "jasminreis", "vollkornreis", "risottoreis", "wildreis",
       "quinoa", "couscous", "bulgur", "hirse", "buchweizen", "polenta", "grieß",
       "haferflocken", "müsli", "granola", "cornflakes", "cerealien", "porridge",
-      // Österreichische Backwaren
+      // Österreichische Backwaren & Beilagen
       "kaisersemmel", "handsemmel", "kornspitz", "mohnweckerl", "kürbiskernweckerl", "laugenstangerl", "vollkornweckerl",
       "kipferl", "buchteln", "topfenstrudel", "apfelstrudel", "milchrahmstrudel",
-      "kürbiskernbrot", "wachauer laib", "roggenmischbrot",
+      "kürbiskernbrot", "wachauer laib", "roggenmischbrot", "vinschgauer",
+      "knödel", "semmelknödel", "kartoffelknödel", "erdäpfelknödel", "grießknödel",
+      "nockerl", "grießnockerl", "tiroler knödel",
+      "palatschinken", "palatschinkenteig",
+      "blätterteig", "strudelteig", "pizzateig", "mürbteig",
+      "germ", "frischhefe",
       "linsen", "rote linsen", "kichererbsen", "kidneybohnen", "weiße bohnen",
       // English
       "bread", "wholemeal bread", "sourdough", "rye bread", "spelt bread",
@@ -238,12 +261,16 @@ export const SHOPPING_CATEGORIES = [
       // Deutsch
       "tiefkühl", "tiefgefroren", "gefroren", "gefrorene", "tk-",
       "speiseeis", "eiscreme", "eisbecher", "eis am stiel", "sorbet", "gelato",
+      "magnum", "cornetto",
       "fischstäbchen", "garnelen tiefkühl", "lachs tiefkühl",
-      "pommes", "pommes frites", "kroketten", "rösti",
-      "nuggets", "chicken nuggets", "schnitzel tiefkühl",
+      "pommes", "pommes frites", "kroketten", "rösti", "wedges",
+      "nuggets", "chicken nuggets", "schnitzel tiefkühl", "backfisch",
       "tiefkühlgemüse", "tiefkühlerbsen", "tiefkühlspinat", "tiefkühlbohnen",
       "tiefkühlbeeren", "blaubeeren gefroren", "erdbeeren gefroren",
       "fertigpizza", "tiefkühlpizza", "flammkuchen tiefkühl",
+      "tiefkühlknödel", "tiefkühlpasta", "tiefkühlsuppe",
+      "fertiggericht", "fertigmahlzeit", "lasagne tiefkühl",
+      "tiefkühlkräuter", "tiefkühlpilze",
       // English
       "frozen", "ice cream", "gelato", "sorbet", "popsicle", "ice lolly", "ice pop",
       "frozen peas", "frozen spinach", "frozen vegetables", "frozen berries",
@@ -285,7 +312,18 @@ export const SHOPPING_CATEGORIES = [
       "kakaopulver", "trinkschokolade",
       "nüsse", "mandeln", "cashewnüsse", "walnüsse", "erdnüsse", "haselnüsse",
       "paranüsse", "pecannüsse", "pistazien", "macadamia", "mischung",
+      // Süßigkeiten & Snacks
       "chips", "kartoffelchips", "salzstangen", "brezel snack", "popcorn",
+      "gummibären", "gummis", "weingummi", "fruchtgummi",
+      "bonbons", "lutschbonbon", "karamell", "toffee", "lakritz",
+      "kaugummi", "minze bonbons", "pfefferminz",
+      "schokoriegel", "schokoladeriegel", "müsliriegel", "proteinriegel", "energieriegel",
+      "kekse", "butterkeks", "lebkuchen", "weihnachtskekse",
+      "manner", "mannerschnitten", "mozartkugeln", "zotter",
+      "riegel", "waffelriegel", "nussriegel",
+      "salzgebäck", "reiswaffeln", "maiskräcker",
+      // Fertiggerichte (nicht tiefgekühlt)
+      "fertigsuppe dose", "gulaschsuppe dose", "ravioli dose",
       "thunfisch dose", "sardinen dose", "mais dose", "linsen dose", "bohnen dose",
       "kokosmilch", "kokosnussmilch",
       // Spezialzutaten
@@ -294,9 +332,18 @@ export const SHOPPING_CATEGORIES = [
       "reisnudeln", "glasnudeln", "fadennudeln",
       "kokoswasser",
       "soßenbinder", "instant", "liptauer", "verhackertes",
-      // Österreichische Gewürze/Vorräte
-      "kürbiskernöl", "steirisches kürbiskernöl", "essig most", "ringlottenmarmelade",
-      "fertigsuppe", "brühe", "instant brühe",
+      // Suppen & Brühen
+      "suppe", "fertigsuppe", "tomatensuppe", "hühnersuppe", "erbsensuppe", "gulaschsuppe",
+      "brühe", "instant brühe", "brühwürfel", "suppenwürfel", "gemüsewürfel",
+      "fleischbrühwürfel", "hühnerbrühwürfel", "klare brühe",
+      // Backzutaten
+      "puddingpulver", "vanillepudding", "schokoladenpudding",
+      "götterspeise", "wackelpudding", "geleepulver",
+      "tortenguss", "geliermittel", "einmachhilfe", "gelierzucker",
+      // Österreichische Spezialitäten
+      "letscho", "ajvar", "paprikamark", "sauerkraut", "rotkraut",
+      "preiselbeerkonfitüre", "powidl", "ribisgelgelee",
+      "kürbiskernöl", "kernöl", "steirisches kürbiskernöl", "essig most", "ringlottenmarmelade",
       "breadcrumbs",
       // English
       "canned", "tinned", "jar", "preserve", "pickle", "pickled",
@@ -324,6 +371,13 @@ export const SHOPPING_CATEGORIES = [
       "rice noodles", "glass noodles", "vermicelli",
       "coconut water", "coconut cream",
       "instant noodles", "instant soup", "broth", "bouillon",
+      "stock cube", "stock cubes", "vegetable stock", "chicken stock", "beef stock",
+      "soup", "tomato soup", "chicken soup", "pea soup", "goulash soup",
+      "pudding powder", "vanilla pudding", "chocolate pudding",
+      "jelly", "jello", "jelly powder",
+      "cake glaze", "setting agent", "pectin",
+      "sauerkraut", "red cabbage", "pickled cabbage",
+      "ajvar", "letchos",
       // Español
       "conserva", "lata", "bote", "frasco", "encurtido", "escabeche",
       "salsa de tomate", "tomate triturado", "concentrado de tomate", "tomate frito",
@@ -384,6 +438,12 @@ export const SHOPPING_CATEGORIES = [
       "melange", "verlängerter", "mokka", "schwarzer", "brauner", "einspänner",
       "protein shake", "proteinshake", "iso drink", "isodrink",
       "leitungswasser",
+      // Österreichische Getränke
+      "sturm", "most", "apfelmost", "birnenmost", "traubenmost",
+      "grüner veltliner", "blaufränkisch", "zweigelt", "wiener gemischter",
+      "kracherl", "sodawasser", "siphon",
+      "eistee zitrone", "eistee pfirsich", "eistee grüntee",
+      "fruchtnektar", "fruchtsirupe", "himbeersaft", "holundersaft",
       // English
       "water", "sparkling water", "mineral water", "still water",
       "juice", "orange juice", "apple juice", "grape juice", "tomato juice",
@@ -435,6 +495,22 @@ export const SHOPPING_CATEGORIES = [
       "windeln", "babywindeln", "feuchttücher", "babytücher", "taschentücher", "papiertaschentücher",
       "tampons", "binden", "slipeinlage", "damenbinden", "monatshygiene",
       "desinfektionsmittel", "pflaster", "verbandsmaterial",
+      // Geschirrspüler & Maschinen
+      "geschirrspülersalz", "spülmaschinensalz", "spülsalz", "klarspüler", "klarspülmittel",
+      "spülmaschinentabs", "geschirrspülertabs", "spülmitteltabs", "maschinenpfleger",
+      // WC & Sanitär
+      "klostein", "wcstein", "duftspüler", "frischeperlen", "hygienespüler",
+      "reinigungstabletten", "wc-duftstein", "wcduftstein", "toilettenduft",
+      // Wäsche
+      "waschkapseln", "waschmittelpods", "waschpods", "colorpods", "waschpulver",
+      "flüssigwaschmittel", "feinwaschmittel", "wollwaschmittel", "wäscheduft",
+      // Bodenpflege & Reinigungsutensilien
+      "mopp", "wischmopp", "bodentuch", "flachwischtuch", "küchenrolle",
+      "spülbürste", "toilettenbürste", "wischbezug", "staubwedel",
+      // Körperpflege Ergänzungen
+      "rasierklingen", "nassrasierer", "einwegrasierer", "körpermilch", "duschbad",
+      "bartpflege", "bartöl", "mundspülung", "körperpeeling", "peeling",
+      "intimpflege", "damenrasierer", "epilierer",
       // Kosmetik & Schönheit
       "make-up", "makeup", "schminke", "lippenstift", "lipgloss",
       "mascara", "wimperntusche", "eyeliner", "kajal", "lidschatten",
@@ -442,6 +518,17 @@ export const SHOPPING_CATEGORIES = [
       "nagellack", "nagelentferner", "nagelfeile",
       "haargel", "haarwachs", "haarspray", "haarmousse", "haarpflegemittel",
       "kontaktlinsen", "kontaktlinsenflüssigkeit", "pflegelösung linsen",
+      // Tiernahrung
+      "hundefutter", "katzenfutter", "tiernahrung", "tierfutter", "vogelfutter",
+      "katzenstreu", "hundesnack", "katzenleckerli", "tierstreu",
+      "aquariumfutter", "kleinterfutter", "hasenfutter", "nageterfutter",
+      "hundeknochen", "kauspielzeug", "flohschutz",
+      // Baby & Kind
+      "babynahrung", "babybreikost", "babymilch", "folgenahrung", "anfangsmilch",
+      "babygläschen", "babykeks", "kinderbrei", "kindermilch",
+      "babybrei", "obstbrei", "gemüsebrei", "babysnack",
+      // Batterien & Elektronikzubehör
+      "batterien", "batterie", "akkus", "glühbirne", "leuchtmittel",
       // English
       "detergent", "all-purpose cleaner", "bathroom cleaner", "toilet cleaner",
       "glass cleaner", "dish soap", "dishwasher tablet", "dishwasher pods",
@@ -461,12 +548,26 @@ export const SHOPPING_CATEGORIES = [
       "tampons", "sanitary pads", "panty liners", "sanitary towels", "feminine hygiene",
       "tissues", "paper tissues", "facial tissues", "handkerchiefs",
       "disinfectant", "plasters", "bandages",
+      "dishwasher salt", "rinse aid", "dishwasher rinse aid", "dishwasher descaler",
+      "toilet block", "toilet rim block", "hygiene cleaner", "toilet freshener",
+      "laundry pods", "washing pods", "laundry capsules", "washing powder",
+      "mop", "floor mop", "floor cloth", "kitchen roll",
+      "razor blades", "disposable razor", "body milk", "shower cream",
+      "exfoliator", "body scrub", "intimate wash", "beard oil",
       // Cosmetics & Beauty
       "makeup", "cosmetics", "lipstick", "lip gloss", "lip liner",
       "mascara", "eyeliner", "eyeshadow", "concealer", "foundation", "powder",
       "blush", "bronzer", "highlighter", "nail polish", "nail varnish", "nail remover",
       "hair gel", "hairspray", "hair mousse", "hair wax",
       "contact lenses", "lens solution",
+      // Pet food
+      "dog food", "cat food", "pet food", "bird food", "cat litter",
+      "dog treat", "cat treat", "dog snack", "pet snack",
+      // Baby & Kids
+      "baby food", "baby formula", "infant formula", "follow-on milk",
+      "baby puree", "baby snack", "toddler milk",
+      // Batteries & household electronics
+      "batteries", "battery", "light bulb", "led bulb",
       // Español
       "limpiador multiusos", "limpiador de baño", "limpiainodoros",
       "limpiacristales", "lavavajillas", "pastillas lavavajillas", "descalcificador",
@@ -487,6 +588,12 @@ export const SHOPPING_CATEGORIES = [
       "higiene femenina", "higiene íntima", "protector diario",
       "toallitas", "pañuelos", "kleenex",
       "desinfectante", "tiritas", "vendas",
+      "sal para lavavajillas", "abrillantador", "descalcificador lavavajillas",
+      "pastilla wc", "pastillas wc", "limpiador wc",
+      "cápsulas detergente", "monodosis lavadora", "detergente en polvo",
+      "fregona", "bayeta de suelo", "rollo de cocina",
+      "cuchillas de afeitar", "maquinilla desechable", "leche corporal",
+      "exfoliante corporal", "aceite barba",
       // Cosmética
       "maquillaje", "labial", "pintalabios", "lápiz labial", "brillo de labios",
       "máscara de pestañas", "rímel", "delineador", "sombra de ojos",
