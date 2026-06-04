@@ -2280,7 +2280,7 @@ function showDeleteSeriesDialog(ev: CalendarEvent, sid: string, count: number, d
   dlg.innerHTML = `
     <div class="delete-series-sheet">
       <p class="delete-series-title">Termin löschen</p>
-      <p class="delete-series-subtitle">„${ev.summary}" ist Teil einer Serie von ${count} Terminen.</p>
+      <p class="delete-series-subtitle">„${escHtml(ev.summary)}" ist Teil einer Serie von ${count} Terminen.</p>
       <button class="delete-series-btn" id="dsd-single">Nur diesen Termin</button>
       <button class="delete-series-btn delete-series-btn--danger" id="dsd-all">Alle ${count} Termine der Serie löschen</button>
       <button class="delete-series-btn delete-series-btn--cancel" id="dsd-cancel">Abbrechen</button>
@@ -2331,11 +2331,11 @@ function showEventDetail(ev: CalendarEvent): void {
       <div class="detail-handle"></div>
       <div class="detail-bar" style="background:${grad};"></div>
       <div class="detail-body">
-        <p class="detail-title">${ev.summary}</p>
+        <p class="detail-title">${escHtml(ev.summary)}</p>
         <p class="detail-meta">${when}</p>
-        ${member ? `<div class="detail-member"><span class="detail-avatar" style="background:${grad};">${member.initial}</span><span class="detail-member-name">${member.name}</span></div>` : ""}
-        ${ev.location ? `<p class="detail-location">📍 ${ev.location}</p>` : ""}
-        ${stripMetaTags(ev.description) ? `<p class="detail-notes">${stripMetaTags(ev.description)}</p>` : ""}
+        ${member ? `<div class="detail-member"><span class="detail-avatar" style="background:${grad};">${member.initial}</span><span class="detail-member-name">${escHtml(member.name)}</span></div>` : ""}
+        ${ev.location ? `<p class="detail-location">📍 ${escHtml(ev.location)}</p>` : ""}
+        ${stripMetaTags(ev.description) ? `<p class="detail-notes">${escHtml(stripMetaTags(ev.description)).replace(/\n/g, "<br>")}</p>` : ""}
       </div>
       ${actions}
     </div>
@@ -3498,6 +3498,10 @@ function renderConfig(): void {
       alert("Bitte alle Felder ausfüllen");
       return;
     }
+    if (!/^https?:\/\/./.test(url)) {
+      alert("URL muss mit http:// oder https:// beginnen");
+      return;
+    }
     saveConfig({ baseUrl: url.replace(/\/$/, ""), token, calendarEntities: entities });
     pushEntitiesToHA(entities);
     render();
@@ -3601,13 +3605,10 @@ if (demoMode) {
   renderConfig();
 } else {
   render();
-  // Sync birthday data from HA (cross-device persistence), then try a fresh ICS fetch.
-  void syncBirthdaysFromHA().then(() => {
-    render();
-    if (localStorage.getItem(BIRTHDAY_ICS_KEY)) {
-      void fetchAndCacheBirthdayICS().then(() => render()).catch(() => {});
-    }
-  });
+  // Sync birthday data from HA (cross-device persistence).
+  // Do NOT auto-fetch the ICS on boot — that would overwrite manual cleanup
+  // done on other devices. Use "Aktualisieren via iCloud" to re-import.
+  void syncBirthdaysFromHA().then(() => render());
   // Pull hidden UIDs first, THEN refresh — so deleted events are never
   // momentarily re-shown after a page reload.
   void syncHiddenUidsFromHA().then(() => {
