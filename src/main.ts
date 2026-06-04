@@ -1117,6 +1117,10 @@ function bindEvents(): void {
         state.weekStart = startOfWeek(new Date());
         render();
         void refreshEvents();
+        requestAnimationFrame(() => {
+          const todayRow = app.querySelector<HTMLElement>(".week-row__day--today");
+          todayRow?.closest(".week-row")?.scrollIntoView({ block: "start", behavior: "smooth" });
+        });
 
       // ── Month navigation ─────────────────────────────────────────────────
       } else if (action === "nav-month-prev") {
