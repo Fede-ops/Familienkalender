@@ -750,11 +750,21 @@ body {
   min-width: 0;
   padding: 6px 6px 8px;
   background-color: #000000;
-  border: 1px solid rgba(120, 120, 128, 0.55);
+  border: none;
+  border-right: 0.5px solid rgba(120, 120, 128, 0.55);
+  border-bottom: 0.5px solid rgba(120, 120, 128, 0.55);
   position: relative;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+}
+
+.month-cell:first-child {
+  border-left: 0.5px solid rgba(120, 120, 128, 0.55);
+}
+
+.month-row:first-child .month-cell {
+  border-top: 0.5px solid rgba(120, 120, 128, 0.55);
 }
 
 .month-row__bars {
