@@ -1896,21 +1896,21 @@ function showBirthdaySettingsSheet(): void {
         ).join("");
 
     const html = `<div id="birthday-settings-sheet" class="sheet-backdrop">
-      <div class="bottom-sheet" data-stop-propagation style="max-height:85dvh;display:flex;flex-direction:column;">
+      <div class="bottom-sheet" data-stop-propagation>
         <div class="bottom-sheet__handle"></div>
-        <p class="bottom-sheet__title" style="flex-shrink:0;">🎂 Geburtstage</p>
-        <div style="padding:0 20px 10px;flex-shrink:0;">
+        <p class="bottom-sheet__title">🎂 Geburtstage</p>
+        <div style="padding:0 20px 10px;">
           <input id="birthday-ics-input" type="url" inputmode="url"
             placeholder="webcal://p10-caldav.icloud.com/published/2/…"
             value="${escHtml(savedUrl)}"
             style="width:100%;box-sizing:border-box;background:rgba(120,120,128,0.18);border:none;border-radius:10px;padding:11px 13px;font-size:14px;color:#EBEBF5;outline:none;" />
         </div>
-        <div style="padding:0 20px 12px;flex-shrink:0;">
+        <div style="padding:0 20px 12px;">
           <button class="ics-import-confirm" id="birthday-fetch" style="width:100%;">Aktualisieren</button>
         </div>
-        ${data.length > 0 ? `<p style="font-size:12px;color:rgba(235,235,245,0.4);padding:0 20px 4px;flex-shrink:0;">${data.length} Einträge</p>` : ""}
-        <div style="overflow-y:auto;flex:1 1 0;">${listRows}</div>
-        <div style="padding:12px 20px;flex-shrink:0;">
+        ${data.length > 0 ? `<p style="font-size:12px;color:rgba(235,235,245,0.4);padding:0 20px 4px;">${data.length} Einträge · nach unten scrollen zum Löschen</p>` : ""}
+        <div style="overflow-y:auto;max-height:40vh;">${listRows}</div>
+        <div style="padding:12px 20px;">
           <button class="ics-import-cancel" id="birthday-close" style="width:100%;">Schließen</button>
         </div>
       </div>
