@@ -171,9 +171,9 @@ def parse_birthday_ics(raw_bytes):
             in_event = False
             if "SUMMARY" not in props or "DTSTART" not in props:
                 continue
-            if "FREQ=YEARLY" not in props.get("RRULE", ""):
-                continue
-            m = re.match(r"\d{4}(\d{2})(\d{2})", props["DTSTART"])
+            # Accept events with RRULE:FREQ=YEARLY OR plain all-day events (8-digit date)
+            dtstart = props["DTSTART"].strip()
+            m = re.match(r"\d{4}(\d{2})(\d{2})$", dtstart)
             if not m:
                 continue
             month, day = int(m.group(1)) - 1, int(m.group(2))
