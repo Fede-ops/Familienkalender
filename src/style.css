@@ -9,7 +9,7 @@
   --text-secondary: rgba(235, 235, 245, 0.6);
   --text-tertiary: rgba(235, 235, 245, 0.3);
   --text-quaternary: rgba(235, 235, 245, 0.18);
-  --separator: rgba(120, 120, 128, 0.55);
+  --separator: rgba(120, 120, 128, 0.75);
   --accent: #ff6b47;
   --accent-blue: #0a84ff;
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
@@ -460,7 +460,7 @@ body {
   gap: 10px;
   align-items: stretch;
   padding: 16px 0 16px;
-  border-top: 0.5px solid rgba(120, 120, 128, 0.55);
+  border-top: 0.5px solid rgba(120, 120, 128, 0.75);
   min-height: 56px;
   flex-shrink: 0;
   user-select: none;
@@ -726,6 +726,7 @@ body {
 .month-weekdays {
   display: flex;
   padding: 0 12px 8px;
+  border-bottom: 0.5px solid rgba(120, 120, 128, 0.75);
 }
 
 .month-weekdays__day {
@@ -751,7 +752,7 @@ body {
   padding: 6px 6px 8px;
   background-color: #000000;
   border: none;
-  border-right: 0.5px solid rgba(120, 120, 128, 0.55);
+  border-right: 0.5px solid rgba(120, 120, 128, 0.75);
   position: relative;
   user-select: none;
   -webkit-user-select: none;
@@ -759,17 +760,17 @@ body {
 }
 
 .month-cell:first-child {
-  border-left: 0.5px solid rgba(120, 120, 128, 0.55);
+  border-left: 0.5px solid rgba(120, 120, 128, 0.75);
 }
 
 /* Horizontal lines live on the row container — one border per gap, no doubling */
 .month-row {
-  border-bottom: 0.5px solid rgba(120, 120, 128, 0.55);
+  border-bottom: 0.5px solid rgba(120, 120, 128, 0.75);
 }
 
 /* Top outer edge: first .month-row follows .month-weekdays */
 .month-weekdays + .month-row {
-  border-top: 0.5px solid rgba(120, 120, 128, 0.55);
+  border-top: 0.5px solid rgba(120, 120, 128, 0.75);
 }
 
 .month-row__bars {
