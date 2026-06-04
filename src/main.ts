@@ -1117,10 +1117,12 @@ function bindEvents(): void {
         state.weekStart = startOfWeek(new Date());
         render();
         void refreshEvents();
-        requestAnimationFrame(() => {
+        // Double rAF: first frame commits the new DOM, second frame lets the
+        // browser finish layout so scrollIntoView lands on the right position.
+        requestAnimationFrame(() => requestAnimationFrame(() => {
           const todayRow = app.querySelector<HTMLElement>(".week-row__day--today");
           todayRow?.closest(".week-row")?.scrollIntoView({ block: "start", behavior: "smooth" });
-        });
+        }));
 
       // ── Month navigation ─────────────────────────────────────────────────
       } else if (action === "nav-month-prev") {
