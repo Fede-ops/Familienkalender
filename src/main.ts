@@ -1965,6 +1965,21 @@ function showBirthdaySettingsSheet(): void {
 
 // ── Search sheet ───────────────────────────────────────────────────────────
 
+// Wide-range event cache for search: covers ±2 years, refreshed every 5 min.
+let searchEventsCache: CalendarEvent[] = [];
+let searchEventsCacheTime = 0;
+
+async function fetchSearchRange(): Promise<CalendarEvent[]> {
+  const config = loadConfig();
+  if (!config) return [];
+  const now = new Date();
+  const client = new HAClient(config);
+  const fresh = await client.getAllEvents(addMonths(now, -12), addMonths(now, 24));
+  searchEventsCache = fresh;
+  searchEventsCacheTime = Date.now();
+  return fresh;
+}
+
 function showSearchSheet(): void {
   document.getElementById("search-sheet")?.remove();
 
@@ -1986,6 +2001,17 @@ function showSearchSheet(): void {
 
   const input = document.getElementById("search-input") as HTMLInputElement;
   const resultsEl = document.getElementById("search-results")!;
+  let fetchingWide = false;
+
+  // Deduplicated union of cached view events + wide-range search cache
+  function searchPool(): CalendarEvent[] {
+    const seen = new Set<string>();
+    const pool: CalendarEvent[] = [];
+    for (const e of [...state.events, ...searchEventsCache]) {
+      if (!seen.has(e.uid)) { seen.add(e.uid); pool.push(e); }
+    }
+    return pool;
+  }
 
   function escHtml(s: string): string {
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -2002,12 +2028,15 @@ function showSearchSheet(): void {
       `${["Mo","Di","Mi","Do","Fr","Sa","So"][d.getDay() === 0 ? 6 : d.getDay() - 1]}, ${d.getDate()}. ${["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"][d.getMonth()]}`;
     const fmtTime = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
-    const matches = state.events
+    const pool = searchPool();
+    const matches = pool
       .filter((e) => e.summary.toLowerCase().includes(q) || (e.description ?? "").toLowerCase().includes(q) || (e.location ?? "").toLowerCase().includes(q))
       .sort((a, b) => a.start.getTime() - b.start.getTime());
 
     if (matches.length === 0) {
-      resultsEl.innerHTML = `<p class="search-hint">Keine Treffer im geladenen Zeitraum</p>`;
+      resultsEl.innerHTML = fetchingWide
+        ? `<p class="search-hint">Suche lädt…</p>`
+        : `<p class="search-hint">Keine Treffer</p>`;
       return;
     }
 
@@ -2026,12 +2055,13 @@ function showSearchSheet(): void {
 
     resultsEl.querySelectorAll<HTMLElement>("[data-uid]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const ev = state.events.find((e) => e.uid === btn.dataset.uid);
+        const ev = searchPool().find((e) => e.uid === btn.dataset.uid);
         if (!ev) return;
         sheet.remove();
         state.viewMode = "week";
         state.weekStart = startOfWeek(ev.start);
         render();
+        void refreshEvents();
         showEventDetail(ev);
       });
     });
@@ -2047,6 +2077,17 @@ function showSearchSheet(): void {
 
   renderResults("");
   requestAnimationFrame(() => input.focus());
+
+  // Fetch wide range if cache is missing or older than 5 minutes
+  if (Date.now() - searchEventsCacheTime > 5 * 60 * 1000) {
+    fetchingWide = true;
+    fetchSearchRange()
+      .then(() => {
+        fetchingWide = false;
+        if (document.getElementById("search-sheet")) renderResults(input.value);
+      })
+      .catch(() => { fetchingWide = false; });
+  }
 }
 
 function addShoppingItem(): void {
