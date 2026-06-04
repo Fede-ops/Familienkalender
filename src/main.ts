@@ -690,7 +690,7 @@ function birthdayEvents(): CalendarEvent[] {
   const events: CalendarEvent[] = [];
   for (const bd of data) {
     for (const y of [year - 1, year, year + 1]) {
-      const age = bd.year && bd.year >= 1900 ? y - bd.year : null;
+      const age = (bd.year && bd.year >= 1900 && (y - bd.year) > 0) ? y - bd.year : null;
       const displayName = cleanBirthdayName(bd.name);
       events.push({
         uid: `__birthday__${bd.name.replace(/[^a-zA-Z0-9]/g, "_")}__${bd.month}_${bd.day}`,
