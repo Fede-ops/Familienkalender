@@ -3078,18 +3078,12 @@ async function runFullDuplicateCleanup(silent = false): Promise<void> {
     const fresh = await client.getAllEvents(rangeStart, rangeEnd);
 
     const nowMs = Date.now();
-    const hiddenFpsCleanup = new Set<string>();
-    for (const e of fresh) {
-      if (pendingDeletes.get(e.uid) === PERMANENT) {
-        hiddenFpsCleanup.add(`${e.memberId}|${e.start.getTime()}|${e.summary.toLowerCase()}`);
-      }
-    }
     const withoutHiddenCleanup = fresh.filter((e) => {
       const exp = pendingDeletes.get(e.uid);
       if (exp === PERMANENT) return false;
       if (exp !== undefined && exp > nowMs) return false;
       const fp = eventFp(e);
-      if (hiddenFpsCleanup.has(fp) || hiddenFingerprints.has(fp)) return false;
+      if (hiddenFingerprints.has(fp)) return false;
       const sid = extractSeriesId(e.description);
       if (sid && deletedSeriesIds.has(sid)) return false;
       return true;
@@ -3257,24 +3251,19 @@ async function refreshEvents(): Promise<void> {
       rangeEnd = addDays(state.weekStart, 63);
     }
     const fresh = await client.getAllEvents(rangeStart, rangeEnd);
-    // getAllEvents only deduplicates by UID; fingerprint dedup happens here,
-    // AFTER the pendingDeletes filter, so that a PERMANENT event's fingerprint
-    // can suppress sibling duplicates that HA returned under a different UID.
+    // getAllEvents only deduplicates by UID; pendingDeletes/fingerprint filtering
+    // happens here.
     const now = Date.now();
-    // Pass 1: collect fingerprints of every PERMANENT-hidden event in the raw fetch.
-    const hiddenFps = new Set<string>();
+    // Pass 1: find events HA still returns despite being PERMANENT-deleted → ghost-retry.
+    // We do NOT collect fingerprints here. Fingerprint suppression (hiddenFps) used to
+    // block all events sharing a fingerprint with any PERMANENT entry, which caused
+    // legitimate copies with different UIDs to permanently vanish when the old
+    // dedup code incorrectly marked duplicates PERMANENT. Only hiddenFingerprints
+    // (explicitly set by the user via series-delete) is used for fingerprint filtering.
     const ghostsToRetryDelete: CalendarEvent[] = [];
     for (const e of fresh) {
-      if (pendingDeletes.get(e.uid) === PERMANENT) {
-        hiddenFps.add(`${e.memberId}|${e.start.getTime()}|${e.summary.toLowerCase()}`);
-        // Event is marked PERMANENT but HA still returns it → re-attempt
-        // delete in HA. This is the recovery path for cases where HA's first
-        // delete_event call returned success but the event came back (recurring
-        // event, external calendar sync, etc.) or where the initial delete
-        // failed silently.
-        if (!e.uid.startsWith("local-") && e.memberId) {
-          ghostsToRetryDelete.push(e);
-        }
+      if (pendingDeletes.get(e.uid) === PERMANENT && !e.uid.startsWith("local-") && e.memberId) {
+        ghostsToRetryDelete.push(e);
       }
     }
     if (ghostsToRetryDelete.length > 0 && navigator.onLine) {
@@ -3291,13 +3280,13 @@ async function refreshEvents(): Promise<void> {
         ),
       );
     }
-    // Pass 2: filter by UID (pendingDeletes), fingerprints, and deleted series IDs.
+    // Pass 2: filter by UID (pendingDeletes), persistent fingerprints, and deleted series IDs.
     const withoutHidden = fresh.filter((e) => {
       const exp = pendingDeletes.get(e.uid);
       if (exp === PERMANENT) return false;
       if (exp !== undefined && exp > now) return false;
       const fp = eventFp(e);
-      if (hiddenFps.has(fp) || hiddenFingerprints.has(fp)) return false;
+      if (hiddenFingerprints.has(fp)) return false;
       const sid = extractSeriesId(e.description);
       if (sid && deletedSeriesIds.has(sid)) return false;
       return true;
@@ -3311,18 +3300,15 @@ async function refreshEvents(): Promise<void> {
       if (!cur || e.end > cur.end) fpBest.set(fp, e);
     }
     const merged = [...fpBest.values()].sort((a, b) => a.start.getTime() - b.start.getTime());
-    // Auto-deduplicate on every refresh: mark duplicates PERMANENT and re-filter.
-    // This runs inline so duplicates are never shown, even on first load after a
-    // fresh install where localStorage / sensor may be empty.
+    // Auto-deduplicate: filter duplicate UIDs from the display without persisting
+    // anything to pendingDeletes. Writing to pendingDeletes here caused a cascade:
+    // dedup-marked UIDs triggered the ghost-retry to delete real calendar events
+    // from HA, and their shared fingerprint blocked any new copies from showing.
+    // Dedup is now pure display logic — only explicit user deletes touch pendingDeletes.
     const { strict: strictDupes } = findDuplicateUids(merged);
-    // A restored event is never a duplicate to hide — the tombstone always wins.
     const dupesToHide = strictDupes.filter((uid) => !restoredUids.has(uid));
     let clean = merged;
     if (dupesToHide.length > 0) {
-      for (const uid of dupesToHide) {
-        if (!pendingDeletes.has(uid)) pendingDeletes.set(uid, PERMANENT);
-      }
-      savePendingDeletes(pendingDeletes);
       const dupeSet = new Set(dupesToHide);
       clean = merged.filter((e) => !dupeSet.has(e.uid));
     }
