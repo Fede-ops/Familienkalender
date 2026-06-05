@@ -3031,8 +3031,11 @@ async function saveEvent(): Promise<void> {
 // ── Duplicate detection & cleanup ─────────────────────────────────────────
 
 function findDuplicateUids(events: CalendarEvent[]): { strict: string[]; soft: string[] } {
+  // Only TRUE duplicates count: same calendar, same name, and the same time
+  // slot (overlapping all-day range OR identical start minute). Events that
+  // merely share a name on adjacent days are legitimate multi-day events
+  // (e.g. "Hochzeit Standesamt" Fr + Sa) and must NEVER be treated as dupes.
   const strictDupes = new Set<string>();
-  const softDupes = new Set<string>();
 
   for (let i = 0; i < events.length; i++) {
     if (strictDupes.has(events[i].uid)) continue;
@@ -3058,47 +3061,7 @@ function findDuplicateUids(events: CalendarEvent[]): { strict: string[]; soft: s
     }
   }
 
-  // Consecutive same-name same-calendar all-day events: soft-filter only
-  // (in-memory, never written to pendingDeletes) to avoid permanently hiding
-  // legitimate multi-day events like "Hochzeit Fr + Sa".
-  const allDayByKey = new Map<string, CalendarEvent[]>();
-  for (const e of events) {
-    if (!e.allDay || strictDupes.has(e.uid)) continue;
-    const key = `${e.memberId}|${e.summary.toLowerCase()}`;
-    if (!allDayByKey.has(key)) allDayByKey.set(key, []);
-    allDayByKey.get(key)!.push(e);
-  }
-  for (const [, group] of allDayByKey) {
-    if (group.length < 2) continue;
-    const sorted = [...group].sort((a, b) => a.start.getTime() - b.start.getTime());
-    for (let i = 1; i < sorted.length; i++) {
-      if (sorted[i - 1].end.getTime() >= sorted[i].start.getTime()) {
-        softDupes.add(sorted[i].uid);
-      }
-    }
-  }
-
-  // Consecutive same-time timed events: also soft-filter only.
-  const DAY_MS = 24 * 60 * 60 * 1000;
-  const timedByKey = new Map<string, CalendarEvent[]>();
-  for (const e of events) {
-    if (e.allDay || strictDupes.has(e.uid)) continue;
-    const key = `${e.memberId}|${e.summary.toLowerCase()}|${e.start.getHours()}:${String(e.start.getMinutes()).padStart(2, "0")}`;
-    if (!timedByKey.has(key)) timedByKey.set(key, []);
-    timedByKey.get(key)!.push(e);
-  }
-  for (const [, group] of timedByKey) {
-    if (group.length < 2) continue;
-    const sorted = [...group].sort((a, b) => a.start.getTime() - b.start.getTime());
-    for (let i = 1; i < sorted.length; i++) {
-      const prevMidnight = new Date(sorted[i - 1].start); prevMidnight.setHours(0, 0, 0, 0);
-      const thisMidnight = new Date(sorted[i].start); thisMidnight.setHours(0, 0, 0, 0);
-      const dayDiff = (thisMidnight.getTime() - prevMidnight.getTime()) / DAY_MS;
-      if (dayDiff <= 1) softDupes.add(sorted[i].uid);
-    }
-  }
-
-  return { strict: [...strictDupes], soft: [...softDupes] };
+  return { strict: [...strictDupes], soft: [] };
 }
 
 
