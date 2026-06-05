@@ -3031,37 +3031,29 @@ async function saveEvent(): Promise<void> {
 // ── Duplicate detection & cleanup ─────────────────────────────────────────
 
 function findDuplicateUids(events: CalendarEvent[]): { strict: string[]; soft: string[] } {
-  // Only TRUE duplicates count: same calendar, same name, and the same time
-  // slot (overlapping all-day range OR identical start minute). Events that
-  // merely share a name on adjacent days are legitimate multi-day events
-  // (e.g. "Hochzeit Standesamt" Fr + Sa) and must NEVER be treated as dupes.
-  const strictDupes = new Set<string>();
+  // A duplicate is only an event that is TRULY identical to another: same
+  // calendar, same name, same all-day flag, AND the exact same start (and end
+  // for all-day). Different days/durations are never duplicates — that keeps
+  // legitimate multi-day events ("Hochzeit Standesamt" Fr + Sa) intact.
+  const groups = new Map<string, CalendarEvent[]>();
+  for (const e of events) {
+    const sig = `${e.memberId ?? ""}|${e.summary.toLowerCase()}|${e.allDay ? "AD" : "T"}|${e.start.getTime()}|${e.allDay ? e.end.getTime() : ""}`;
+    if (!groups.has(sig)) groups.set(sig, []);
+    groups.get(sig)!.push(e);
+  }
 
-  for (let i = 0; i < events.length; i++) {
-    if (strictDupes.has(events[i].uid)) continue;
-    const a = events[i];
-
-    for (let j = i + 1; j < events.length; j++) {
-      const b = events[j];
-      if (strictDupes.has(b.uid)) continue;
-      if (a.memberId !== b.memberId) continue;
-      if (a.summary.toLowerCase() !== b.summary.toLowerCase()) continue;
-
-      let isDupe = false;
-      if (a.allDay && b.allDay) {
-        isDupe = a.start < b.end && b.start < a.end;
-      } else if (!a.allDay && !b.allDay) {
-        isDupe = a.start.getTime() === b.start.getTime();
-      } else {
-        const [allDay, timed] = a.allDay ? [a, b] : [b, a];
-        isDupe = timed.start >= allDay.start && timed.start < allDay.end;
-      }
-
-      if (isDupe) strictDupes.add(b.uid);
+  const dupes = new Set<string>();
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    // Survivor: prefer an explicitly restored event so a tombstone always wins;
+    // otherwise keep the first. All other identical copies are duplicates.
+    const survivor = group.find((e) => restoredUids.has(e.uid)) ?? group[0];
+    for (const e of group) {
+      if (e.uid !== survivor.uid) dupes.add(e.uid);
     }
   }
 
-  return { strict: [...strictDupes], soft: [] };
+  return { strict: [...dupes], soft: [] };
 }
 
 
@@ -3322,17 +3314,17 @@ async function refreshEvents(): Promise<void> {
     // Auto-deduplicate on every refresh: mark duplicates PERMANENT and re-filter.
     // This runs inline so duplicates are never shown, even on first load after a
     // fresh install where localStorage / sensor may be empty.
-    const { strict: strictDupes, soft: softDupes } = findDuplicateUids(merged);
+    const { strict: strictDupes } = findDuplicateUids(merged);
+    // A restored event is never a duplicate to hide — the tombstone always wins.
+    const dupesToHide = strictDupes.filter((uid) => !restoredUids.has(uid));
     let clean = merged;
-    if (strictDupes.length > 0) {
-      for (const uid of strictDupes) {
+    if (dupesToHide.length > 0) {
+      for (const uid of dupesToHide) {
         if (!pendingDeletes.has(uid)) pendingDeletes.set(uid, PERMANENT);
       }
       savePendingDeletes(pendingDeletes);
-    }
-    const allDupeSet = new Set([...strictDupes, ...softDupes]);
-    if (allDupeSet.size > 0) {
-      clean = merged.filter((e) => !allDupeSet.has(e.uid));
+      const dupeSet = new Set(dupesToHide);
+      clean = merged.filter((e) => !dupeSet.has(e.uid));
     }
     // Inject placeholders for in-flight member moves where HA hasn't indexed
     // the new event yet. Once HA returns it (fingerprint match), auto-drop.

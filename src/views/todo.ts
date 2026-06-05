@@ -144,6 +144,9 @@ export const TODO_CATEGORIES = [
       // ── Geräte & Aktionen ─────────────────────────────────────────────────
       "sensor koppeln", "gerät koppeln", "koppeln", "pairen", "einbinden",
       "sensor anlernen", "gerät anlernen",
+      "bluetooth", "bluetooth proxy", "ble proxy", "bt proxy",
+      "klimaanlage", "klimagerät", "klimasteuerung", "klima smart", "klimaanlage steuern",
+      "led abkleben", "status led", "status-led", "kontroll-led", "led abkleben",
       "rolladen", "rolläden", "jalousie", "markise",
       "dimmer", "lichtschalter smart",
       "steckdose smart", "zwischenstecker",
@@ -729,8 +732,10 @@ export const TODO_CATEGORIES = [
       "umtopfen", "blumenerde", "dünger", "kompost",
       "balkon", "terrasse",
       // Deutsch – Einkauf & Besorgungen
-      "einkaufen", "einkauf", "lebensmittel", "supermarkt", "billa", "spar", "hofer", "lidl", "merkur", "interspar",
-      "kaufen", "besorgen", "holen", "bestellen",
+      // Nur Lebensmittel-/Supermarkt-spezifische Begriffe — generische Kauf-Verben
+      // ("kaufen", "besorgen", "holen", "bestellen") sind absichtlich NICHT hier,
+      // sonst landet z.B. "Anzug kaufen" (Bekleidung/Shopping) fälschlich im Haushalt.
+      "einkaufen", "lebensmittel einkaufen", "lebensmittel", "supermarkt", "billa", "spar", "hofer", "lidl", "merkur", "interspar",
       "post abholen", "pakete", "pakete abholen",
       "schlüssel", "schlüssel nachmachen",
       "pfand", "pfandflasche", "pfandflaschen", "leergut", "retournieren", "zurückbringen", "abgeben",
