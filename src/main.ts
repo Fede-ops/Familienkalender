@@ -1634,7 +1634,7 @@ function showFilterSheet(): void {
       </button>`;
     }).join("");
 
-    const dupeCount = findDuplicateUids(state.events).length;
+    const dupeCount = findDuplicateUids(state.events).strict.length;
     const dupeRow = dupeCount > 0
       ? `<button class="filter-row filter-dupe-row" id="filter-dupe-btn">
           <span class="filter-row__name" style="color:#FF9F0A;">⚠ ${dupeCount} doppelte Einträge</span>
@@ -2057,6 +2057,11 @@ function showSearchSheet(): void {
       btn.addEventListener("click", () => {
         const ev = searchPool().find((e) => e.uid === btn.dataset.uid);
         if (!ev) return;
+        // If this event was accidentally hidden via pendingDeletes, restore it.
+        if (pendingDeletes.get(ev.uid) === PERMANENT) {
+          pendingDeletes.delete(ev.uid);
+          savePendingDeletes(pendingDeletes);
+        }
         sheet.remove();
         state.viewMode = "week";
         state.weekStart = startOfWeek(ev.start);
@@ -2992,44 +2997,40 @@ async function saveEvent(): Promise<void> {
 
 // ── Duplicate detection & cleanup ─────────────────────────────────────────
 
-function findDuplicateUids(events: CalendarEvent[]): string[] {
-  const dupes = new Set<string>();
+function findDuplicateUids(events: CalendarEvent[]): { strict: string[]; soft: string[] } {
+  const strictDupes = new Set<string>();
+  const softDupes = new Set<string>();
 
   for (let i = 0; i < events.length; i++) {
-    if (dupes.has(events[i].uid)) continue;
+    if (strictDupes.has(events[i].uid)) continue;
     const a = events[i];
 
     for (let j = i + 1; j < events.length; j++) {
       const b = events[j];
-      if (dupes.has(b.uid)) continue;
+      if (strictDupes.has(b.uid)) continue;
       if (a.memberId !== b.memberId) continue;
       if (a.summary.toLowerCase() !== b.summary.toLowerCase()) continue;
 
       let isDupe = false;
       if (a.allDay && b.allDay) {
-        // Both all-day: duplicate if date ranges overlap
         isDupe = a.start < b.end && b.start < a.end;
       } else if (!a.allDay && !b.allDay) {
-        // Both timed: duplicate if same start minute
         isDupe = a.start.getTime() === b.start.getTime();
       } else {
-        // Mixed: timed event is a duplicate of the all-day event if it falls
-        // within the all-day span and has the same name (e.g. "Urlaub" created
-        // both as an all-day and accidentally as hourly slots)
         const [allDay, timed] = a.allDay ? [a, b] : [b, a];
         isDupe = timed.start >= allDay.start && timed.start < allDay.end;
       }
 
-      if (isDupe) dupes.add(b.uid);
+      if (isDupe) strictDupes.add(b.uid);
     }
   }
 
-  // Consecutive same-name same-calendar all-day events: the processQueue bug can
-  // create individual one-day chunks instead of one multi-day event.  Adjacent
-  // chunks (end of prev == start of next) are treated as duplicates.
+  // Consecutive same-name same-calendar all-day events: soft-filter only
+  // (in-memory, never written to pendingDeletes) to avoid permanently hiding
+  // legitimate multi-day events like "Hochzeit Fr + Sa".
   const allDayByKey = new Map<string, CalendarEvent[]>();
   for (const e of events) {
-    if (!e.allDay || dupes.has(e.uid)) continue;
+    if (!e.allDay || strictDupes.has(e.uid)) continue;
     const key = `${e.memberId}|${e.summary.toLowerCase()}`;
     if (!allDayByKey.has(key)) allDayByKey.set(key, []);
     allDayByKey.get(key)!.push(e);
@@ -3038,19 +3039,17 @@ function findDuplicateUids(events: CalendarEvent[]): string[] {
     if (group.length < 2) continue;
     const sorted = [...group].sort((a, b) => a.start.getTime() - b.start.getTime());
     for (let i = 1; i < sorted.length; i++) {
-      // end >= start means adjacent (end==start) or overlapping — both are dupes
       if (sorted[i - 1].end.getTime() >= sorted[i].start.getTime()) {
-        dupes.add(sorted[i].uid);
+        softDupes.add(sorted[i].uid);
       }
     }
   }
 
-  // Same-name same-time timed events repeated on consecutive days within the
-  // same calendar — another processQueue bug pattern.
+  // Consecutive same-time timed events: also soft-filter only.
   const DAY_MS = 24 * 60 * 60 * 1000;
   const timedByKey = new Map<string, CalendarEvent[]>();
   for (const e of events) {
-    if (e.allDay || dupes.has(e.uid)) continue;
+    if (e.allDay || strictDupes.has(e.uid)) continue;
     const key = `${e.memberId}|${e.summary.toLowerCase()}|${e.start.getHours()}:${String(e.start.getMinutes()).padStart(2, "0")}`;
     if (!timedByKey.has(key)) timedByKey.set(key, []);
     timedByKey.get(key)!.push(e);
@@ -3062,11 +3061,11 @@ function findDuplicateUids(events: CalendarEvent[]): string[] {
       const prevMidnight = new Date(sorted[i - 1].start); prevMidnight.setHours(0, 0, 0, 0);
       const thisMidnight = new Date(sorted[i].start); thisMidnight.setHours(0, 0, 0, 0);
       const dayDiff = (thisMidnight.getTime() - prevMidnight.getTime()) / DAY_MS;
-      if (dayDiff <= 1) dupes.add(sorted[i].uid);
+      if (dayDiff <= 1) softDupes.add(sorted[i].uid);
     }
   }
 
-  return [...dupes];
+  return { strict: [...strictDupes], soft: [...softDupes] };
 }
 
 
@@ -3115,7 +3114,7 @@ async function runFullDuplicateCleanup(silent = false): Promise<void> {
       return true;
     });
 
-    const dupeUids = findDuplicateUids(visible);
+    const { strict: dupeUids } = findDuplicateUids(visible);
     toast?.remove();
     toast = null;
 
@@ -3323,15 +3322,17 @@ async function refreshEvents(): Promise<void> {
     // Auto-deduplicate on every refresh: mark duplicates PERMANENT and re-filter.
     // This runs inline so duplicates are never shown, even on first load after a
     // fresh install where localStorage / sensor may be empty.
-    const inViewDupes = findDuplicateUids(merged);
+    const { strict: strictDupes, soft: softDupes } = findDuplicateUids(merged);
     let clean = merged;
-    if (inViewDupes.length > 0) {
-      for (const uid of inViewDupes) {
+    if (strictDupes.length > 0) {
+      for (const uid of strictDupes) {
         if (!pendingDeletes.has(uid)) pendingDeletes.set(uid, PERMANENT);
       }
       savePendingDeletes(pendingDeletes);
-      const dupeSet = new Set(inViewDupes);
-      clean = merged.filter((e) => !dupeSet.has(e.uid));
+    }
+    const allDupeSet = new Set([...strictDupes, ...softDupes]);
+    if (allDupeSet.size > 0) {
+      clean = merged.filter((e) => !allDupeSet.has(e.uid));
     }
     // Inject placeholders for in-flight member moves where HA hasn't indexed
     // the new event yet. Once HA returns it (fingerprint match), auto-drop.
