@@ -367,13 +367,22 @@ async function syncHiddenUidsFromHA(): Promise<void> {
     // through so we re-publish our local lists below.
     let uids: string[] = [];
     let sids: string[] = [];
+    let restored: string[] = [];
     if (res.ok) {
-      const data = (await res.json()) as { attributes?: { uids?: string[]; sids?: string[] } };
+      const data = (await res.json()) as { attributes?: { uids?: string[]; sids?: string[]; restored?: string[] } };
       uids = data.attributes?.uids ?? [];
       sids = data.attributes?.sids ?? [];
+      restored = data.attributes?.restored ?? [];
     }
     let changed = false;
+    // Merge restored tombstones first — they always win over any deletion.
+    for (const uid of restored) {
+      if (!restoredUids.has(uid)) restoredUids.add(uid);
+      if (pendingDeletes.delete(uid)) changed = true;
+    }
+    localStorage.setItem(RESTORED_UIDS_KEY, JSON.stringify([...restoredUids]));
     for (const uid of uids) {
+      if (restoredUids.has(uid)) continue; // never re-hide a restored event
       if (!pendingDeletes.has(uid)) {
         pendingDeletes.set(uid, PERMANENT);
         changed = true;
@@ -447,15 +456,40 @@ function saveDeletedSids(s: Set<string>): void {
   _publishDeletionsToHA();
 }
 
+// UIDs the user explicitly restored — these always win over a deletion across
+// ALL devices, so a previously (mis-)deleted event can never be re-hidden by
+// another device's stale pendingDeletes. This is the cross-device un-delete.
+const RESTORED_UIDS_KEY = "nanoclaw-restored-uids";
+function loadRestoredUids(): Set<string> {
+  try {
+    const raw = localStorage.getItem(RESTORED_UIDS_KEY);
+    return new Set<string>(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch { return new Set(); }
+}
+const restoredUids: Set<string> = loadRestoredUids();
+
+// Restore an event everywhere: drop it from every local suppression list and
+// add it to the synced restored-tombstone set so other devices follow suit.
+function restoreEventEverywhere(ev: CalendarEvent): void {
+  pendingDeletes.delete(ev.uid);
+  hiddenFingerprints.delete(eventFp(ev));
+  restoredUids.add(ev.uid);
+  localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify([...pendingDeletes]));
+  saveHiddenFps(hiddenFingerprints);
+  localStorage.setItem(RESTORED_UIDS_KEY, JSON.stringify([...restoredUids]));
+  _publishDeletionsToHA();
+}
+
 function _publishDeletionsToHA(): void {
   const uids = [...pendingDeletes].filter(([, exp]) => exp === PERMANENT).map(([uid]) => uid).slice(-300);
   const sids = [...deletedSeriesIds];
+  const restored = [...restoredUids].slice(-300);
   const cfg = loadConfig();
   if (!cfg) return;
   void fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_hidden_uids`, {
     method: "POST",
     headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ state: String(uids.length + sids.length), attributes: { uids, sids, ts: Date.now() } }),
+    body: JSON.stringify({ state: String(uids.length + sids.length), attributes: { uids, sids, restored, ts: Date.now() } }),
   }).catch(() => {});
 }
 const deletedSeriesIds: Set<string> = loadDeletedSids();
@@ -2057,10 +2091,9 @@ function showSearchSheet(): void {
       btn.addEventListener("click", () => {
         const ev = searchPool().find((e) => e.uid === btn.dataset.uid);
         if (!ev) return;
-        // If this event was accidentally hidden via pendingDeletes, restore it.
-        if (pendingDeletes.get(ev.uid) === PERMANENT) {
-          pendingDeletes.delete(ev.uid);
-          savePendingDeletes(pendingDeletes);
+        // If this event was accidentally hidden, restore it on ALL devices.
+        if (pendingDeletes.get(ev.uid) === PERMANENT || hiddenFingerprints.has(eventFp(ev))) {
+          restoreEventEverywhere(ev);
         }
         sheet.remove();
         state.viewMode = "week";
@@ -3204,6 +3237,10 @@ async function deleteEvent(ev: CalendarEvent): Promise<void> {
   // the event still reappears (recurring rules, external calendar sync, etc.).
   // The PERMANENT list is synced to HA via sensor.familienkalender_hidden_uids
   // so all devices honour the same hidden set.
+  // Explicit user delete overrides any prior restore tombstone.
+  if (restoredUids.delete(ev.uid)) {
+    localStorage.setItem(RESTORED_UIDS_KEY, JSON.stringify([...restoredUids]));
+  }
   pendingDeletes.set(ev.uid, PERMANENT);
   savePendingDeletes(pendingDeletes);
 
