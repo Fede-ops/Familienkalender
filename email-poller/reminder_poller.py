@@ -53,6 +53,8 @@ DEFAULT_CALENDARS = [
 SENT_FILE         = "/config/scripts/reminder_sent.json"
 NOTIF_CACHE       = "/config/scripts/notif_config_cache.json"
 BIRTHDAY_DATA_FILE = "/config/scripts/birthday_data.json"
+TODO_DATA_FILE     = "/config/scripts/todo_data.json"
+SHOPPING_DATA_FILE = "/config/scripts/shopping_data.json"
 ctx = ssl.create_default_context()
 
 REMIND_RE = re.compile(r"\[remind:(\d+)\]")
@@ -326,6 +328,56 @@ def sync_birthday_persistence():
         print(f"  Geburtstage: Wiederherstellung fehlgeschlagen: {exc}", file=sys.stderr)
 
 
+def sync_list_persistence(label, entity, data_file):
+    """Sichert Todo-/Einkaufs-Listen auf Disk; stellt sie nach HA-Neustart wieder her.
+
+    Diese Listen liegen sonst nur im HA-Sensor und gehen bei jedem HA-Neustart
+    verloren. Läuft jede Minute:
+    - Sensor hat Daten  → auf Disk sichern (Backup, Teil des HA-Backups).
+    - Sensor leer       → aus Disk-Datei in Sensor laden (Restore nach Neustart).
+    """
+    st = ha_state(entity)
+    attrs = (st.get("attributes") or {}) if st else {}
+    current = attrs.get("items")
+    ts = attrs.get("ts")
+
+    if isinstance(current, list) and current:
+        # Sensor OK → Backup auf Disk aktualisieren (inkl. Zeitstempel).
+        try:
+            with open(data_file, "w", encoding="utf-8") as f:
+                json.dump({"items": current, "ts": ts}, f)
+        except Exception:
+            pass
+        return
+
+    # Sensor leer (z.B. nach HA-Neustart) → aus Datei wiederherstellen.
+    try:
+        with open(data_file, encoding="utf-8") as f:
+            saved = json.load(f)
+    except Exception:
+        return
+    items = saved.get("items") if isinstance(saved, dict) else saved
+    if not isinstance(items, list) or not items:
+        return
+    saved_ts = saved.get("ts") if isinstance(saved, dict) else None
+
+    payload = json.dumps({
+        "state": str(saved_ts or datetime.now().isoformat()),
+        "attributes": {"items": items, "ts": saved_ts or int(datetime.now().timestamp() * 1000)},
+    }).encode()
+    req = urllib.request.Request(
+        f"{HA_URL}/api/states/{entity}",
+        data=payload,
+        headers={"Authorization": f"Bearer {HA_TOKEN}", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            if resp.status in (200, 201):
+                print(f"  {label}: {len(items)} Einträge nach HA-Neustart wiederhergestellt.")
+    except Exception as exc:
+        print(f"  {label}: Wiederherstellung fehlgeschlagen: {exc}", file=sys.stderr)
+
+
 def sync_birthdays():
     """Importiert Geburtstage von ICS-URL — nur wenn die App einen neuen Import ausgelöst hat.
 
@@ -457,6 +509,10 @@ def main():
     # Geburtstage: zuerst Persistenz sichern/wiederherstellen, dann ggf. neu von ICS laden.
     sync_birthday_persistence()
     sync_birthdays()
+
+    # Todos + Einkaufsliste: Disk-Backup, überlebt HA-Neustarts (Teil des HA-Backups).
+    sync_list_persistence("Todos", "sensor.familienkalender_todos", TODO_DATA_FILE)
+    sync_list_persistence("Einkauf", "sensor.familienkalender_shopping", SHOPPING_DATA_FILE)
 
 
 if __name__ == "__main__":
