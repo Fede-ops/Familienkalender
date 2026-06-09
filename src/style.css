@@ -1705,9 +1705,8 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 .detail-x-btn {
   position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
+  right: 14px;
+  top: 4px;
   width: 28px;
   height: 28px;
   border-radius: 50%;
