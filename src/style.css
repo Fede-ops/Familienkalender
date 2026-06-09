@@ -1675,6 +1675,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 .detail-sheet {
   width: 100%;
+  max-width: 560px;
   background: #1c1c1e;
   border-radius: 18px 18px 0 0;
   display: flex;
@@ -1687,42 +1688,12 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   animation: slideUp 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
-.detail-wrap {
-  position: relative;
-  width: 100%;
-  max-width: 560px;
-}
-
 .detail-handle {
   width: 36px;
   height: 5px;
   border-radius: 3px;
   background: rgba(235, 235, 245, 0.3);
   margin: 8px auto 0;
-}
-
-.detail-x-btn {
-  position: absolute;
-  top: 10px;
-  right: 14px;
-  z-index: 1;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: rgba(235, 235, 245, 0.12);
-  border: none;
-  color: rgba(235, 235, 245, 0.6);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-}
-.detail-x-btn:hover {
-  background: rgba(235, 235, 245, 0.2);
-  color: rgba(235, 235, 245, 0.9);
 }
 
 .detail-bar {

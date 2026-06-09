@@ -2285,20 +2285,17 @@ function showEventDetail(ev: CalendarEvent): void {
       <p class="detail-ics-hint">Speichert in Downloads → Signal: + → Datei → Downloads → anhängen</p>`;
 
   const html = `<div id="event-detail-sheet" class="detail-backdrop" data-action="close-detail">
-    <div class="detail-wrap" data-stop-propagation>
-      <button class="detail-x-btn" data-action="close-x" aria-label="Schließen">✕</button>
-      <div class="detail-sheet">
-        <div class="detail-handle"></div>
-        <div class="detail-bar" style="background:${grad};"></div>
-        <div class="detail-body">
-          <p class="detail-title">${escHtml(ev.summary)}</p>
-          <p class="detail-meta">${when}</p>
-          ${member ? `<div class="detail-member"><span class="detail-avatar" style="background:${grad};">${member.initial}</span><span class="detail-member-name">${escHtml(member.name)}</span></div>` : ""}
-          ${ev.location ? `<p class="detail-location">📍 ${escHtml(ev.location)}</p>` : ""}
-          ${stripMetaTags(ev.description) ? `<p class="detail-notes">${escHtml(stripMetaTags(ev.description)).replace(/\n/g, "<br>")}</p>` : ""}
-        </div>
-        ${actions}
+    <div class="detail-sheet" data-stop-propagation>
+      <div class="detail-handle"></div>
+      <div class="detail-bar" style="background:${grad};"></div>
+      <div class="detail-body">
+        <p class="detail-title">${escHtml(ev.summary)}</p>
+        <p class="detail-meta">${when}</p>
+        ${member ? `<div class="detail-member"><span class="detail-avatar" style="background:${grad};">${member.initial}</span><span class="detail-member-name">${escHtml(member.name)}</span></div>` : ""}
+        ${ev.location ? `<p class="detail-location">📍 ${escHtml(ev.location)}</p>` : ""}
+        ${stripMetaTags(ev.description) ? `<p class="detail-notes">${escHtml(stripMetaTags(ev.description)).replace(/\n/g, "<br>")}</p>` : ""}
       </div>
+      ${actions}
     </div>
   </div>`;
 
@@ -2309,12 +2306,8 @@ function showEventDetail(ev: CalendarEvent): void {
 
   sheet.querySelector<HTMLElement>("[data-action='close-detail']")
     ?.addEventListener("click", () => sheet.remove());
-  sheet.querySelector<HTMLElement>("[data-action='close-x']")
-    ?.addEventListener("click", () => sheet.remove());
   sheet.querySelector<HTMLElement>("[data-stop-propagation]")
     ?.addEventListener("click", (e) => e.stopPropagation());
-  const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") { sheet.remove(); document.removeEventListener("keydown", onEsc); } };
-  document.addEventListener("keydown", onEsc);
   if (!isHoliday) {
     sheet.querySelector<HTMLElement>("[data-action='edit-event-from-detail']")
       ?.addEventListener("click", () => { sheet.remove(); openEditModal(ev); });
