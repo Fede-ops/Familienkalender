@@ -1,55 +1,45 @@
 #!/bin/sh
-# Aktualisiert email_to_calendar.py von GitHub und übernimmt die Zugangsdaten.
+# Aktualisiert email_to_calendar.py und reminder_poller.py von GitHub.
+#
+# Zugangsdaten liegen NICHT mehr im Skript, sondern in
+# /config/scripts/poller_config.json — daher ist dieses Update jetzt ein
+# einfacher Download, der die Credentials nie berührt.
+#
+# Einmaliges Setup von poller_config.json (falls noch nicht vorhanden):
+#   {
+#     "ha_url": "http://homeassistant:8123",
+#     "ha_token": "DEIN_HA_LONG_LIVED_TOKEN",
+#     "imap_user": "familienkalender@gugg.tech",
+#     "imap_pass": "DEIN_EMAIL_PASSWORT",
+#     "anthropic_api_key": "DEIN_ANTHROPIC_API_KEY"
+#   }
 set -e
+
+CFG="/config/scripts/poller_config.json"
+if [ ! -f "$CFG" ]; then
+  echo "Fehler: $CFG nicht gefunden. Siehe Kommentar in diesem Skript für das Format." >&2
+  exit 1
+fi
 
 SCRIPT="/config/scripts/email_to_calendar.py"
 TMP="/tmp/email_to_calendar_new.py"
 URL="https://raw.githubusercontent.com/fede-ops/familienkalender/main/email-poller/email_to_calendar.py"
 
-if [ ! -f "$SCRIPT" ]; then
-  echo "Fehler: $SCRIPT nicht gefunden." >&2
-  exit 1
-fi
-
-# Zugangsdaten aus bestehendem Script auslesen
-IMAP_PASS=$(grep 'IMAP_PASS\s*=' "$SCRIPT" | head -1 | sed 's/.*=\s*"\(.*\)"/\1/')
-HA_TOKEN=$(grep 'HA_TOKEN\s*=' "$SCRIPT" | head -1 | sed 's/.*=\s*"\(.*\)"/\1/')
-ANTHROPIC_API_KEY=$(grep 'ANTHROPIC_API_KEY\s*=' "$SCRIPT" | head -1 | sed 's/.*=\s*"\(.*\)"/\1/')
-
-if [ -z "$IMAP_PASS" ] || [ -z "$HA_TOKEN" ] || [ -z "$ANTHROPIC_API_KEY" ]; then
-  echo "Fehler: Zugangsdaten konnten nicht ausgelesen werden." >&2
-  exit 1
-fi
-
-# Neue Version laden
 curl -fsSL "$URL" -o "$TMP"
-
-# Zugangsdaten einsetzen
-sed -i "s|IMAP_PASS = \".*\"|IMAP_PASS = \"$IMAP_PASS\"|" "$TMP"
-sed -i "s|HA_TOKEN = \".*\"|HA_TOKEN = \"$HA_TOKEN\"|" "$TMP"
-sed -i "s|ANTHROPIC_API_KEY = \".*\"|ANTHROPIC_API_KEY = \"$ANTHROPIC_API_KEY\"|" "$TMP"
-
-# Syntax prüfen bevor wir ersetzen
 python3 -m py_compile "$TMP"
-
-# Altes Script ersetzen
 cp "$TMP" "$SCRIPT"
 rm "$TMP"
+echo "✓ email_to_calendar.py aktualisiert."
 
-echo "✓ email_to_calendar.py aktualisiert. Zugangsdaten übernommen."
-
-# ── Reminder-Poller einrichten/aktualisieren ─────────────────────────────────
 REMINDER="/config/scripts/reminder_poller.py"
 RTMP="/tmp/reminder_poller_new.py"
 RURL="https://raw.githubusercontent.com/fede-ops/familienkalender/main/email-poller/reminder_poller.py"
 
 curl -fsSL "$RURL" -o "$RTMP"
-sed -i "s|HA_TOKEN = \".*\"|HA_TOKEN = \"$HA_TOKEN\"|" "$RTMP"
 python3 -m py_compile "$RTMP"
 cp "$RTMP" "$REMINDER"
 rm "$RTMP"
-
-echo "✓ reminder_poller.py aktualisiert. HA-Token übernommen."
+echo "✓ reminder_poller.py aktualisiert."
 echo ""
-echo "→ Noch nötig: shell_command + Automation aus ha_setup.yaml übernehmen,"
-echo "  dann 'ha core restart' bzw. Konfiguration neu laden."
+echo "→ Noch nötig (nur beim allerersten Setup): shell_command + Automation"
+echo "  aus ha_setup.yaml übernehmen, dann 'ha core restart'."

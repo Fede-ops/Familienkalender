@@ -19,17 +19,36 @@ import base64
 from email.header import decode_header
 from datetime import datetime, date, timedelta
 
-# ── Konfiguration — vom Benutzer ausfüllen ────────────────────────────────────
+# ── Konfiguration ────────────────────────────────────────────────────────────
+# Zugangsdaten werden aus /config/scripts/poller_config.json gelesen, damit sie
+# nach einem direkten wget/curl-Update dieses Skripts erhalten bleiben.
+# Format: {"ha_url": "...", "ha_token": "...", "imap_user": "...",
+#          "imap_pass": "...", "anthropic_api_key": "..."}
+_CFG_FILE = "/config/scripts/poller_config.json"
+try:
+    with open(_CFG_FILE, encoding="utf-8") as _f:
+        _cfg = json.load(_f)
+except Exception:
+    _cfg = {}
+
 IMAP_HOST = "mail.infomaniak.com"
 IMAP_PORT = 993
-IMAP_USER = "familienkalender@gugg.tech"
-IMAP_PASS = "DEIN_EMAIL_PASSWORT"
+IMAP_USER = _cfg.get("imap_user", "familienkalender@gugg.tech")
+IMAP_PASS = _cfg.get("imap_pass", "")
 
-HA_URL = "http://localhost:8123"
-HA_TOKEN = "DEIN_HA_LONG_LIVED_TOKEN"
+HA_URL = _cfg.get("ha_url", "http://localhost:8123")
+HA_TOKEN = _cfg.get("ha_token", "")
 HA_CALENDAR = "calendar.bebos"  # Ziel-Kalender
 
-ANTHROPIC_API_KEY = "DEIN_ANTHROPIC_API_KEY"
+ANTHROPIC_API_KEY = _cfg.get("anthropic_api_key", "")
+
+if not IMAP_PASS or not HA_TOKEN or not ANTHROPIC_API_KEY:
+    print(
+        "FEHLER: Zugangsdaten fehlen in /config/scripts/poller_config.json "
+        "(benötigt: imap_pass, ha_token, anthropic_api_key).",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
