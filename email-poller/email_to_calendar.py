@@ -98,9 +98,10 @@ def parse_ics(text):
     return result
 
 
-def parse_with_claude(text, pdf_bytes=None):
-    """Extrahiert alle Event-Details aus Text oder PDF via Claude API.
-    Gibt eine Liste von Events zurück (z.B. Hin- und Rückflug)."""
+def parse_with_claude(text, pdf_bytes=None, image_parts=None):
+    """Extrahiert alle Event-Details aus Text, PDF oder Bildern via Claude API.
+    Gibt eine Liste von Events zurück (z.B. Hin- und Rückflug).
+    image_parts: Liste von (media_type, bytes) Tupeln."""
     today = date.today().isoformat()
     instruction = (
         f"Today is {today}. Extract ALL calendar events from this content "
@@ -121,6 +122,14 @@ def parse_with_claude(text, pdf_bytes=None):
                 "data": base64.standard_b64encode(pdf_bytes).decode(),
             }},
         ]
+    elif image_parts:
+        content = [{"type": "text", "text": instruction + (f"\n\nContext: {text[:2000]}" if text else "")}]
+        for media_type, img_bytes in image_parts[:5]:
+            content.append({"type": "image", "source": {
+                "type": "base64",
+                "media_type": media_type,
+                "data": base64.standard_b64encode(img_bytes).decode(),
+            }})
     else:
         content = f"{instruction}\n\n{text[:8000]}"
 
@@ -208,7 +217,10 @@ def process_message(msg):
     subject   = decode_str(msg.get("Subject", "Termin"))
     ics_parts = []   # alle ICS-Anhänge (z.B. Hin- UND Rückflug als separate Dateien)
     pdf_bytes = None
+    image_parts = []  # (media_type, bytes) — Screenshots von Buchungen etc.
     body      = ""
+
+    IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 
     if msg.is_multipart():
         for part in msg.walk():
@@ -221,6 +233,11 @@ def process_message(msg):
             elif ctype == "application/pdf" or fname.lower().endswith(".pdf"):
                 if not pdf_bytes:
                     pdf_bytes = part.get_payload(decode=True)
+            elif ctype in IMAGE_TYPES:
+                raw = part.get_payload(decode=True)
+                # Claude API Limit: max. 5 MB pro Bild
+                if raw and len(raw) <= 4_500_000:
+                    image_parts.append((ctype, raw))
             elif ctype == "text/plain" and not body:
                 raw = part.get_payload(decode=True)
                 if raw:
@@ -281,7 +298,24 @@ def process_message(msg):
             if create_ha_event(ev):
                 created += 1
 
-    # Email-Text nur als Fallback, wenn weder ICS noch PDF Events lieferten
+    # Bilder (Screenshots von Buchungsbestätigungen etc.), wenn ICS/PDF nichts lieferten
+    if not created and image_parts:
+        events = parse_with_claude(f"Subject: {subject}\n\n{body}", image_parts=image_parts) or []
+        for ev in events:
+            if "error" in ev:
+                continue
+            k = key_of(ev)
+            t = start_minute(ev)
+            if k in seen or (t and t in seen_times):
+                continue
+            seen.add(k)
+            if t:
+                seen_times.add(t)
+            print(f"  → Bild: {ev['summary']}")
+            if create_ha_event(ev):
+                created += 1
+
+    # Email-Text nur als Fallback, wenn weder ICS noch PDF noch Bilder Events lieferten
     if not created:
         full = f"Subject: {subject}\n\n{body}"
         events = parse_with_claude(full) or []
