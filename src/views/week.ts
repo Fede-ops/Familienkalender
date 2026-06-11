@@ -48,6 +48,10 @@ function escapeHtml(str: string): string {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+function isEmojiInitial(s: string): boolean {
+  return /\p{Extended_Pictographic}/u.test(s);
+}
+
 const ICONS = {
   back: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>`,
   next: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`,
@@ -81,7 +85,7 @@ function renderEvent(event: CalendarEvent, member?: FamilyMember): string {
       <span class="event__title">${escapeHtml(event.summary)}</span>
       <span class="event__time">${timeLabel}</span>
     </div>
-    <div class="event__avatar" style="background:${avatarGrad};">${member?.initial ?? "?"}</div>
+    <div class="event__avatar${isEmojiInitial(member?.initial ?? "?") ? " event__avatar--emoji" : ""}" style="background:${avatarGrad};">${member?.initial ?? "?"}</div>
   </div>`;
 }
 

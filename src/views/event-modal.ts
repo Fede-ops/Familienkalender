@@ -118,6 +118,10 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+function isEmojiInitial(s: string): boolean {
+  return /\p{Extended_Pictographic}/u.test(s);
+}
+
 export function renderEventModal(state: ModalState, members: FamilyMember[], occurrenceCount?: number): string {
   const tabsHtml = (["datum", "detail", "erinnerung"] as const)
     .map(
@@ -254,7 +258,7 @@ export function renderEventModal(state: ModalState, members: FamilyMember[], occ
       .map((m) => {
         const grad = `linear-gradient(135deg,${m.color} 0%,${shade(m.color, -30)} 100%)`;
         return `<button class="member-chip${m.id === state.memberId ? " member-chip--active" : ""}" data-action="select-member" data-member-id="${m.id}">
-          <span class="member-chip__avatar" style="background:${grad};">${m.initial}</span>
+          <span class="member-chip__avatar${isEmojiInitial(m.initial) ? " member-chip__avatar--emoji" : ""}" style="background:${grad};">${m.initial}</span>
           <span class="member-chip__name">${m.name}</span>
         </button>`;
       })

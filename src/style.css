@@ -607,6 +607,12 @@ body {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 
+.event__avatar--emoji {
+  font-size: 13px;
+  line-height: 1;
+  text-indent: 0.1em;
+}
+
 .bottom-bar {
   position: fixed;
   /* Anchor the pill flush with the screen bottom — the home indicator is
@@ -1231,6 +1237,12 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   color: #fff;
 }
 
+.member-chip__avatar--emoji {
+  font-size: 17px;
+  line-height: 1;
+  text-indent: 0.1em;
+}
+
 .member-chip__name {
   font-size: 11px;
   font-weight: 500;
@@ -1744,6 +1756,12 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   font-weight: 700;
   color: #fff;
   flex-shrink: 0;
+}
+
+.detail-avatar--emoji {
+  font-size: 14px;
+  line-height: 1;
+  text-indent: 0.1em;
 }
 
 .detail-member-name {
