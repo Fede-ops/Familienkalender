@@ -44,6 +44,10 @@ function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+function isEmojiInitial(s: string): boolean {
+  return /\p{Extended_Pictographic}/u.test(s);
+}
+
 // ── Offline queue ──────────────────────────────────────────────────────────
 
 const QUEUE_KEY = "calendar-offline-queue";
@@ -2351,7 +2355,7 @@ function showEventDetail(ev: CalendarEvent): void {
       <div class="detail-body">
         <p class="detail-title">${escHtml(ev.summary)}</p>
         <p class="detail-meta">${when}</p>
-        ${member ? `<div class="detail-member"><span class="detail-avatar" style="background:${grad};">${member.initial}</span><span class="detail-member-name">${escHtml(member.name)}</span></div>` : ""}
+        ${member ? `<div class="detail-member"><span class="detail-avatar${isEmojiInitial(member.initial) ? " detail-avatar--emoji" : ""}" style="background:${grad};">${member.initial}</span><span class="detail-member-name">${escHtml(member.name)}</span></div>` : ""}
         ${ev.location ? `<p class="detail-location">📍 ${escHtml(ev.location)}</p>` : ""}
         ${stripMetaTags(ev.description) ? `<p class="detail-notes">${escHtml(stripMetaTags(ev.description)).replace(/\n/g, "<br>")}</p>` : ""}
       </div>
