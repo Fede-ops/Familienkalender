@@ -214,6 +214,9 @@ const HOLIDAY_MEMBER: FamilyMember = { id: HOLIDAY_MEMBER_ID, name: "Feiertage �
 const BIRTHDAY_MEMBER_ID = "__geburtstage__";
 const BIRTHDAY_MEMBER: FamilyMember = { id: BIRTHDAY_MEMBER_ID, name: "Geburtstage 🎂", initial: "🎂", color: "#FF2D55" };
 
+const MOTOGP_MEMBER_ID = "__motogp__";
+const MOTOGP_MEMBER: FamilyMember = { id: MOTOGP_MEMBER_ID, name: "MotoGP 🏍️", initial: "🏍️", color: "#E4002B" };
+
 const BIRTHDAY_DATA_KEY = "fk_birthday_data_v1";
 
 interface BirthdayEntry { name: string; month: number; day: number; year?: number; }
@@ -266,6 +269,7 @@ const DEFAULT_MEMBERS: FamilyMember[] = [
   { id: "calendar.pita_trabajo", name: "Pita T", initial: "P", color: "#5AC46A" },
   HOLIDAY_MEMBER,
   BIRTHDAY_MEMBER,
+  MOTOGP_MEMBER,
 ];
 
 interface AppState {
@@ -710,17 +714,72 @@ function birthdayEvents(): CalendarEvent[] {
   return events;
 }
 
+// ── MotoGP race calendar ───────────────────────────────────────────────────
+// Ein Eintrag pro Rennwochenende, jeweils am Renn-Sonntag (ganztägig).
+// Daten sind fix veröffentlicht (kein Algorithmus wie bei Feiertagen), daher
+// pro Saison hart hinterlegt. Format: [Monat (1-12), Tag, Ortsname].
+const MOTOGP_RACES: Record<number, Array<[number, number, string]>> = {
+  2026: [
+    [3, 1,   "Buriram"],      // Thailand
+    [3, 22,  "Goiânia"],      // Brasilien
+    [3, 29,  "Austin"],       // Amerika
+    [4, 26,  "Jerez"],        // Spanien
+    [5, 10,  "Le Mans"],      // Frankreich
+    [5, 17,  "Barcelona"],    // Catalunya
+    [5, 31,  "Mugello"],      // Italien
+    [6, 7,   "Balaton"],      // Ungarn
+    [6, 21,  "Brno"],         // Tschechien
+    [6, 28,  "Assen"],        // Niederlande
+    [7, 12,  "Sachsenring"],  // Deutschland
+    [8, 9,   "Silverstone"],  // Großbritannien
+    [8, 30,  "Aragón"],       // Spanien
+    [9, 13,  "Misano"],       // San Marino
+    [9, 20,  "Spielberg"],    // Österreich
+    [10, 4,  "Motegi"],       // Japan
+    [10, 11, "Mandalika"],    // Indonesien
+    [10, 25, "Phillip Island"], // Australien
+    [11, 1,  "Sepang"],       // Malaysia
+    [11, 8,  "Lusail"],       // Katar
+    [11, 15, "Portimão"],     // Portugal
+    [11, 22, "Valencia"],     // Saisonfinale
+  ],
+};
+
+function motogpEvents(): CalendarEvent[] {
+  const base = state.viewMode === "week" ? state.weekStart : state.monthStart;
+  const y = base.getFullYear();
+  const events: CalendarEvent[] = [];
+  for (const year of [y - 1, y, y + 1]) {
+    const races = MOTOGP_RACES[year];
+    if (!races) continue;
+    for (const [month, day, loc] of races) {
+      const date = new Date(year, month - 1, day);
+      events.push({
+        uid: `__motogp__${year}__${month}_${day}`,
+        summary: `MotoGP ${loc}`,
+        start: date,
+        end: date,
+        allDay: true,
+        memberId: MOTOGP_MEMBER_ID,
+      });
+    }
+  }
+  return events;
+}
+
 function visibleEvents(): CalendarEvent[] {
   const holidays = holidayEvents();
   const birthdays = birthdayEvents();
+  const motogp = motogpEvents();
   if (state.filterMemberIds.length === 0) {
-    return [...state.events, ...holidays, ...birthdays];
+    return [...state.events, ...holidays, ...birthdays, ...motogp];
   }
   const regular = state.events.filter((e) => state.filterMemberIds.includes(e.memberId ?? ""));
   return [
     ...regular,
     ...(state.filterMemberIds.includes(HOLIDAY_MEMBER_ID)  ? holidays  : []),
     ...(state.filterMemberIds.includes(BIRTHDAY_MEMBER_ID) ? birthdays : []),
+    ...(state.filterMemberIds.includes(MOTOGP_MEMBER_ID)   ? motogp    : []),
   ];
 }
 
@@ -2269,8 +2328,9 @@ function showEventDetail(ev: CalendarEvent): void {
     ? (diffDays > 1 ? `${fmtDate(ev.start)} – ${fmtDate(ev.end)}` : fmtDate(ev.start))
     : `${fmtDate(ev.start)}, ${fmtTime(ev.start)} – ${fmtTime(ev.end)}`;
 
-  const isHoliday = ev.memberId === HOLIDAY_MEMBER_ID;
-  const actions = isHoliday
+  // Generierte Termine (Feiertage, MotoGP) sind schreibgeschützt — nur teilen.
+  const isReadOnly = ev.memberId === HOLIDAY_MEMBER_ID || ev.memberId === MOTOGP_MEMBER_ID;
+  const actions = isReadOnly
     ? `<div class="detail-actions">
         <button class="detail-share" data-action="share-event-from-detail">Teilen</button>
       </div>`
@@ -2308,7 +2368,7 @@ function showEventDetail(ev: CalendarEvent): void {
     ?.addEventListener("click", () => sheet.remove());
   sheet.querySelector<HTMLElement>("[data-stop-propagation]")
     ?.addEventListener("click", (e) => e.stopPropagation());
-  if (!isHoliday) {
+  if (!isReadOnly) {
     sheet.querySelector<HTMLElement>("[data-action='edit-event-from-detail']")
       ?.addEventListener("click", () => { sheet.remove(); openEditModal(ev); });
   }
@@ -2333,7 +2393,7 @@ function showEventDetail(ev: CalendarEvent): void {
         });
       }
     });
-  if (!isHoliday) {
+  if (!isReadOnly) {
     sheet.querySelector<HTMLElement>("[data-action='ics-event-from-detail']")
       ?.addEventListener("click", () => {
         const icsContent = generateICS(ev);
