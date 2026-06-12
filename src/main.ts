@@ -2928,9 +2928,16 @@ async function saveEvent(): Promise<void> {
     const client = new HAClient(config);
     try {
       if (editUid && !editUid.startsWith("local-")) {
+        const originalEvent = state.events.find((e) => e.uid === editUid);
+        // local_calendar's update_event leaves the old .ics entry behind when
+        // the event moves to a different day, producing a duplicate that
+        // keeps firing its own reminder. For same-day edits (time, summary,
+        // location, …) update_event works fine and keeps the UID stable.
+        const dateChanged = !!originalEvent && originalEvent.start.toDateString() !== startDate.toDateString();
         // Try update_event first (seamless, same UID). Falls back to
-        // create+delete when the calendar backend returns 400 (not supported).
-        const updated = await client.updateEvent(
+        // create+delete when the calendar backend returns 400 (not supported)
+        // or when the date changed (see above).
+        const updated = dateChanged ? false : await client.updateEvent(
           memberId, editUid, summary.trim(), startDate, endDate, allDay, {
             location: location || undefined,
             description: notes || undefined,
@@ -2942,13 +2949,13 @@ async function saveEvent(): Promise<void> {
           setTimeout(() => void refreshEvents(), 8_000);
         }
         if (!updated) {
-          // Backend doesn't support update_event — recreate in new position.
+          // Backend doesn't support update_event, or the date changed —
+          // recreate in new position and delete the old entry by UID.
           await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, {
             location: location || undefined,
             description: notes || undefined,
             rrule: rruleStr || undefined,
           });
-          const originalEvent = state.events.find((e) => e.uid === editUid);
           try {
             await client.deleteEvent(originalMemberId ?? memberId, editUid, originalEvent?.recurrenceId);
           } catch { /* best-effort */ }
