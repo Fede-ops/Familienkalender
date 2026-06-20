@@ -425,6 +425,64 @@ def sync_birthdays():
         pass
 
 
+def check_birthday_reminders(now, member_services, sent):
+    """Prüft ob heute jemand Geburtstag hat und schickt um 12:00 eine Push-Benachrichtigung."""
+    if now.hour < 12:
+        return 0
+
+    birthdays = None
+    st = ha_state("sensor.familienkalender_birthdays")
+    if st:
+        birthdays = (st.get("attributes") or {}).get("birthdays")
+    if not isinstance(birthdays, list) or not birthdays:
+        try:
+            with open(BIRTHDAY_DATA_FILE, encoding="utf-8") as f:
+                birthdays = json.load(f)
+        except Exception:
+            return 0
+    if not birthdays:
+        return 0
+
+    all_services = set()
+    for svcs in member_services.values():
+        all_services.update(svcs)
+    if not all_services:
+        return 0
+
+    today_month = now.month - 1  # birthday data uses 0-indexed months
+    today_day = now.day
+    today_str = now.strftime("%Y-%m-%d")
+    fired = 0
+
+    for bd in birthdays:
+        if bd.get("month") != today_month or bd.get("day") != today_day:
+            continue
+
+        name = bd.get("name", "?")
+        key = f"birthday-{name}-{today_str}"
+        if key in sent:
+            continue
+
+        year = bd.get("year")
+        if year:
+            age = now.year - year
+            title = f"🎂 {name} wird heute {age}!"
+        else:
+            title = f"🎂 {name} hat heute Geburtstag!"
+        message = "Alles Gute zum Geburtstag!"
+
+        ok_any = False
+        for svc in all_services:
+            if notify(svc, title, message):
+                ok_any = True
+        if ok_any:
+            sent[key] = now.isoformat()
+            fired += 1
+            print(f"  → Geburtstag: {name}")
+
+    return fired
+
+
 def main():
     now = datetime.now()
     member_services = get_member_services()
@@ -494,6 +552,9 @@ def main():
                 sent[key] = now.isoformat()
                 fired += 1
                 print(f"  → Erinnerung: {summary} ({cal}, {remaining} Min.)")
+
+    # Geburtstags-Benachrichtigungen (täglich um 12:00).
+    fired += check_birthday_reminders(now, member_services, sent)
 
     # Alte Einträge (> 2 Tage) aufräumen.
     cutoff = now - timedelta(days=2)
