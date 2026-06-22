@@ -115,7 +115,7 @@ function posLabel(pos: number): string {
 }
 
 function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 function isEmojiInitial(s: string): boolean {
@@ -258,8 +258,8 @@ export function renderEventModal(state: ModalState, members: FamilyMember[], occ
       .map((m) => {
         const grad = `linear-gradient(135deg,${m.color} 0%,${shade(m.color, -30)} 100%)`;
         return `<button class="member-chip${m.id === state.memberId ? " member-chip--active" : ""}" data-action="select-member" data-member-id="${m.id}">
-          <span class="member-chip__avatar${isEmojiInitial(m.initial) ? " member-chip__avatar--emoji" : ""}" style="background:${grad};">${m.initial}</span>
-          <span class="member-chip__name">${m.name}</span>
+          <span class="member-chip__avatar${isEmojiInitial(m.initial) ? " member-chip__avatar--emoji" : ""}" style="background:${grad};">${escapeHtml(m.initial)}</span>
+          <span class="member-chip__name">${escapeHtml(m.name)}</span>
         </button>`;
       })
       .join("");

@@ -17,8 +17,19 @@ import urllib.request
 from datetime import datetime, timedelta
 
 # ── Konfiguration ─────────────────────────────────────────────────────────────
-HA_URL   = "http://localhost:8123"         # direkt, kein Proxy
-HA_TOKEN = "DEIN_HA_LONG_LIVED_TOKEN"
+_CFG_FILE = "/config/scripts/poller_config.json"
+try:
+    with open(_CFG_FILE, encoding="utf-8") as _f:
+        _cfg = json.load(_f)
+except Exception:
+    _cfg = {}
+
+HA_URL   = _cfg.get("ha_url", "http://localhost:8123")
+HA_TOKEN = _cfg.get("ha_token", "")
+
+if not HA_TOKEN:
+    print("FEHLER: ha_token fehlt in /config/scripts/poller_config.json.", file=sys.stderr)
+    sys.exit(1)
 
 # Alle Kalender-Entities die durchsucht werden sollen
 CALENDARS = [

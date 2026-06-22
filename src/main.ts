@@ -41,7 +41,7 @@ import {
 import type { CalendarEvent, FamilyMember, ShoppingItem, TabKey, TodoItem } from "./types.ts";
 
 function escHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 function isEmojiInitial(s: string): boolean {
@@ -1415,7 +1415,7 @@ function showNotificationsSheet(): void {
   let availableServices: string[] = [];
 
   function escHtml(s: string): string {
-    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
   function haYaml(mapping: Record<string, string[]>): string {
@@ -1726,7 +1726,7 @@ function showFilterSheet(): void {
       const on = allOn || active.includes(m.id);
       return `<button class="filter-row${on ? " filter-row--on" : ""}" data-member-id="${m.id}">
         <span class="filter-row__dot" style="background:${m.color};box-shadow:0 0 5px ${m.color}88;"></span>
-        <span class="filter-row__name">${m.name}</span>
+        <span class="filter-row__name">${escHtml(m.name)}</span>
         <span class="filter-row__check">${on ? checkSvg : ""}</span>
       </button>`;
     }).join("");
@@ -2111,7 +2111,7 @@ function showSearchSheet(): void {
   }
 
   function escHtml(s: string): string {
-    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
   function renderResults(query: string): void {
@@ -2145,7 +2145,7 @@ function showSearchSheet(): void {
         <span class="search-result__bar" style="background:${accent};"></span>
         <span class="search-result__body">
           <span class="search-result__title">${escHtml(ev.summary)}</span>
-          <span class="search-result__meta">${when}${member ? ` · ${member.name}` : ""}</span>
+          <span class="search-result__meta">${when}${member ? ` · ${escHtml(member.name)}` : ""}</span>
         </span>
       </button>`;
     }).join("");
@@ -2284,10 +2284,8 @@ async function deleteEventSeries(sid: string): Promise<void> {
   const { fulfilled, rejected: fail } = await runBatch(tasks, 5);
   if (fail > 0) {
     console.error(`[deleteEventSeries] ${fail} failures, first: ${firstErr}`);
-    const cfg = loadConfig();
-    const haLink = cfg ? `<a href="${cfg.baseUrl}/calendar" target="_blank" style="color:#fff;text-decoration:underline">In HA öffnen</a>` : "";
     showTransientBanner(
-      `${fulfilled} von ${toDelete.length} gelöscht · ${fail} fehlgeschlagen (${firstErr}) ${haLink}`,
+      `${fulfilled} von ${toDelete.length} gelöscht · ${fail} fehlgeschlagen (${escHtml(String(firstErr))})`,
       true,
     );
   } else {
@@ -2715,7 +2713,7 @@ function showICSImportSheet(events: ParsedICSEvent[]): void {
   }
 
   function escH(s: string) {
-    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
   const pad = (n: number) => n.toString().padStart(2, "0");
   const fmtD = (d: Date) => `${d.getDate()}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
@@ -3228,9 +3226,9 @@ async function runFullDuplicateCleanup(silent = false): Promise<void> {
     const result = document.createElement("div");
     result.className = "dupe-banner";
     const msg = failed > 0
-      ? `${succeeded} gelöscht · ${failed} HA-Fehler: ${firstErr}`
+      ? `${succeeded} gelöscht · ${failed} HA-Fehler: ${escHtml(String(firstErr))}`
       : `${succeeded} Duplikate gelöscht ✓`;
-    result.innerHTML = `<span style="flex:1;">${msg}</span><span class="dupe-banner__dismiss">✕</span>`;
+    result.innerHTML = `<span style="flex:1;">${escHtml(msg)}</span><span class="dupe-banner__dismiss">✕</span>`;
     result.querySelector(".dupe-banner__dismiss")!.addEventListener("click", () => result.remove());
     document.body.appendChild(result);
     setTimeout(() => result.remove(), 8000);
@@ -3241,7 +3239,7 @@ async function runFullDuplicateCleanup(silent = false): Promise<void> {
       const errBanner = document.createElement("div");
       errBanner.className = "dupe-banner";
       errBanner.style.color = "#FF453A";
-      errBanner.innerHTML = `<span style="flex:1;">Fehler: ${err instanceof Error ? err.message : String(err)}</span><span class="dupe-banner__dismiss">✕</span>`;
+      errBanner.innerHTML = `<span style="flex:1;">${escHtml(`Fehler: ${err instanceof Error ? err.message : String(err)}`)}</span><span class="dupe-banner__dismiss">✕</span>`;
       errBanner.querySelector(".dupe-banner__dismiss")!.addEventListener("click", () => errBanner.remove());
       document.body.appendChild(errBanner);
       setTimeout(() => errBanner.remove(), 8000);
@@ -3287,7 +3285,7 @@ function showTransientBanner(text: string, isError = false): void {
   const banner = document.createElement("div");
   banner.className = "dupe-banner";
   if (isError) banner.style.color = "#FF453A";
-  banner.innerHTML = `<span style="flex:1;">${text}</span><span class="dupe-banner__dismiss">✕</span>`;
+  banner.innerHTML = `<span style="flex:1;">${escHtml(text)}</span><span class="dupe-banner__dismiss">✕</span>`;
   banner.querySelector(".dupe-banner__dismiss")!.addEventListener("click", () => banner.remove());
   document.body.appendChild(banner);
   setTimeout(() => banner.remove(), 8000);
@@ -3420,7 +3418,7 @@ function showHAError(detail?: string): void {
   el.id = "ha-error-banner";
   el.className = "ha-error-banner";
   const gearSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
-  el.innerHTML = `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${detail ?? "HA nicht erreichbar"}</span><button class="ha-error-reconnect">Erneut versuchen</button><button class="ha-error-settings" title="Einstellungen">${gearSvg}</button><span style="margin-left:4px;opacity:.7;cursor:pointer;">✕</span>`;
+  el.innerHTML = `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(detail ?? "HA nicht erreichbar")}</span><button class="ha-error-reconnect">Erneut versuchen</button><button class="ha-error-settings" title="Einstellungen">${gearSvg}</button><span style="margin-left:4px;opacity:.7;cursor:pointer;">✕</span>`;
   el.querySelector(".ha-error-reconnect")!.addEventListener("click", (e) => {
     e.stopPropagation();
     el.remove();
