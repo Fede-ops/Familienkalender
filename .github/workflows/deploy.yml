@@ -33,7 +33,7 @@ jobs:
           VITE_DEPLOY_BASE: /Familienkalender/
 
       - name: Deploy to gh-pages branch
-        uses: JamesIves/github-pages-deploy-action@v4
+        uses: JamesIves/github-pages-deploy-action@d92aa235d04922e8f08b40ce78cc5442fcfbfa2f # v4.8.0
         with:
           folder: dist
           branch: gh-pages

@@ -3475,6 +3475,17 @@ function renderConfig(): void {
       alert("URL muss mit http:// oder https:// beginnen");
       return;
     }
+    // Warnen, wenn der Token über unverschlüsseltes HTTP zu einem nicht-lokalen
+    // Server gesendet würde — dort könnte er im Netzwerk mitgelesen werden.
+    const isLocalHost = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|homeassistant(\.local)?|[\w-]+\.local)(:\d+)?/i.test(url);
+    if (url.startsWith("http://") && !isLocalHost) {
+      const proceed = confirm(
+        "Warnung: Mit http:// wird dein HA-Token unverschlüsselt übertragen und kann im Netzwerk mitgelesen werden.\n\n" +
+        "Für einen entfernten Server bitte https:// verwenden (z.B. die Nabu-Casa-URL).\n\n" +
+        "Trotzdem mit http:// fortfahren?",
+      );
+      if (!proceed) return;
+    }
     saveConfig({ baseUrl: url.replace(/\/$/, ""), token, calendarEntities: entities });
     pushEntitiesToHA(entities);
     render();
