@@ -9,7 +9,7 @@
 #   {
 #     "ha_url": "http://homeassistant:8123",
 #     "ha_token": "DEIN_HA_LONG_LIVED_TOKEN",
-#     "imap_user": "familienkalender@gugg.tech",
+#     "imap_user": "DEINE_EMAIL_ADRESSE",
 #     "imap_pass": "DEIN_EMAIL_PASSWORT",
 #     "anthropic_api_key": "DEIN_ANTHROPIC_API_KEY"
 #   }

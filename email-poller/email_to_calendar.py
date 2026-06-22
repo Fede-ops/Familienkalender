@@ -2,7 +2,8 @@
 """
 Familienkalender – Email-to-Calendar Poller
 Läuft auf Home Assistant via shell_command alle 10 Minuten.
-Pollt familienkalender@gugg.tech, parst Emails und legt Events in HA an.
+Pollt das in poller_config.json konfigurierte IMAP-Postfach, parst Emails
+und legt Events in HA an.
 
 Setup: siehe README im selben Ordner.
 """
@@ -31,9 +32,9 @@ try:
 except Exception:
     _cfg = {}
 
-IMAP_HOST = "mail.infomaniak.com"
-IMAP_PORT = 993
-IMAP_USER = _cfg.get("imap_user", "familienkalender@gugg.tech")
+IMAP_HOST = _cfg.get("imap_host", "mail.infomaniak.com")
+IMAP_PORT = _cfg.get("imap_port", 993)
+IMAP_USER = _cfg.get("imap_user", "")
 IMAP_PASS = _cfg.get("imap_pass", "")
 
 HA_URL = _cfg.get("ha_url", "http://localhost:8123")
@@ -42,10 +43,10 @@ HA_CALENDAR = "calendar.bebos"  # Ziel-Kalender
 
 ANTHROPIC_API_KEY = _cfg.get("anthropic_api_key", "")
 
-if not IMAP_PASS or not HA_TOKEN or not ANTHROPIC_API_KEY:
+if not IMAP_USER or not IMAP_PASS or not HA_TOKEN or not ANTHROPIC_API_KEY:
     print(
         "FEHLER: Zugangsdaten fehlen in /config/scripts/poller_config.json "
-        "(benötigt: imap_pass, ha_token, anthropic_api_key).",
+        "(benötigt: imap_user, imap_pass, ha_token, anthropic_api_key).",
         file=sys.stderr,
     )
     sys.exit(1)
