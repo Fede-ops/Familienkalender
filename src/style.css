@@ -126,6 +126,11 @@ body {
   justify-content: space-between;
   padding: 16px 20px 24px;
   gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.toolbar::-webkit-scrollbar {
+  display: none;
 }
 
 .sticky-nav {
@@ -143,7 +148,8 @@ body {
   gap: 6px;
   cursor: pointer;
   padding: 0;
-  flex: 1;
+  flex: 1 0 auto;
+  min-width: 44px;
 }
 
 .toolbar__icon {
@@ -172,6 +178,7 @@ body {
   font-weight: 500;
   color: var(--text-secondary);
   letter-spacing: 0;
+  white-space: nowrap;
 }
 
 .build-chip {

@@ -149,7 +149,7 @@ export function renderWeekView(viewState: WeekViewState): string {
         </button>
         ${toolbarBtn("search", "Suche", "search")}
         ${toolbarBtn("import", "Import", "import-ics")}
-        ${toolbarBtn("settings", "Einstellungen", "open-settings")}
+        ${toolbarBtn("settings", "Setup", "open-settings")}
       </nav>
     </div>
     <div class="slide-viewport"><main class="week-list">${rows}</main></div>
