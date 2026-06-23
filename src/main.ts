@@ -1366,6 +1366,8 @@ function bindEvents(): void {
         showSearchSheet();
       } else if (action === "import-ics") {
         triggerICSImport();
+      } else if (action === "open-settings") {
+        renderConfig();
       }
     });
   });
@@ -3459,9 +3461,13 @@ function renderConfig(): void {
         <textarea id="cfg-entities" rows="3">${existing ? existing.calendarEntities.join(", ") : defaultEntities}</textarea>
       </label>
       <button id="cfg-save">Speichern und verbinden</button>
+      ${existing ? `<button id="cfg-cancel" style="margin-top:12px;background:none;color:rgba(235,235,245,0.6);border:1px solid rgba(235,235,245,0.2);">Zurück</button>` : ""}
       <p style="margin-top:24px;font-size:11px;color:rgba(235,235,245,0.3);text-align:center;">Build: ${__BUILD_TIME__}</p>
     </div>
   `;
+  document.getElementById("cfg-cancel")?.addEventListener("click", () => {
+    render();
+  });
   document.getElementById("cfg-save")!.addEventListener("click", () => {
     const url = (document.getElementById("cfg-url") as HTMLInputElement).value.trim();
     const token = (document.getElementById("cfg-token") as HTMLInputElement).value.trim();
