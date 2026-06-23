@@ -53,6 +53,7 @@ DEFAULT_CALENDARS = [
 SENT_FILE         = "/config/scripts/reminder_sent.json"
 NOTIF_CACHE       = "/config/scripts/notif_config_cache.json"
 BIRTHDAY_DATA_FILE = "/config/scripts/birthday_data.json"
+DELETED_BIRTHDAYS_FILE = "/config/scripts/deleted_birthdays.json"
 TODO_DATA_FILE     = "/config/scripts/todo_data.json"
 SHOPPING_DATA_FILE = "/config/scripts/shopping_data.json"
 ctx = ssl.create_default_context()
@@ -337,6 +338,68 @@ def sync_birthday_persistence():
         print(f"  Geburtstage: Wiederherstellung fehlgeschlagen: {exc}", file=sys.stderr)
 
 
+def get_deleted_birthdays():
+    """Persistente Blockliste gelöschter Geburtstage (Schlüssel: name|month|day).
+
+    Quelle: sensor.familienkalender_deleted_birthdays (von der App gepflegt),
+    mit Disk-Fallback für den Zeitraum direkt nach einem HA-Neustart, bevor die
+    App den Sensor neu befüllt hat.
+    """
+    st = ha_state("sensor.familienkalender_deleted_birthdays")
+    keys = (st.get("attributes") or {}).get("keys") if st else None
+    if isinstance(keys, list):
+        return set(keys)
+    try:
+        with open(DELETED_BIRTHDAYS_FILE, encoding="utf-8") as f:
+            saved = json.load(f)
+        if isinstance(saved, list):
+            return set(saved)
+    except Exception:
+        pass
+    return set()
+
+
+def sync_deleted_birthday_persistence():
+    """Sichert die Lösch-Blockliste auf Disk / stellt sie nach HA-Neustart wieder her.
+
+    Gleiche Logik wie sync_birthday_persistence: vorhandenes keys-Attribut (auch
+    leer) ist maßgeblich → auf Disk sichern; fehlt das Attribut komplett (Sensor
+    nach Neustart weg) → aus Disk wiederherstellen.
+    """
+    st = ha_state("sensor.familienkalender_deleted_birthdays")
+    keys = (st.get("attributes") or {}).get("keys") if st else None
+
+    if isinstance(keys, list):
+        try:
+            with open(DELETED_BIRTHDAYS_FILE, "w", encoding="utf-8") as f:
+                json.dump(keys, f)
+        except Exception:
+            pass
+        return
+
+    try:
+        with open(DELETED_BIRTHDAYS_FILE, encoding="utf-8") as f:
+            saved = json.load(f)
+    except Exception:
+        return
+    if not isinstance(saved, list) or not saved:
+        return
+
+    payload = json.dumps({
+        "state": str(len(saved)),
+        "attributes": {"keys": saved, "ts": datetime.now().isoformat()},
+    }).encode()
+    req = urllib.request.Request(
+        f"{HA_URL}/api/states/sensor.familienkalender_deleted_birthdays",
+        data=payload,
+        headers={"Authorization": f"Bearer {HA_TOKEN}", "Content-Type": "application/json"},
+    )
+    try:
+        urllib.request.urlopen(req, timeout=10)
+    except Exception as exc:
+        print(f"  Lösch-Blockliste: Wiederherstellung fehlgeschlagen: {exc}", file=sys.stderr)
+
+
 def sync_list_persistence(label, entity, data_file):
     """Sichert Todo-/Einkaufs-Listen auf Disk; stellt sie nach HA-Neustart wieder her.
 
@@ -458,6 +521,7 @@ def check_birthday_reminders(now, member_services, sent):
     if not all_services:
         return 0
 
+    blocked = get_deleted_birthdays()
     today_month = now.month - 1  # birthday data uses 0-indexed months
     today_day = now.day
     today_str = now.strftime("%Y-%m-%d")
@@ -465,6 +529,9 @@ def check_birthday_reminders(now, member_services, sent):
 
     for bd in birthdays:
         if bd.get("month") != today_month or bd.get("day") != today_day:
+            continue
+        # Gelöschte (blockierte) Geburtstage lösen keine Benachrichtigung aus.
+        if f"{bd.get('name')}|{bd.get('month')}|{bd.get('day')}" in blocked:
             continue
 
         name = bd.get("name", "?")
@@ -576,9 +643,13 @@ def main():
     if fired:
         print(f"Familienkalender Reminder: {fired} Benachrichtigung(en) gesendet.")
 
-    # Geburtstage: zuerst Persistenz sichern/wiederherstellen, dann ggf. neu von ICS laden.
+    # Geburtstage: Persistenz sichern/wiederherstellen (Daten + Lösch-Blockliste).
     sync_birthday_persistence()
-    sync_birthdays()
+    sync_deleted_birthday_persistence()
+    # iCloud-/ICS-Re-Import ist bewusst deaktiviert: Geburtstage werden manuell
+    # in der App verwaltet, gelöschte Einträge bleiben über die Blockliste weg.
+    # Ein automatischer Re-Import würde die manuelle Bereinigung überschreiben.
+    # (Funktion sync_birthdays() bleibt erhalten, falls künftig wieder gewünscht.)
 
     # Todos + Einkaufsliste: Disk-Backup, überlebt HA-Neustarts (Teil des HA-Backups).
     sync_list_persistence("Todos", "sensor.familienkalender_todos", TODO_DATA_FILE)

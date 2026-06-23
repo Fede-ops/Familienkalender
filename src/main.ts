@@ -230,6 +230,56 @@ function loadBirthdayData(): BirthdayEntry[] {
   catch { return []; }
 }
 
+// ── Gelöschte Geburtstage (persistente Blockliste) ──────────────────────────
+// Geburtstage stammen aus einem iCloud-ICS-Feed. Damit manuell gelöschte
+// Einträge bei einem erneuten Import (oder einer Disk-Wiederherstellung nach
+// HA-Neustart) NICHT wieder auftauchen, merken wir uns gelöschte Geburtstage
+// in einer Blockliste — analog zu sensor.familienkalender_hidden_uids bei den
+// Terminen. Schlüssel: `name|month|day` (month 0-indexiert), identisch zur
+// Schlüsselbildung im Poller.
+const DELETED_BIRTHDAYS_KEY = "fk_deleted_birthdays_v1";
+
+function birthdayKey(bd: { name: string; month: number; day: number }): string {
+  return `${bd.name}|${bd.month}|${bd.day}`;
+}
+
+function loadDeletedBirthdays(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(DELETED_BIRTHDAYS_KEY) ?? "[]") as string[]); }
+  catch { return new Set(); }
+}
+
+function saveDeletedBirthdays(keys: Set<string>): void {
+  try { localStorage.setItem(DELETED_BIRTHDAYS_KEY, JSON.stringify([...keys])); }
+  catch { /* ignore */ }
+}
+
+function pushDeletedBirthdaysToHA(keys: Set<string>): void {
+  const cfg = loadConfig();
+  if (!cfg) return;
+  void fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_deleted_birthdays`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ state: String(keys.size), attributes: { keys: [...keys], ts: Date.now() } }),
+  }).catch(() => {});
+}
+
+async function syncDeletedBirthdaysFromHA(): Promise<void> {
+  const cfg = loadConfig();
+  if (!cfg) return;
+  try {
+    const res = await fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_deleted_birthdays`, {
+      headers: { Authorization: `Bearer ${cfg.token}` },
+    });
+    if (!res.ok) return;
+    const data = (await res.json()) as { attributes?: { keys?: string[] } };
+    const keys = data.attributes?.keys;
+    // Nur ein fehlendes Attribut (Sensor nach Neustart noch nicht befüllt) wird
+    // ausgelassen; ein vorhandenes Array (auch leer) ist maßgeblich.
+    if (!Array.isArray(keys)) return;
+    saveDeletedBirthdays(new Set(keys));
+  } catch { /* ignore */ }
+}
+
 function cleanBirthdayName(name: string): string {
   return name
     .replace(/\s*\([^)]*\)/g, "")
@@ -702,10 +752,12 @@ function holidayEvents(): CalendarEvent[] {
 function birthdayEvents(): CalendarEvent[] {
   const data = loadBirthdayData();
   if (!data.length) return [];
+  const blocked = loadDeletedBirthdays();
   const base = state.viewMode === "week" ? state.weekStart : state.monthStart;
   const year = base.getFullYear();
   const events: CalendarEvent[] = [];
   for (const bd of data) {
+    if (blocked.has(birthdayKey(bd))) continue;
     for (const y of [year - 1, year, year + 1]) {
       const age = (bd.year && bd.year >= 1900 && (y - bd.year) > 0) ? y - bd.year : null;
       const displayName = cleanBirthdayName(bd.name);
@@ -1775,7 +1827,8 @@ function showFilterSheet(): void {
           <button class="filter-row" id="filter-birthday-btn">
             <span class="filter-row__name">🎂 Geburtstage</span>
             ${(() => {
-              const count = loadBirthdayData().length;
+              const blocked = loadDeletedBirthdays();
+              const count = loadBirthdayData().filter((bd) => !blocked.has(birthdayKey(bd))).length;
               return count > 0
                 ? `<span style="font-size:12px;font-weight:600;color:#FF2D55;">${count} Einträge · Bearbeiten ›</span>`
                 : `<span style="font-size:12px;font-weight:600;color:rgba(235,235,245,0.5);">Einrichten ›</span>`;
@@ -1972,7 +2025,11 @@ function showBirthdaySettingsSheet(): void {
   const MONTHS_DE = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
 
   function buildSheet(): HTMLElement {
-    const data = loadBirthdayData().slice().sort((a, b) => a.name.localeCompare(b.name));
+    const blocked = loadDeletedBirthdays();
+    const data = loadBirthdayData()
+      .filter((bd) => !blocked.has(birthdayKey(bd)))
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name));
     const monthOpts = MONTHS_DE.map((m, i) => `<option value="${i}">${m}</option>`).join("");
 
     const listRows = data.length === 0
@@ -2042,6 +2099,12 @@ function showBirthdaySettingsSheet(): void {
         }
         const entry: BirthdayEntry = { name, month, day };
         if (!isNaN(yearVal) && yearVal >= 1900 && yearVal <= new Date().getFullYear()) entry.year = yearVal;
+        // Falls dieser Geburtstag zuvor gelöscht (blockiert) war, wieder freigeben.
+        const blocked = loadDeletedBirthdays();
+        if (blocked.delete(birthdayKey(entry))) {
+          saveDeletedBirthdays(blocked);
+          pushDeletedBirthdaysToHA(blocked);
+        }
         const data = loadBirthdayData();
         data.push(entry);
         localStorage.setItem(BIRTHDAY_DATA_KEY, JSON.stringify(data));
@@ -2053,10 +2116,25 @@ function showBirthdaySettingsSheet(): void {
     sheet.querySelectorAll<HTMLElement>("[data-delete-index]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const idx = Number(btn.dataset.deleteIndex);
-        const data = loadBirthdayData().slice().sort((a, b) => a.name.localeCompare(b.name));
-        data.splice(idx, 1);
-        localStorage.setItem(BIRTHDAY_DATA_KEY, JSON.stringify(data));
-        pushBirthdayDataToHA(data);
+        // Gleiche Reihenfolge wie in buildSheet (gefiltert + sortiert), damit
+        // data-delete-index korrekt zuordnet.
+        const blocked = loadDeletedBirthdays();
+        const visible = loadBirthdayData()
+          .filter((bd) => !blocked.has(birthdayKey(bd)))
+          .slice()
+          .sort((a, b) => a.name.localeCompare(b.name));
+        const removed = visible[idx];
+        if (removed) {
+          // Aus der Datenliste entfernen …
+          const data = loadBirthdayData().filter((bd) => birthdayKey(bd) !== birthdayKey(removed));
+          localStorage.setItem(BIRTHDAY_DATA_KEY, JSON.stringify(data));
+          pushBirthdayDataToHA(data);
+          // … und auf die persistente Blockliste setzen, damit der Geburtstag
+          // bei einem künftigen iCloud-Re-Import nicht wieder auftaucht.
+          blocked.add(birthdayKey(removed));
+          saveDeletedBirthdays(blocked);
+          pushDeletedBirthdaysToHA(blocked);
+        }
         render();
         mount();
       });
@@ -3600,10 +3678,13 @@ if (demoMode) {
 } else {
   scrollTodayUntil = Date.now() + 5000;
   render();
-  // Sync birthday data from HA (cross-device persistence).
-  // Do NOT auto-fetch the ICS on boot — that would overwrite manual cleanup
-  // done on other devices. Use "Aktualisieren via iCloud" to re-import.
-  void syncBirthdaysFromHA().then(() => render());
+  // Sync birthday data + Lösch-Blockliste from HA (cross-device persistence).
+  // Die Blockliste ZUERST laden, damit gelöschte Geburtstage nach einem Reload
+  // nicht kurz wieder aufblitzen. Es gibt bewusst keinen automatischen ICS-/
+  // iCloud-Re-Import — Geburtstage werden manuell verwaltet.
+  void syncDeletedBirthdaysFromHA()
+    .then(() => syncBirthdaysFromHA())
+    .then(() => render());
   // Pull hidden UIDs first, THEN refresh — so deleted events are never
   // momentarily re-shown after a page reload.
   void syncHiddenUidsFromHA().then(() => {
@@ -3846,7 +3927,7 @@ window.addEventListener("online", () => void refreshEvents());
       showTransientBanner("Wird aktualisiert…");
       lastFailedAt = 0; // clear any cooldown so a manual pull always refetches
       void refreshEvents();
-      void syncBirthdaysFromHA().then(() => render());
+      void syncDeletedBirthdaysFromHA().then(() => syncBirthdaysFromHA()).then(() => render());
       void syncHiddenUidsFromHA().then(() => void refreshEvents());
     }
   }, { passive: true });
