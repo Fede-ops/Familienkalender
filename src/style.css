@@ -2538,3 +2538,21 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .ptr-indicator__circle svg {
   transition: transform 0.08s linear;
 }
+
+@media (max-width: 430px) {
+  .toolbar {
+    padding: 12px 12px 16px;
+    gap: 2px;
+  }
+  .toolbar__icon {
+    width: 36px;
+    height: 36px;
+  }
+  .toolbar__icon svg {
+    width: 17px;
+    height: 17px;
+  }
+  .toolbar__label {
+    font-size: 9px;
+  }
+}
