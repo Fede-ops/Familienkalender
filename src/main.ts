@@ -259,7 +259,11 @@ async function syncBirthdaysFromHA(): Promise<void> {
     if (!res.ok) return;
     const data = (await res.json()) as { attributes?: { birthdays?: BirthdayEntry[] } };
     const birthdays = data.attributes?.birthdays;
-    if (!Array.isArray(birthdays) || birthdays.length === 0) return;
+    // Eine leere Liste ist ein gültiger Zustand (alle Geburtstage gelöscht) und
+    // muss übernommen werden. Nur ein FEHLENDES Attribut (z.B. Sensor nach
+    // HA-Neustart noch nicht befüllt) lassen wir aus, um die lokale Liste nicht
+    // versehentlich zu leeren.
+    if (!Array.isArray(birthdays)) return;
     localStorage.setItem(BIRTHDAY_DATA_KEY, JSON.stringify(birthdays));
   } catch { /* ignore */ }
 }

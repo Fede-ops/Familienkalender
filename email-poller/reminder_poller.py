@@ -287,14 +287,21 @@ def sync_birthday_persistence():
     """Sichert Geburtstage auf Disk; stellt sie nach HA-Neustart wieder her.
 
     Läuft jede Minute:
-    - Sensor hat Daten  → auf Disk sichern (Backup).
-    - Sensor leer       → aus Disk-Datei in Sensor laden (Restore nach Neustart).
+    - Sensor hat das birthdays-Attribut (auch leere Liste)  → auf Disk sichern.
+    - Sensor-Attribut fehlt ganz (nach HA-Neustart verschwindet der per
+      /api/states erzeugte Sensor)  → aus Disk-Datei wiederherstellen.
+
+    WICHTIG: Eine leere Liste [] ist ein GÜLTIGER Zustand (User hat alle
+    Geburtstage gelöscht) und darf NICHT als "muss wiederhergestellt werden"
+    interpretiert werden — sonst macht der Poller jede Löschung jede Minute
+    wieder rückgängig. Wir unterscheiden daher zwischen "Attribut vorhanden,
+    aber leer" (= behalten) und "Attribut fehlt komplett" (= Restore).
     """
     st = ha_state("sensor.familienkalender_birthdays")
     current = (st.get("attributes") or {}).get("birthdays") if st else None
 
-    if isinstance(current, list) and current:
-        # Sensor OK → Backup auf Disk aktualisieren.
+    if isinstance(current, list):
+        # Sensor ist maßgeblich (auch wenn leer) → Backup auf Disk aktualisieren.
         try:
             with open(BIRTHDAY_DATA_FILE, "w", encoding="utf-8") as f:
                 json.dump(current, f)
@@ -302,7 +309,9 @@ def sync_birthday_persistence():
             pass
         return
 
-    # Sensor leer (z.B. nach HA-Neustart) → aus Datei wiederherstellen.
+    # Sensor-Attribut fehlt komplett (z.B. nach HA-Neustart) → aus Datei
+    # wiederherstellen. Eine leere Disk-Sicherung bedeutet "keine Geburtstage"
+    # und löst keinen Restore aus.
     try:
         with open(BIRTHDAY_DATA_FILE, encoding="utf-8") as f:
             saved = json.load(f)
