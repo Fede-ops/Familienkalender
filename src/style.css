@@ -468,6 +468,7 @@ body {
   align-items: stretch;
   padding: 16px 0 16px;
   border-top: 0.5px solid rgba(120, 120, 128, 0.75);
+  overflow: hidden;
   min-height: 56px;
   flex-shrink: 0;
   user-select: none;
@@ -541,7 +542,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  flex: 1 1 auto;
+  flex: 1 1 0;
+  min-width: 0;
   justify-content: center;
 }
 
