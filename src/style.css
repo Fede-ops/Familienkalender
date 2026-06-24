@@ -221,6 +221,7 @@ body {
   animation: fadeIn 0.15s ease;
 }
 .bottom-sheet {
+  position: relative;
   width: 100%;
   background: #1C1C1E;
   border-radius: 16px 16px 0 0;
@@ -229,6 +230,26 @@ body {
   max-height: 88vh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+.bottom-sheet__close {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(120,120,128,0.36);
+  color: rgba(235,235,245,0.6);
+  font-size: 15px;
+  line-height: 28px;
+  text-align: center;
+  padding: 0;
+  cursor: pointer;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .bottom-sheet__handle {
   width: 36px;
