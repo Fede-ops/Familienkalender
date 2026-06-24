@@ -1802,6 +1802,7 @@ function showFilterSheet(): void {
     const html = `<div id="filter-sheet" class="sheet-backdrop">
       <div class="bottom-sheet" data-stop-propagation>
         <div class="bottom-sheet__handle"></div>
+        <button class="bottom-sheet__close" data-action="close-sheet">&times;</button>
         <p class="bottom-sheet__title">Nach Person filtern</p>
         <button class="filter-row filter-row--all${allOn ? " filter-row--on" : ""}" data-action="filter-all">
           <span class="filter-row__name" style="font-weight:600;">Alle anzeigen</span>
@@ -1850,6 +1851,8 @@ function showFilterSheet(): void {
     sheet.addEventListener("click", (e) => {
       if ((e.target as HTMLElement) === sheet) { sheet.remove(); }
     });
+    sheet.querySelector<HTMLElement>("[data-action='close-sheet']")!
+      .addEventListener("click", () => sheet.remove());
     sheet.querySelector<HTMLElement>("[data-stop-propagation]")!
       .addEventListener("click", (e) => e.stopPropagation());
     sheet.querySelector<HTMLElement>("[data-action='filter-all']")!
