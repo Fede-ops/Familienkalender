@@ -1423,7 +1423,7 @@ function bindEvents(): void {
       } else if (action === "import-ics") {
         triggerICSImport();
       } else if (action === "open-settings") {
-        renderConfig();
+        renderConfig(true);
       }
     });
   });
@@ -3512,7 +3512,7 @@ function showHAError(detail?: string): void {
   el.querySelector(".ha-error-settings")!.addEventListener("click", (e) => {
     e.stopPropagation();
     el.remove();
-    renderConfig();
+    renderConfig(true);
   });
   el.addEventListener("click", () => el.remove());
   document.body.appendChild(el);
@@ -3525,8 +3525,9 @@ function dismissHAError(): void {
 
 // ── Config screen ──────────────────────────────────────────────────────────
 
-function renderConfig(): void {
+function renderConfig(showBack = false): void {
   const existing = loadConfig();
+  const canGoBack = showBack || !!existing;
   const defaultEntities = "calendar.fede, calendar.pita, calendar.bebos, calendar.santi, calendar.fede_trabajo, calendar.pita_trabajo";
   const escVal = (s: string) => s.replace(/"/g, "&quot;");
   app.innerHTML = `
@@ -3543,7 +3544,7 @@ function renderConfig(): void {
         <textarea id="cfg-entities" rows="3">${existing ? existing.calendarEntities.join(", ") : defaultEntities}</textarea>
       </label>
       <button id="cfg-save">Speichern und verbinden</button>
-      ${existing ? `<button id="cfg-cancel" style="margin-top:12px;background:none;color:rgba(235,235,245,0.6);border:1px solid rgba(235,235,245,0.2);">Zurück</button>` : ""}
+      ${canGoBack ? `<button id="cfg-cancel" style="margin-top:12px;background:none;color:rgba(235,235,245,0.6);border:1px solid rgba(235,235,245,0.2);">Zurück</button>` : ""}
       <p style="margin-top:24px;font-size:11px;color:rgba(235,235,245,0.3);text-align:center;">Build: ${__BUILD_TIME__}</p>
     </div>
   `;
