@@ -31,7 +31,6 @@ export const TODO_CATEGORIES = [
       "wundversorgung", "wundheilung", "naht", "verband",
       "blutung", "bluttransfusion", "transfusion",
       "nachsorge", "kontrolltermin",
-      "prostatauntersuchung", "prostata", "vorsorgeuntersuchung",
       // ── Diagnostik ────────────────────────────────────────────────────
       "befund", "befunde", "laborbefund", "röntgenbefund",
       "diagnose", "differentialdiagnose", "diagnosestellung",
@@ -576,6 +575,7 @@ export const TODO_CATEGORIES = [
       "abnehmen", "gewicht", "ernährung",
       "brille", "augenarzt",
       "operationen persönlich", "krankenversicherung",
+      "prostatauntersuchung", "prostata", "vorsorgeuntersuchung",
       // Medikamente & Selbstfürsorge
       "medikamente", "tabletten holen", "pille", "antibiotika",
       "vitamine", "vitamin d", "vitamin c", "magnesium", "zink", "omega",
