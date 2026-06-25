@@ -31,6 +31,7 @@ export const TODO_CATEGORIES = [
       "wundversorgung", "wundheilung", "naht", "verband",
       "blutung", "bluttransfusion", "transfusion",
       "nachsorge", "kontrolltermin",
+      "prostatauntersuchung", "prostata", "vorsorgeuntersuchung",
       // ── Diagnostik ────────────────────────────────────────────────────
       "befund", "befunde", "laborbefund", "röntgenbefund",
       "diagnose", "differentialdiagnose", "diagnosestellung",
@@ -832,6 +833,12 @@ export const TODO_CATEGORIES = [
     ],
   },
   {
+    key: "mitnehmen",
+    label: "Mitnehmen",
+    color: "#AF52DE",
+    keywords: ["mitnehmen", "einpacken", "nicht vergessen"],
+  },
+  {
     key: "sonstiges",
     label: "Sonstiges",
     color: "#636366",
@@ -846,7 +853,7 @@ export type TodoCategoryKey = (typeof TODO_CATEGORIES)[number]["key"];
 // Priority: most specific professional terms first, broad household last.
 const CATEGORIZATION_PRIORITY = [
   "medizin", "smarthome", "technologie", "vertrieb", "natur",
-  "freizeit", "familie", "gesundheit", "finanzen", "haushalt",
+  "freizeit", "familie", "gesundheit", "finanzen", "haushalt", "mitnehmen",
 ] as const;
 
 export function categorizeTodoItem(title: string): string {
@@ -865,6 +872,11 @@ export function categorizeTodoItem(title: string): string {
       return cat.key;
   }
   return "sonstiges";
+}
+
+export function cleanTodoTitle(title: string, category: string): string {
+  if (category !== "mitnehmen") return title;
+  return title.replace(/\s*(mitnehmen|einpacken|nicht vergessen)\s*/gi, " ").trim();
 }
 
 // ── Storage ────────────────────────────────────────────────────────────────
