@@ -852,8 +852,9 @@ export type TodoCategoryKey = (typeof TODO_CATEGORIES)[number]["key"];
 
 // Priority: most specific professional terms first, broad household last.
 const CATEGORIZATION_PRIORITY = [
+  "mitnehmen",
   "medizin", "smarthome", "technologie", "vertrieb", "natur",
-  "freizeit", "familie", "gesundheit", "finanzen", "haushalt", "mitnehmen",
+  "freizeit", "familie", "gesundheit", "finanzen", "haushalt",
 ] as const;
 
 export function categorizeTodoItem(title: string): string {
