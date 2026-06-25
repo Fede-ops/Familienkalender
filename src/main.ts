@@ -3624,6 +3624,7 @@ function buildDemoWeek(weekStart: Date): CalendarEvent[] {
   }
   const todos = loadTodoItems();
   const recatTodos = todos.map((i) => {
+    if (i.category === "mitnehmen") return i;
     const category = categorizeTodoItem(i.title);
     return { ...i, title: cleanTodoTitle(i.title, category), category };
   });
