@@ -1048,7 +1048,7 @@ export function renderTodoView(viewState: TodoViewState): string {
         return `
         <button class="list-item" data-action="complete-todo" data-id="${item.id}">
           <span class="list-item__check"></span>
-          <span class="list-item__name">${escHtml(item.title)}</span>
+          <span class="list-item__name">${escHtml(cleanTodoTitle(item.title, item.category))}</span>
           ${avatarHtml}
         </button>`;
       })
@@ -1070,7 +1070,7 @@ export function renderTodoView(viewState: TodoViewState): string {
         (item) => `
         <button class="list-item list-item--checked" data-action="complete-todo" data-id="${item.id}">
           <span class="list-item__check list-item__check--done">${ICONS.check}</span>
-          <span class="list-item__name">${escHtml(item.title)}</span>
+          <span class="list-item__name">${escHtml(cleanTodoTitle(item.title, item.category))}</span>
         </button>`
       )
       .join("");
