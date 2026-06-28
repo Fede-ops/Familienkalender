@@ -32,7 +32,6 @@ import {
 } from "./views/shopping.ts";
 import {
   categorizeTodoItem,
-  cleanTodoTitle,
   loadTodoItems,
   renderTodoView,
   saveTodoItems,
@@ -2297,16 +2296,16 @@ function addShoppingItem(): void {
 }
 
 function addTodoItem(): void {
-  const rawTitle = readListInput();
-  if (!rawTitle) return;
-  const category = categorizeTodoItem(rawTitle);
-  const title = cleanTodoTitle(rawTitle, category);
-  // Assign to the active member filter, or fall back to first member
+  const title = readListInput();
+  if (!title) return;
+  // Den vollen Titel speichern (inkl. "mitnehmen"), damit die Kategorie auf
+  // allen synchronisierten Geräten stabil ableitbar bleibt. "mitnehmen" wird
+  // nur bei der Anzeige entfernt (cleanTodoTitle im Render).
   const memberId = state.todoFilterMemberId || state.members[0]?.id || "";
   state.todos.push({
     id: `t-${Date.now()}`,
     title,
-    category,
+    category: categorizeTodoItem(title),
     completed: false,
     createdAt: Date.now(),
     memberId,
@@ -3623,12 +3622,8 @@ function buildDemoWeek(weekStart: Date): CalendarEvent[] {
     state.shopping = recatShopping;
   }
   const todos = loadTodoItems();
-  const recatTodos = todos.map((i) => {
-    if (i.category === "mitnehmen") return i;
-    const category = categorizeTodoItem(i.title);
-    return { ...i, title: cleanTodoTitle(i.title, category), category };
-  });
-  if (recatTodos.some((i, idx) => i.title !== todos[idx].title || i.category !== todos[idx].category)) {
+  const recatTodos = todos.map((i) => ({ ...i, category: categorizeTodoItem(i.title) }));
+  if (recatTodos.some((i, idx) => i.category !== todos[idx].category)) {
     saveTodoItems(recatTodos);
     state.todos = recatTodos;
   }
