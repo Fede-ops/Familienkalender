@@ -578,6 +578,7 @@ export const TODO_CATEGORIES = [
       "prostatauntersuchung", "prostata", "vorsorgeuntersuchung",
       // Medikamente & Selbstfürsorge
       "medikamente", "tabletten holen", "pille", "antibiotika",
+      "statin", "statine", "blutdrucksenker", "blutverdünner",
       "vitamine", "vitamin d", "vitamin c", "magnesium", "zink", "omega",
       "nahrungsergänzung", "supplement", "probiotika",
       "rezept holen", "rezept einlösen",
