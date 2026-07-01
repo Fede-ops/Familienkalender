@@ -587,7 +587,7 @@ export const TODO_CATEGORIES = [
       "krankmeldung", "krank",
       // Österreichische Gesundheitstermine
       "frauenarzt", "gynäkologin", "gynäkologe", "hautarzt", "dermatologe",
-      "orthopäde", "urologe", "pulmologe", "lungenfacharzt",
+      "orthopäde", "urologe", "urologie", "urologisch", "pulmologe", "lungenfacharzt",
       "ergotherapie", "logopädie", "sprachtherapie",
       "allergiearzt", "allergietest",
       "impfpass", "impfbuch", "impfdokumentation",
