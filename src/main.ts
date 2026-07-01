@@ -272,11 +272,20 @@ async function syncDeletedBirthdaysFromHA(): Promise<void> {
     });
     if (!res.ok) return;
     const data = (await res.json()) as { attributes?: { keys?: string[] } };
-    const keys = data.attributes?.keys;
-    // Nur ein fehlendes Attribut (Sensor nach Neustart noch nicht befüllt) wird
-    // ausgelassen; ein vorhandenes Array (auch leer) ist maßgeblich.
-    if (!Array.isArray(keys)) return;
-    saveDeletedBirthdays(new Set(keys));
+    const remoteKeys = data.attributes?.keys;
+    if (!Array.isArray(remoteKeys)) return;
+    // WICHTIG: Die Blockliste wird nur VEREINIGT, nie überschrieben. Eine einmal
+    // gelöschte Geburtstag-Kennung bleibt damit dauerhaft blockiert und kann
+    // nicht durch einen leeren/zurückgesetzten HA-Sensor (z.B. nach HA-Neustart
+    // ohne Poller-Persistenz) oder durch den iCloud-Re-Import des Pollers wieder
+    // auftauchen. So sind gelöschte Geburtstage endgültig weg — unabhängig davon,
+    // was der Poller auf der HA-Seite tut.
+    const local = loadDeletedBirthdays();
+    const merged = new Set([...local, ...remoteKeys]);
+    if (merged.size !== local.size) saveDeletedBirthdays(merged);
+    // Falls die lokale Liste mehr Einträge kennt als HA, HA heilen, damit auch
+    // andere Geräte den vollständigen Stand bekommen.
+    if (merged.size !== remoteKeys.length) pushDeletedBirthdaysToHA(merged);
   } catch { /* ignore */ }
 }
 
