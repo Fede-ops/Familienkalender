@@ -46,6 +46,9 @@ export const SHOPPING_CATEGORIES = [
       // English – Fruit
       "apple", "pear", "banana", "orange", "mandarin", "clementine", "grapefruit",
       "grape", "strawberry", "raspberry", "blackberry", "blueberry", "cranberry",
+      // Englische "-ies"-Plurale matchen nicht per Substring (y→ies), daher explizit:
+      "strawberries", "raspberries", "blackberries", "blueberries", "cranberries",
+      "cherries", "berries",
       "cherry", "plum", "peach", "apricot", "nectarine", "mango", "papaya",
       "pineapple", "melon", "watermelon", "kiwi", "lemon", "lime", "avocado",
       "fig", "pomegranate", "passion fruit", "guava", "lychee", "coconut",
@@ -171,6 +174,7 @@ export const SHOPPING_CATEGORIES = [
       "rabbit", "venison", "game", "wild boar",
       "sausage", "bratwurst", "chorizo", "salami", "pepperoni", "mortadella",
       "ham", "prosciutto", "serrano", "bacon", "pancetta", "liverwurst", "black pudding",
+      "liver", "leber", "leberkäse", "leberwurst",
       "chop", "steak", "fillet", "spare ribs", "cutlet",
       "fish", "salmon", "smoked salmon", "tuna", "trout", "mackerel", "herring",
       "sardine", "cod", "haddock", "sea bass", "seabass", "tilapia", "halibut",
