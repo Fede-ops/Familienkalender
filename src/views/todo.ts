@@ -1,4 +1,5 @@
 import type { FamilyMember, TodoItem } from "../types.ts";
+import { haWriteState } from "../ha-write.ts";
 
 // ── Category definitions ───────────────────────────────────────────────────
 
@@ -930,11 +931,7 @@ export function saveTodoItems(items: TodoItem[]): void {
   if (!cfg) return;
   // Never overwrite HA with an empty list — see shopping.ts for rationale.
   if (items.length === 0) return;
-  void fetch(`${cfg.baseUrl}/api/states/${HA_ENTITY}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ state: new Date(ts).toISOString(), attributes: { items, ts } }),
-  }).catch(() => {});
+  haWriteState(cfg.baseUrl, cfg.token, HA_ENTITY, new Date(ts).toISOString(), { items, ts });
 }
 
 export async function syncTodosFromHA(): Promise<TodoItem[] | null> {
