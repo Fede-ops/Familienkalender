@@ -1,4 +1,5 @@
 import type { ShoppingItem } from "../types.ts";
+import { haWriteState } from "../ha-write.ts";
 
 // ── Category definitions ───────────────────────────────────────────────────
 
@@ -734,11 +735,7 @@ export function saveShoppingItems(items: ShoppingItem[]): void {
   // state still survives on this device; on next sync HA's items will be
   // pulled back (which is the desired "soft delete" UX).
   if (items.length === 0) return;
-  void fetch(`${cfg.baseUrl}/api/states/${HA_ENTITY}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ state: new Date(ts).toISOString(), attributes: { items, ts } }),
-  }).catch(() => {});
+  haWriteState(cfg.baseUrl, cfg.token, HA_ENTITY, new Date(ts).toISOString(), { items, ts });
 }
 
 export async function syncShoppingFromHA(): Promise<ShoppingItem[] | null> {

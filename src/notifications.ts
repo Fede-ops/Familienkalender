@@ -5,6 +5,8 @@
 // calendar reminders. The HA automation that the app generates simply
 // calls those notify services directly — no ntfy, no VAPID, no Web Push.
 
+import { haWriteState } from "./ha-write.ts";
+
 export interface NotifConfig {
   // memberId (e.g. "calendar.fede") → list of HA notify service slugs
   // (e.g. ["mobile_app_iphone_fede", "mobile_app_ipad_familie"])
@@ -57,14 +59,8 @@ export function pushNotifConfigToHA(cfg: NotifConfig): void {
   const ha = haConfig();
   if (!ha) return;
   const ts = Date.now();
-  void fetch(`${ha.baseUrl}/api/states/sensor.familienkalender_notif_config`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${ha.token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      state: String(Object.keys(cfg.memberServices).length),
-      attributes: { memberServices: cfg.memberServices, ts },
-    }),
-  }).catch(() => {});
+  haWriteState(ha.baseUrl, ha.token, "sensor.familienkalender_notif_config",
+    String(Object.keys(cfg.memberServices).length), { memberServices: cfg.memberServices, ts });
 }
 
 interface HAServiceDomain {

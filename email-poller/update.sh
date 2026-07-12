@@ -40,6 +40,26 @@ python3 -m py_compile "$RTMP"
 cp "$RTMP" "$REMINDER"
 rm "$RTMP"
 echo "✓ reminder_poller.py aktualisiert."
+
+# python_script: erlaubt der PWA (Nicht-Admin-Benutzer) das Schreiben der
+# Familienkalender-Sensoren über einen Service-Aufruf mit Allowlist.
+PYS="/config/python_scripts/familienkalender_set_state.py"
+PTMP="/tmp/familienkalender_set_state_new.py"
+PURL="https://raw.githubusercontent.com/fede-ops/familienkalender/main/email-poller/familienkalender_set_state.py"
+
+mkdir -p /config/python_scripts
+curl -fsSL "$PURL" -o "$PTMP"
+python3 -m py_compile "$PTMP"
+cp "$PTMP" "$PYS"
+rm "$PTMP"
+echo "✓ familienkalender_set_state.py aktualisiert."
+
+if ! grep -q "^python_script:" /config/configuration.yaml; then
+  echo ""
+  echo "→ Noch nötig (einmalig): 'python_script:' in /config/configuration.yaml"
+  echo "  eintragen und Home Assistant neu starten:"
+  echo "    echo 'python_script:' >> /config/configuration.yaml && ha core restart"
+fi
 echo ""
 echo "→ Noch nötig (nur beim allerersten Setup): shell_command + Automation"
 echo "  aus ha_setup.yaml übernehmen, dann 'ha core restart'."

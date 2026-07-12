@@ -1,5 +1,6 @@
 import "./style.css";
 import { HAClient, loadConfig, saveConfig } from "./ha-client.ts";
+import { haWriteState } from "./ha-write.ts";
 import {
   fetchMobileAppServices,
   loadNotifConfig,
@@ -10,6 +11,18 @@ import {
   type NotifConfig,
 } from "./notifications.ts";
 declare const __BUILD_TIME__: string;
+
+// HA hat einen Sensor-Schreibzugriff abgelehnt (401/403) — sichtbar machen,
+// statt still zu scheitern (hat sonst tagelang unbemerkt den Sync gebrochen).
+let haWriteDeniedBannerAt = 0;
+window.addEventListener("ha-write-denied", () => {
+  if (Date.now() - haWriteDeniedBannerAt < 60_000) return;
+  haWriteDeniedBannerAt = Date.now();
+  showTransientBanner(
+    "Sync-Fehler: HA verweigert das Schreiben. python_script-Setup auf dem Server prüfen (update.sh).",
+    true,
+  );
+});
 
 // Reload when a new service worker takes over — ensures fresh JS is executed.
 if ("serviceWorker" in navigator) {
@@ -257,11 +270,8 @@ function saveDeletedBirthdays(keys: Set<string>): void {
 function pushDeletedBirthdaysToHA(keys: Set<string>): void {
   const cfg = loadConfig();
   if (!cfg) return;
-  void fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_deleted_birthdays`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ state: String(keys.size), attributes: { keys: [...keys], ts: Date.now() } }),
-  }).catch(() => {});
+  haWriteState(cfg.baseUrl, cfg.token, "sensor.familienkalender_deleted_birthdays",
+    String(keys.size), { keys: [...keys], ts: Date.now() });
 }
 
 async function syncDeletedBirthdaysFromHA(): Promise<void> {
@@ -302,11 +312,8 @@ function cleanBirthdayName(name: string): string {
 function pushBirthdayDataToHA(data: BirthdayEntry[]): void {
   const cfg = loadConfig();
   if (!cfg) return;
-  void fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_birthdays`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ state: String(data.length), attributes: { birthdays: data, ts: Date.now() } }),
-  }).catch(() => {});
+  haWriteState(cfg.baseUrl, cfg.token, "sensor.familienkalender_birthdays",
+    String(data.length), { birthdays: data, ts: Date.now() });
 }
 
 async function syncBirthdaysFromHA(): Promise<void> {
@@ -558,11 +565,8 @@ function _publishDeletionsToHA(): void {
   const restored = [...restoredUids].slice(-300);
   const cfg = loadConfig();
   if (!cfg) return;
-  void fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_hidden_uids`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ state: String(uids.length + sids.length), attributes: { uids, sids, restored, ts: Date.now() } }),
-  }).catch(() => {});
+  haWriteState(cfg.baseUrl, cfg.token, "sensor.familienkalender_hidden_uids",
+    String(uids.length + sids.length), { uids, sids, restored, ts: Date.now() });
 }
 const deletedSeriesIds: Set<string> = loadDeletedSids();
 
@@ -3724,11 +3728,8 @@ function pushEntitiesToHA(entities: string[]): void {
   if (!cfg) return;
   const ts = Date.now();
   localStorage.setItem(ENTITIES_TS_KEY, String(ts));
-  void fetch(`${cfg.baseUrl}/api/states/${HA_ENTITIES_ENTITY}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ state: new Date(ts).toISOString(), attributes: { entities, ts } }),
-  }).catch(() => {});
+  haWriteState(cfg.baseUrl, cfg.token, HA_ENTITIES_ENTITY,
+    new Date(ts).toISOString(), { entities, ts });
 }
 
 async function syncEntitiesFromHA(): Promise<string[] | null> {
