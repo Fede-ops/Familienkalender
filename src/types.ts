@@ -35,4 +35,6 @@ export interface TodoItem {
   completed: boolean;
   createdAt: number;
   memberId?: string;
+  /** Erinnerungszeitpunkt (Epoch ms) — Push-Benachrichtigung via Poller. */
+  remindAt?: number;
 }

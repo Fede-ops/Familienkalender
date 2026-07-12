@@ -32,6 +32,7 @@ import {
 } from "./views/shopping.ts";
 import {
   categorizeTodoItem,
+  cleanTodoTitle,
   loadTodoItems,
   renderTodoView,
   saveTodoItems,
@@ -1417,6 +1418,12 @@ function bindEvents(): void {
         state.todos = state.todos.filter((i) => !i.completed);
         saveTodoItems(state.todos);
         render();
+      } else if (action === "todo-reminder") {
+        // Verhindern, dass der Tap auf die Glocke das Todo abhakt (die Zeile
+        // selbst ist der complete-todo-Button).
+        e.stopPropagation();
+        const id = el.dataset.id;
+        if (id) showTodoReminderSheet(id);
 
       // ── Todo member filter ───────────────────────────────────────────────
       } else if (action === "todo-filter") {
@@ -2324,6 +2331,75 @@ function addTodoItem(): void {
   render();
   const input = document.getElementById("list-input") as HTMLInputElement | null;
   input?.focus();
+}
+
+// ── Todo reminder sheet ────────────────────────────────────────────────────
+// Datum + Uhrzeit für eine Push-Erinnerung wählen. Der native
+// datetime-local-Picker öffnet auf iOS das Kalender-Popup + Uhrzeitrad.
+// Die Benachrichtigung verschickt der Poller (reminder_poller.py) über die
+// HA Companion App an die Geräte des zugeordneten Familienmitglieds.
+
+function showTodoReminderSheet(id: string): void {
+  const item = state.todos.find((i) => i.id === id);
+  if (!item) return;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  // Vorbelegung: bestehende Erinnerung, sonst die nächste volle Stunde.
+  const def = item.remindAt
+    ? new Date(item.remindAt)
+    : (() => { const d = new Date(Date.now() + 60 * 60 * 1000); d.setMinutes(0, 0, 0); return d; })();
+  const defVal = `${def.getFullYear()}-${pad(def.getMonth() + 1)}-${pad(def.getDate())}T${pad(def.getHours())}:${pad(def.getMinutes())}`;
+  const iStyle = "width:100%;background:rgba(120,120,128,0.18);border:none;border-radius:10px;padding:12px;font-size:16px;color:#EBEBF5;outline:none;box-sizing:border-box;color-scheme:dark;font-family:inherit;";
+  const html = `<div id="todo-reminder-sheet" class="sheet-backdrop">
+    <div class="bottom-sheet" data-stop-propagation>
+      <div class="bottom-sheet__handle"></div>
+      <button class="bottom-sheet__close" id="todo-remind-close">&times;</button>
+      <p class="bottom-sheet__title">🔔 Erinnerung</p>
+      <div style="padding:4px 20px 8px;">
+        <p style="font-size:15px;font-weight:600;color:#EBEBF5;margin:0 0 14px;">${escHtml(cleanTodoTitle(item.title, item.category))}</p>
+        <input id="todo-remind-input" type="datetime-local" value="${defVal}" style="${iStyle}" />
+      </div>
+      <div style="padding:10px 20px 4px;">
+        <button class="ics-import-confirm" id="todo-remind-save" style="width:100%;">Erinnerung speichern</button>
+        ${item.remindAt ? `<button class="ics-import-cancel" id="todo-remind-remove" style="width:100%;margin-top:8px;color:#FF453A;">Erinnerung entfernen</button>` : ""}
+      </div>
+    </div>
+  </div>`;
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = html;
+  const sheet = wrapper.firstElementChild as HTMLElement;
+  document.body.appendChild(sheet);
+
+  sheet.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement) === sheet) sheet.remove();
+  });
+  sheet.querySelector<HTMLElement>("[data-stop-propagation]")!
+    .addEventListener("click", (e) => e.stopPropagation());
+  sheet.querySelector<HTMLElement>("#todo-remind-close")!
+    .addEventListener("click", () => sheet.remove());
+  sheet.querySelector<HTMLElement>("#todo-remind-save")!.addEventListener("click", () => {
+    const val = (sheet.querySelector("#todo-remind-input") as HTMLInputElement).value;
+    const ts = val ? new Date(val).getTime() : NaN;
+    if (isNaN(ts)) {
+      showTransientBanner("Bitte Datum und Uhrzeit wählen", true);
+      return;
+    }
+    if (ts <= Date.now()) {
+      showTransientBanner("Der Zeitpunkt liegt in der Vergangenheit", true);
+      return;
+    }
+    item.remindAt = ts;
+    saveTodoItems(state.todos);
+    sheet.remove();
+    render();
+    const when = new Date(ts).toLocaleString("de-DE", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" });
+    showTransientBanner(`🔔 Erinnerung gesetzt: ${when}`);
+  });
+  sheet.querySelector<HTMLElement>("#todo-remind-remove")?.addEventListener("click", () => {
+    delete item.remindAt;
+    saveTodoItems(state.todos);
+    sheet.remove();
+    render();
+  });
 }
 
 // ── Event detail sheet ─────────────────────────────────────────────────────

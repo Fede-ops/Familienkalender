@@ -1614,6 +1614,45 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   color: var(--text-tertiary);
 }
 
+.list-item__content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+
+.list-item__reminder {
+  font-size: 11px;
+  font-weight: 500;
+  color: #FF9F0A;
+}
+
+.list-item__reminder--due {
+  color: #FF453A;
+}
+
+.list-item__bell {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  color: rgba(235, 235, 245, 0.3);
+}
+
+.list-item__bell svg {
+  width: 18px;
+  height: 18px;
+}
+
+.list-item__bell--set {
+  color: #FF9F0A;
+}
+
 .list-empty {
   display: flex;
   flex-direction: column;

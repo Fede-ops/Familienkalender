@@ -559,6 +559,66 @@ def check_birthday_reminders(now, member_services, sent):
     return fired
 
 
+def check_todo_reminders(now, member_services, sent):
+    """Sendet Push-Benachrichtigungen für To-Dos mit gesetzter Erinnerungszeit.
+
+    Die App speichert am Todo-Item ein optionales remindAt (Epoch ms). Fällige,
+    unerledigte Todos werden an die Geräte des zugeordneten Familienmitglieds
+    gepusht (Fallback: alle bekannten Geräte). Nachfeuer-Fenster: 60 Minuten —
+    ältere verpasste Erinnerungen (z.B. Poller lange aus) werden nicht mehr
+    nachgeholt.
+    """
+    st = ha_state("sensor.familienkalender_todos")
+    items = (st.get("attributes") or {}).get("items") if st else None
+    if not isinstance(items, list) or not items:
+        # Sensor leer (z.B. direkt nach HA-Neustart) → Disk-Backup nutzen.
+        try:
+            with open(TODO_DATA_FILE, encoding="utf-8") as f:
+                saved = json.load(f)
+            items = saved.get("items") if isinstance(saved, dict) else saved
+        except Exception:
+            return 0
+    if not isinstance(items, list):
+        return 0
+
+    fired = 0
+    for it in items:
+        if not isinstance(it, dict) or it.get("completed"):
+            continue
+        remind_at = it.get("remindAt")
+        if not isinstance(remind_at, (int, float)):
+            continue
+        fire_dt = datetime.fromtimestamp(remind_at / 1000)
+        if not (fire_dt <= now <= fire_dt + timedelta(minutes=60)):
+            continue
+
+        key = f"todo-{it.get('id')}-{int(remind_at)}"
+        if key in sent:
+            continue
+
+        services = member_services.get(it.get("memberId") or "", [])
+        if not services:
+            all_svcs = set()
+            for svcs in member_services.values():
+                all_svcs.update(svcs)
+            services = sorted(all_svcs)
+        if not services:
+            continue
+
+        title = it.get("title", "To-Do")
+        message = f"To-Do fällig · {fire_dt.strftime('%H:%M')} Uhr"
+        ok_any = False
+        for svc in services:
+            if notify(svc, f"📋 {title}", message):
+                ok_any = True
+        if ok_any:
+            sent[key] = now.isoformat()
+            fired += 1
+            print(f"  → To-Do-Erinnerung: {title}")
+
+    return fired
+
+
 def main():
     now = datetime.now()
     member_services = get_member_services()
@@ -631,6 +691,9 @@ def main():
 
     # Geburtstags-Benachrichtigungen (täglich um 12:00).
     fired += check_birthday_reminders(now, member_services, sent)
+
+    # To-Do-Erinnerungen (remindAt aus der App).
+    fired += check_todo_reminders(now, member_services, sent)
 
     # Alte Einträge (> 2 Tage) aufräumen.
     cutoff = now - timedelta(days=2)

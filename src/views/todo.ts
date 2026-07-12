@@ -981,6 +981,7 @@ export async function syncTodosFromHA(): Promise<TodoItem[] | null> {
 const ICONS = {
   plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>`,
   check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+  bell: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>`,
   home: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>`,
   todo: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l2 2 4-4M4 14l2 2 4-4M12 7h8M12 15h8"/></svg>`,
   cart: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.4 12.5a2 2 0 0 0 2 1.5h8.4a2 2 0 0 0 2-1.5L22 7H6"/></svg>`,
@@ -989,6 +990,18 @@ const ICONS = {
 
 function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function fmtRemind(ts: number): string {
+  const d = new Date(ts);
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  const day = sameDay ? "Heute" : `${d.getDate()}.${d.getMonth() + 1}.`;
+  return `${day} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 
@@ -1046,10 +1059,17 @@ export function renderTodoView(viewState: TodoViewState): string {
         const avatarHtml = member
           ? `<span class="list-item__member-dot" style="background:${member.color};"></span>`
           : "";
+        const reminderHtml = item.remindAt
+          ? `<span class="list-item__reminder${item.remindAt < Date.now() ? " list-item__reminder--due" : ""}">🔔 ${fmtRemind(item.remindAt)}</span>`
+          : "";
         return `
         <button class="list-item" data-action="complete-todo" data-id="${item.id}">
           <span class="list-item__check"></span>
-          <span class="list-item__name">${escHtml(cleanTodoTitle(item.title, item.category))}</span>
+          <span class="list-item__content">
+            <span class="list-item__name">${escHtml(cleanTodoTitle(item.title, item.category))}</span>
+            ${reminderHtml}
+          </span>
+          <span class="list-item__bell${item.remindAt ? " list-item__bell--set" : ""}" data-action="todo-reminder" data-id="${item.id}" role="button" aria-label="Erinnerung">${ICONS.bell}</span>
           ${avatarHtml}
         </button>`;
       })
