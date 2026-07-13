@@ -7,6 +7,9 @@
 # serverseitig — aber ausschließlich für die Sensoren in der Allowlist, damit
 # der eingeschränkte Benutzer keine beliebigen Entitäten manipulieren kann.
 #
+# Bewusst ohne isinstance()/str-Slicing geschrieben: die python_script-Sandbox
+# (RestrictedPython) erlaubt nicht alle Builtins.
+#
 # Setup (einmalig):
 #   1. Diese Datei nach /config/python_scripts/ legen (macht update.sh).
 #   2. "python_script:" in /config/configuration.yaml eintragen.
@@ -23,10 +26,15 @@ ALLOWED = [
 ]
 
 entity_id = data.get("entity_id")
+
 if entity_id in ALLOWED:
     attributes = data.get("attributes")
-    if not isinstance(attributes, dict):
+    if attributes is None:
         attributes = {}
-    hass.states.set(entity_id, str(data.get("state", "ok"))[:255], attributes)
+    state = data.get("state")
+    if state is None:
+        state = "ok"
+    hass.states.set(entity_id, state, attributes)
+    logger.warning("familienkalender_set_state OK: %s", entity_id)
 else:
-    logger.warning("familienkalender_set_state: Entity nicht erlaubt: %s", entity_id)
+    logger.warning("familienkalender_set_state ABGELEHNT: %s", entity_id)
