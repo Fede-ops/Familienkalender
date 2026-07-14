@@ -89,13 +89,24 @@ export function parseQuickEvent(input: string, now: Date = new Date()): ParsedEv
   }
 
   // ── Datum: dd.mm(.yyyy) bzw. dd/mm ─────────────────────────────────────────
-  if ((m = take(new RegExp(`${LB}(\\d{1,2})[./](\\d{1,2})(?:[./](\\d{4}|\\d{2}))?`, "iu")))) {
-    const a = parseInt(m[1], 10), b = parseInt(m[2], 10);
-    // Tag-zuerst (europäisch) als Default; per Wertebereich korrigieren.
-    if (a > 12 && b <= 12) { day = a; month = b - 1; }
-    else if (b > 12 && a <= 12) { month = a - 1; day = b; }
-    else { day = a; month = b - 1; }
-    if (m[3]) year = m[3].length === 2 ? 2000 + parseInt(m[3], 10) : parseInt(m[3], 10);
+  // Nur konsumieren, wenn es ein plausibles Datum ist. Sonst (z.B. "13.30",
+  // "9.30") als Uhrzeit stehen lassen → wird unten geparst.
+  {
+    const dm = text.match(new RegExp(`${LB}(\\d{1,2})[./](\\d{1,2})(?:[./](\\d{4}|\\d{2}))?`, "iu"));
+    if (dm && dm.index !== undefined) {
+      const a = parseInt(dm[1], 10), b = parseInt(dm[2], 10);
+      const hasYear = dm[3] !== undefined;
+      // Datum, wenn eine der beiden Zahlen ein gültiger Monat (1–12) ist und die
+      // andere ein gültiger Tag (1–31). Mit Jahr immer als Datum werten.
+      const dateLike = a >= 1 && a <= 31 && b >= 1 && b <= 31 && (a <= 12 || b <= 12);
+      if (dateLike && (hasYear || a > 12 || b <= 12)) {
+        text = `${text.slice(0, dm.index)} ${text.slice(dm.index + dm[0].length)}`;
+        if (a > 12 && b <= 12) { day = a; month = b - 1; }
+        else if (b > 12 && a <= 12) { month = a - 1; day = b; }
+        else { day = a; month = b - 1; }
+        if (hasYear) year = dm[3].length === 2 ? 2000 + parseInt(dm[3], 10) : parseInt(dm[3], 10);
+      }
+    }
   }
 
   // ── Datum mit Monatsnamen: "15. März" / "15 de marzo" / "March 15" ────────
@@ -144,8 +155,8 @@ export function parseQuickEvent(input: string, now: Date = new Date()): ParsedEv
     ampmExplicit = true;
   }
 
-  // ── Uhrzeit: HH:MM ────────────────────────────────────────────────────────
-  if (hour === null && (m = take(rx(`${TP}(\\d{1,2}):(\\d{2})`)))) {
+  // ── Uhrzeit: HH:MM bzw. HH.MM / HHhMM ("13:30", "13.30", "9h30") ──────────
+  if (hour === null && (m = take(rx(`${TP}(\\d{1,2})[:.h](\\d{2})(?:\\s*uhr)?`)))) {
     hour = parseInt(m[1], 10); minute = parseInt(m[2], 10);
   }
 
@@ -153,6 +164,25 @@ export function parseQuickEvent(input: string, now: Date = new Date()): ParsedEv
   if (hour === null && (m = take(rx(`${TP}(\\d{1,2})\\s*(?:uhr|o'?clock)(?:\\s*(\\d{1,2}))?`)))) {
     hour = parseInt(m[1], 10);
     if (m[2]) minute = parseInt(m[2], 10);
+  }
+
+  // ── Uhrzeit: bloße 3–4 Ziffern ("1330" = 13:30, "930" = 9:30) ─────────────
+  // iOS-Diktat macht aus "dreizehn dreißig" die Zahl "1330". Kein Jahr (1900–
+  // 2099) als Uhrzeit deuten. Explizite 24-h-Notation → keine Nachmittags-
+  // Heuristik.
+  if (hour === null) {
+    const hm = text.match(rx(`${TP}(\\d{3,4})(?:\\s*uhr)?`));
+    if (hm && hm.index !== undefined) {
+      const n = parseInt(hm[1], 10);
+      const hh = Math.floor(n / 100), mm = n % 100;
+      // Kein "Nummern-Wort" davor (Zimmer 204, Bus 401 …) als Uhrzeit deuten.
+      const lastWord = text.slice(0, hm.index).trim().split(/\s+/).pop()?.toLowerCase() ?? "";
+      const isLabel = /^(zimmer|raum|room|nr|nummer|no|tel|telefon|handy|bus|gate|flug|gleis|haus|tür|tuer|apt|nº|núm|numero|número|linie|stock)$/iu.test(lastWord);
+      if (!isLabel && hh <= 23 && mm <= 59 && !(n >= 1900 && n <= 2099)) {
+        hour = hh; minute = mm; ampmExplicit = true;
+        text = `${text.slice(0, hm.index)} ${text.slice(hm.index + hm[0].length)}`;
+      }
+    }
   }
 
   // ── Bruch-Zeiten DE (österreichisch + deutsch) ────────────────────────────
@@ -221,7 +251,7 @@ export function parseQuickEvent(input: string, now: Date = new Date()): ParsedEv
 
   // ── Titel säubern ─────────────────────────────────────────────────────────
   let title = text
-    .replace(new RegExp(`${LB}(um|am|für|lang|von|bis|at|on|for|of|long)${RB}`, "giu"), " ")
+    .replace(new RegExp(`${LB}(um|am|für|lang|von|bis|at|on|for|of|long|uhr|o'?clock|clock|hs|hrs)${RB}`, "giu"), " ")
     .replace(/\s+/g, " ")
     .trim()
     .replace(/^[\s,;.\-–]+/, "")
