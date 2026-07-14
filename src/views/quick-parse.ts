@@ -121,9 +121,16 @@ export function parseQuickEvent(input: string, now: Date = new Date()): ParsedEv
     if ((m = take(rx(`(am\\s+|n[äa]chsten\\s+|kommenden\\s+|diesen\\s+|on\\s+|next\\s+|this\\s+|el\\s+|próximo\\s+|proximo\\s+)?(${wd})`)))) {
       const target = WEEKDAYS[m[2].toLowerCase()];
       const forceNext = /n[äa]chsten|kommenden|next|próximo|proximo/i.test(m[1] ?? "");
-      let delta = (target - now.getDay() + 7) % 7;
-      if (delta === 0 && forceNext) delta = 7;
-      dayOffset = delta;
+      if (forceNext) {
+        // "nächsten X" = X in der NÄCHSTEN Kalenderwoche (Mo–So), nicht der
+        // schon kommende Tag dieser Woche.
+        let toNextMonday = (1 - now.getDay() + 7) % 7;   // Tage bis kommenden Montag
+        if (toNextMonday === 0) toNextMonday = 7;         // heute Montag → nächster Montag
+        const offFromMon = target === 0 ? 6 : target - 1; // Mo=0 … So=6
+        dayOffset = toNextMonday + offFromMon;
+      } else {
+        dayOffset = (target - now.getDay() + 7) % 7;      // kommender (evtl. heute)
+      }
     }
   }
 

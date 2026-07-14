@@ -939,7 +939,11 @@ function render(): void {
   updateTabBarActive();
   updateFab();
   const modalNowOpen = !!state.modal;
-  if (modalNowOpen && !_prevModalOpen) document.getElementById("modal-summary")?.focus();
+  if (modalNowOpen && !_prevModalOpen) {
+    // Bei neuen Terminen das Schnell-Eingabe-Feld fokussieren → iOS-Tastatur
+    // erscheint sofort, Mikro ist einen Tipp entfernt.
+    (document.getElementById("quick-add-input") ?? document.getElementById("modal-summary"))?.focus();
+  }
   _prevModalOpen = modalNowOpen;
   // Do NOT auto-focus list-input on render — it opens the iOS keyboard
   // automatically on every tab switch and causes the sticky nav to jump.
@@ -3314,6 +3318,14 @@ async function saveEvent(): Promise<void> {
   }
   state.events.sort((a, b) => a.start.getTime() - b.start.getTime());
   saveCachedEvents(state.events);
+  if (!editUid) {
+    // Zur Woche/zum Monat des neuen Termins springen, damit er sichtbar ist —
+    // sonst „verschwindet" ein Termin, der außerhalb der aktuellen Woche liegt
+    // (z.B. „nächsten Mittwoch").
+    state.weekStart = startOfWeek(startDate);
+    state.monthStart = startOfMonth(startDate);
+    state.selectedDate = new Date(startDate);
+  }
   state.modal = null;
   render();
   // Do NOT call refreshEvents() here — HA needs time to index the new event.
