@@ -939,11 +939,9 @@ function render(): void {
   updateTabBarActive();
   updateFab();
   const modalNowOpen = !!state.modal;
-  if (modalNowOpen && !_prevModalOpen) {
-    // Bei neuen Terminen das Schnell-Eingabe-Feld fokussieren → iOS-Tastatur
-    // erscheint sofort, Mikro ist einen Tipp entfernt.
-    (document.getElementById("quick-add-input") ?? document.getElementById("modal-summary"))?.focus();
-  }
+  // Das normale Titelfeld fokussieren (nicht das Sprach-Feld) — Spracheingabe
+  // startet der User bei Bedarf selbst.
+  if (modalNowOpen && !_prevModalOpen) document.getElementById("modal-summary")?.focus();
   _prevModalOpen = modalNowOpen;
   // Do NOT auto-focus list-input on render — it opens the iOS keyboard
   // automatically on every tab switch and causes the sticky nav to jump.
