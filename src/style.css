@@ -1009,6 +1009,37 @@ body {
   font-weight: 500;
 }
 
+.quick-add {
+  display: flex;
+  gap: 8px;
+  padding: 0 20px 14px;
+}
+.quick-add__input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(10, 132, 255, 0.10);
+  border: 1px solid rgba(10, 132, 255, 0.35);
+  border-radius: 10px;
+  padding: 11px 13px;
+  color: var(--text);
+  font-size: 15px;
+  outline: none;
+}
+.quick-add__input::placeholder {
+  color: rgba(235, 235, 245, 0.45);
+}
+.quick-add__btn {
+  flex-shrink: 0;
+  background: #0a84ff;
+  border: none;
+  border-radius: 10px;
+  padding: 0 16px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .modal-tabs {
   display: flex;
   padding: 4px 16px 0;
