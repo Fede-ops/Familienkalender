@@ -308,6 +308,10 @@ export function renderEventModal(state: ModalState, members: FamilyMember[], occ
       <div class="modal-title-block">
         <input class="modal-title-input" id="modal-summary" placeholder="Beschreibung des Events…" value="${escapeHtml(state.summary)}" autocomplete="off" />
       </div>
+      ${state.editUid ? "" : `<div class="quick-add">
+        <input class="quick-add__input" id="quick-add-input" placeholder="🎙 z.B. „Zahnarzt Dienstag 15 Uhr“" autocomplete="off" autocorrect="off" enterkeyhint="done" />
+        <button class="quick-add__btn" data-action="quick-parse">Übernehmen</button>
+      </div>`}
       <div class="modal-tabs">${tabsHtml}</div>
       <div class="modal-body">${tabBody}</div>
     </div>

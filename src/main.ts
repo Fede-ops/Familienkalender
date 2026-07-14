@@ -36,6 +36,7 @@ import { addDays, renderWeekView, startOfWeek } from "./views/week.ts";
 import { renderMonthView } from "./views/month.ts";
 import { buildRruleString, defaultModalState, fmtDateTimeLocal, renderEventModal } from "./views/event-modal.ts";
 import type { ModalState, RecurrenceFreq } from "./views/event-modal.ts";
+import { parseQuickEvent } from "./views/quick-parse.ts";
 import {
   categorizeShoppingItem,
   loadShoppingItems,
@@ -1007,6 +1008,30 @@ function syncModalForm(): void {
   if (monthWdEl) state.modal.rruleMonthWeekDay = monthWdEl.value;
 }
 
+// Schnell-Eingabe: freien Text (auch per iOS-Diktat) in Titel + Datum/Zeit
+// umwandeln und den Termin-Dialog vorbefüllen. Der User bestätigt danach.
+function applyQuickParse(): void {
+  if (!state.modal) return;
+  const inp = document.getElementById("quick-add-input") as HTMLInputElement | null;
+  const txt = inp?.value.trim();
+  if (!txt) { inp?.focus(); return; }
+  const parsed = parseQuickEvent(txt);
+  if (!parsed) return;
+  // Manuelle Auswahl (z.B. Familienmitglied) im Formular erhalten.
+  syncModalForm();
+  if (parsed.title) state.modal.summary = parsed.title;
+  state.modal.allDay = parsed.allDay;
+  state.modal.startDate = parsed.start;
+  state.modal.endDate = parsed.end;
+  state.modal.tab = "datum";
+  render();
+  showTransientBanner(
+    parsed.allDay
+      ? `📅 ${parsed.start.toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "numeric" })} · ganztägig`
+      : `📅 ${parsed.start.toLocaleString("de-DE", { weekday: "short", day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}`,
+  );
+}
+
 // ── Read list input ────────────────────────────────────────────────────────
 
 function readListInput(): string {
@@ -1252,6 +1277,14 @@ function bindEvents(): void {
     });
   }
 
+  // Enter im Schnell-Eingabe-Feld → parsen und Dialog vorbefüllen
+  const quickAdd = document.getElementById("quick-add-input") as HTMLInputElement | null;
+  if (quickAdd) {
+    quickAdd.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); applyQuickParse(); }
+    });
+  }
+
   app.querySelectorAll<HTMLElement>("[data-action]").forEach((el) => {
     el.addEventListener("click", (e) => {
       const action = el.dataset.action;
@@ -1336,6 +1369,8 @@ function bindEvents(): void {
       } else if (action === "close-modal") {
         state.modal = null;
         render();
+      } else if (action === "quick-parse") {
+        applyQuickParse();
       } else if (action === "modal-tab") {
         if (!state.modal) return;
         syncModalForm();
