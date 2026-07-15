@@ -1011,32 +1011,32 @@ body {
 
 .quick-add {
   display: flex;
-  gap: 8px;
-  padding: 0 20px 14px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 20px 12px;
 }
 .quick-add__input {
   flex: 1;
   min-width: 0;
-  background: rgba(10, 132, 255, 0.10);
-  border: 1px solid rgba(10, 132, 255, 0.35);
-  border-radius: 10px;
-  padding: 11px 13px;
-  color: var(--text);
-  font-size: 15px;
+  background: rgba(120, 120, 128, 0.12);
+  border: none;
+  border-radius: 9px;
+  padding: 8px 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
   outline: none;
 }
 .quick-add__input::placeholder {
-  color: rgba(235, 235, 245, 0.45);
+  color: rgba(235, 235, 245, 0.32);
 }
 .quick-add__btn {
   flex-shrink: 0;
-  background: #0a84ff;
+  background: none;
   border: none;
-  border-radius: 10px;
-  padding: 0 16px;
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
+  padding: 6px 8px;
+  color: rgba(10, 132, 255, 0.85);
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
 }
 
