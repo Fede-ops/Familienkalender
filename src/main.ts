@@ -3502,17 +3502,49 @@ async function deleteEvent(ev: CalendarEvent): Promise<void> {
 
   const config = loadConfig();
   if (config && !ev.uid.startsWith("local-") && navigator.onLine) {
+    const client = new HAClient(config);
     try {
-      const client = new HAClient(config);
       await client.deleteEvent(ev.memberId ?? "", ev.uid, ev.recurrenceId);
     } catch (err) {
       const status = (err as Error & { httpStatus?: number }).httpStatus;
-      if (status === 400 || status === 404) return; // already gone
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error("Failed to delete event from HA:", msg);
-      showTransientBanner(msg, true);
+      if (status !== 400 && status !== 404) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("Failed to delete event from HA:", msg);
+        showTransientBanner(msg, true);
+      }
+      // 400/404 = schon weg → trotzdem noch nach Duplikaten sehen.
     }
+    // Duplikate mitlöschen: HA kann durch fehlgeschlagene Move-/Edit-Löschungen
+    // mehrere Kopien mit gleichem Titel + Startdatum enthalten. Die App kennt
+    // nur eine UID; die übrigen bleiben sonst liegen und werden von externen
+    // Konsumenten (z.B. einer Agenda-Automation) weiter gelistet.
+    if (!ev.recurrenceId) void deleteHADuplicates(client, ev);
   }
+}
+
+async function deleteHADuplicates(client: HAClient, ev: CalendarEvent): Promise<void> {
+  if (!ev.memberId) return;
+  const dayStart = new Date(ev.start.getFullYear(), ev.start.getMonth(), ev.start.getDate());
+  const rangeStart = new Date(dayStart.getTime() - 86_400_000);
+  const rangeEnd = new Date(dayStart.getTime() + 2 * 86_400_000);
+  try {
+    const others = await client.getEvents(ev.memberId, rangeStart, rangeEnd);
+    for (const o of others) {
+      if (o.uid === ev.uid || o.recurrenceId) continue;
+      if (o.summary !== ev.summary) continue;
+      // Gleiches Startdatum (Duplikat), nicht nur zufällig gleicher Titel.
+      if (o.start.getFullYear() !== dayStart.getFullYear()
+        || o.start.getMonth() !== dayStart.getMonth()
+        || o.start.getDate() !== dayStart.getDate()) continue;
+      try {
+        await client.deleteEvent(ev.memberId, o.uid);
+        pendingDeletes.set(o.uid, PERMANENT);
+        state.events = state.events.filter((e) => e.uid !== o.uid);
+      } catch { /* best-effort */ }
+    }
+    savePendingDeletes(pendingDeletes);
+    saveCachedEvents(state.events);
+  } catch { /* Abruf fehlgeschlagen — kein Abbruch, primäres Löschen zählt */ }
 }
 
 function showTransientBanner(text: string, isError = false): void {
