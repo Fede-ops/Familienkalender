@@ -3507,12 +3507,15 @@ async function deleteEvent(ev: CalendarEvent): Promise<void> {
       await client.deleteEvent(ev.memberId ?? "", ev.uid, ev.recurrenceId);
     } catch (err) {
       const status = (err as Error & { httpStatus?: number }).httpStatus;
-      if (status !== 400 && status !== 404) {
+      // Nur 404 heißt „wirklich schon weg". Alles andere (inkl. 400 = von HA
+      // abgelehnt) ist ein echter Fehler und darf NICHT still als erledigt
+      // verbucht werden — sonst blendet die App den Termin aus, während HA ihn
+      // behält (und externe Konsumenten ihn weiter sehen).
+      if (status !== 404) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error("Failed to delete event from HA:", msg);
-        showTransientBanner(msg, true);
+        showTransientBanner(`Löschen in HA fehlgeschlagen: ${msg}`, true);
       }
-      // 400/404 = schon weg → trotzdem noch nach Duplikaten sehen.
     }
     // Duplikate mitlöschen: HA kann durch fehlgeschlagene Move-/Edit-Löschungen
     // mehrere Kopien mit gleichem Titel + Startdatum enthalten. Die App kennt

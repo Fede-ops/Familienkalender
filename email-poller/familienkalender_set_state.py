@@ -35,6 +35,6 @@ if entity_id in ALLOWED:
     if state is None:
         state = "ok"
     hass.states.set(entity_id, state, attributes)
-    logger.warning("familienkalender_set_state OK: %s", entity_id)
+    # Erfolgsfall NICHT loggen — läuft jede Minute und würde das HA-Log fluten.
 else:
     logger.warning("familienkalender_set_state ABGELEHNT: %s", entity_id)
