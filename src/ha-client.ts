@@ -8,6 +8,21 @@ interface HAConfig {
 
 const STORAGE_KEY = "ha-config";
 
+// Lokale Zeit MIT Zeitzonen-Offset formatieren, z.B. "2026-07-23T16:00:00+02:00".
+// WICHTIG: Ohne Offset speichert Home Assistant den Termin als "floating"
+// (zeitzonenlose) Zeit — und solche Termine lassen sich später NICHT mehr per
+// calendar.delete_event löschen (HA vergleicht intern zeitzonenlose mit
+// zeitzonen-bewusster Zeit → 400 Bad Request).
+function fmtDateTimeTZ(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const time = `${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+  const offMin = -d.getTimezoneOffset();                 // Minuten östlich von UTC
+  const sign = offMin >= 0 ? "+" : "-";
+  const off = `${sign}${pad(Math.floor(Math.abs(offMin) / 60))}:${pad(Math.abs(offMin) % 60)}`;
+  return `${date}T${time}${off}`;
+}
+
 export function loadConfig(): HAConfig | null {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
@@ -85,16 +100,14 @@ export class HAClient {
     const pad = (n: number) => String(n).padStart(2, "0");
     const fmtDate = (d: Date) =>
       `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-    const fmtDateTime = (d: Date) =>
-      `${fmtDate(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
 
     const body: Record<string, string> = { entity_id: entityId, summary };
     if (allDay) {
       body.start_date = fmtDate(start);
       body.end_date = fmtDate(end);
     } else {
-      body.start_date_time = fmtDateTime(start);
-      body.end_date_time = fmtDateTime(end);
+      body.start_date_time = fmtDateTimeTZ(start);
+      body.end_date_time = fmtDateTimeTZ(end);
     }
     if (opts?.location) body.location = opts.location;
     if (opts?.description) body.description = opts.description;
@@ -132,16 +145,14 @@ export class HAClient {
     const pad = (n: number) => String(n).padStart(2, "0");
     const fmtDate = (d: Date) =>
       `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-    const fmtDateTime = (d: Date) =>
-      `${fmtDate(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
 
     const body: Record<string, string> = { entity_id: entityId, uid, summary };
     if (allDay) {
       body.start_date = fmtDate(start);
       body.end_date = fmtDate(end);
     } else {
-      body.start_date_time = fmtDateTime(start);
-      body.end_date_time = fmtDateTime(end);
+      body.start_date_time = fmtDateTimeTZ(start);
+      body.end_date_time = fmtDateTimeTZ(end);
     }
     if (opts?.location) body.location = opts.location;
     if (opts?.description) body.description = opts.description;
