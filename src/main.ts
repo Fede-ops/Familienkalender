@@ -3501,27 +3501,35 @@ async function deleteEvent(ev: CalendarEvent): Promise<void> {
   render();
 
   const config = loadConfig();
-  if (config && !ev.uid.startsWith("local-") && navigator.onLine) {
+  if (config && navigator.onLine) {
     const client = new HAClient(config);
-    try {
-      await client.deleteEvent(ev.memberId ?? "", ev.uid, ev.recurrenceId);
-    } catch (err) {
-      const status = (err as Error & { httpStatus?: number }).httpStatus;
-      // Nur 404 heißt „wirklich schon weg". Alles andere (inkl. 400 = von HA
-      // abgelehnt) ist ein echter Fehler und darf NICHT still als erledigt
-      // verbucht werden — sonst blendet die App den Termin aus, während HA ihn
-      // behält (und externe Konsumenten ihn weiter sehen).
-      if (status !== 404) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error("Failed to delete event from HA:", msg);
-        showTransientBanner(`Löschen in HA fehlgeschlagen: ${msg}`, true);
+    // Direktes Löschen per UID nur, wenn wir die ECHTE HA-UID kennen. Frisch
+    // angelegte Termine (auch per Sprache) tragen zunächst eine Platzhalter-UID
+    // "local-…", weil calendar.create_event die UID nicht zurückgibt — sie
+    // existieren aber sehr wohl in HA. Für die greift unten die Titel+Start-
+    // Suche.
+    const isLocal = ev.uid.startsWith("local-");
+    if (!isLocal) {
+      try {
+        await client.deleteEvent(ev.memberId ?? "", ev.uid, ev.recurrenceId);
+      } catch (err) {
+        const status = (err as Error & { httpStatus?: number }).httpStatus;
+        // Nur 404 heißt „wirklich schon weg". Alles andere (inkl. 400 = von HA
+        // abgelehnt) ist ein echter Fehler und darf NICHT still als erledigt
+        // verbucht werden — sonst blendet die App den Termin aus, während HA
+        // ihn behält (und externe Konsumenten ihn weiter sehen).
+        if (status !== 404) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error("Failed to delete event from HA:", msg);
+          showTransientBanner(`Löschen in HA fehlgeschlagen: ${msg}`, true);
+        }
       }
     }
-    // Duplikate mitlöschen: HA kann durch fehlgeschlagene Move-/Edit-Löschungen
-    // mehrere Kopien mit gleichem Titel + Startdatum enthalten. Die App kennt
-    // nur eine UID; die übrigen bleiben sonst liegen und werden von externen
-    // Konsumenten (z.B. einer Agenda-Automation) weiter gelistet.
-    if (!ev.recurrenceId) void deleteHADuplicates(client, ev);
+    // HA nach Termin(en) mit gleichem Titel + Startdatum + Kalender durchsuchen
+    // und löschen. Deckt zwei Fälle ab:
+    //  1) lokal angelegte Termine, deren echte HA-UID die App nicht kennt,
+    //  2) Duplikate durch fehlgeschlagene Move-/Edit-Löschungen.
+    if (!ev.recurrenceId) await deleteHADuplicates(client, ev);
   }
 }
 
