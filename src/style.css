@@ -1599,6 +1599,11 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   color: inherit;
   font-family: inherit;
   transition: background 0.12s ease;
+  /* Long-Press zum Bearbeiten darf NICHT die native iOS-Textauswahl
+     (blaues Markieren + „Kopieren/Nachschlagen") auslösen. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .list-item:last-child {
