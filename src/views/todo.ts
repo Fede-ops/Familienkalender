@@ -32,6 +32,12 @@ export const TODO_CATEGORIES = [
       "wundversorgung", "wundheilung", "naht", "verband",
       "blutung", "bluttransfusion", "transfusion",
       "nachsorge", "kontrolltermin",
+      // ── Geburt & Hebamme (KEIN bloßes "geburt" — träfe sonst "Geburtstag") ─
+      "hebamme", "geburtstermin", "entbindung", "entbindungstermin",
+      "schwangerschaft", "schwangerschaftsvorsorge", "geburtsvorbereitung",
+      "wehen", "kaiserschnitt", "wochenbett", "stillberatung",
+      "midwife", "due date", "pregnancy", "prenatal", "antenatal", "obstetrician",
+      "matrona", "comadrona", "parto", "embarazo", "fecha de parto",
       // ── Diagnostik ────────────────────────────────────────────────────
       "befund", "befunde", "laborbefund", "röntgenbefund",
       "diagnose", "differentialdiagnose", "diagnosestellung",
