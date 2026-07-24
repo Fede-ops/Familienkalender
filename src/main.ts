@@ -936,6 +936,7 @@ function render(): void {
   bindEvents();
   setupDragDrop();
   setupLongPress();
+  setupTodoLongPress();
   updateTabBarActive();
   updateFab();
   const modalNowOpen = !!state.modal;
@@ -1458,6 +1459,8 @@ function bindEvents(): void {
         { const inp = document.getElementById("list-input") as HTMLInputElement | null;
           if (inp?.value.trim()) addTodoItem(); else inp?.focus(); }
       } else if (action === "complete-todo") {
+        // Klick direkt nach einem Long-Press (Bearbeiten) nicht als Abhaken werten.
+        if (suppressNextTodoTap) { suppressNextTodoTap = false; return; }
         const id = el.dataset.id;
         if (!id) return;
         const item = state.todos.find((i) => i.id === id);
@@ -2452,6 +2455,79 @@ function showTodoReminderSheet(id: string): void {
     sheet.remove();
     render();
   });
+}
+
+// ── Todo bearbeiten (Long-Press) ───────────────────────────────────────────
+// Langes Tippen auf ein To-Do öffnet ein Sheet zum Umbenennen (Tippfehler,
+// nachträgliche Änderung). Kein Kollidieren mit dem Abhaken (kurzer Tap).
+
+// Nach einem Long-Press feuert noch ein Klick (Abhaken). Dieses Flag lässt den
+// complete-todo-Handler diesen einen Klick überspringen.
+let suppressNextTodoTap = false;
+
+function setupTodoLongPress(): void {
+  if (state.activeTab !== "todo") return;
+  app.querySelectorAll<HTMLElement>(".list-item[data-action='complete-todo']").forEach((row) => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let sx = 0, sy = 0;
+    const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+    row.addEventListener("pointerdown", (e) => {
+      if ((e.target as HTMLElement).closest("[data-action='todo-reminder']")) return;
+      sx = e.clientX; sy = e.clientY;
+      timer = setTimeout(() => {
+        timer = null;
+        suppressNextTodoTap = true;
+        navigator.vibrate?.(40);
+        const id = row.dataset.id;
+        if (id) showTodoEditSheet(id);
+      }, 500);
+    }, { passive: true });
+    row.addEventListener("pointermove", (e) => {
+      if (Math.abs(e.clientX - sx) > 8 || Math.abs(e.clientY - sy) > 8) cancel();
+    }, { passive: true });
+    row.addEventListener("pointerup", cancel, { passive: true });
+    row.addEventListener("pointercancel", cancel, { passive: true });
+  });
+}
+
+function showTodoEditSheet(id: string): void {
+  const item = state.todos.find((i) => i.id === id);
+  if (!item) return;
+  const iStyle = "width:100%;background:rgba(120,120,128,0.18);border:none;border-radius:10px;padding:12px;font-size:16px;color:#EBEBF5;outline:none;box-sizing:border-box;";
+  const html = `<div id="todo-edit-sheet" class="sheet-backdrop">
+    <div class="bottom-sheet" data-stop-propagation>
+      <div class="bottom-sheet__handle"></div>
+      <button class="bottom-sheet__close" id="todo-edit-close">&times;</button>
+      <p class="bottom-sheet__title">✏️ To-Do bearbeiten</p>
+      <div style="padding:4px 20px 8px;">
+        <input id="todo-edit-input" type="text" value="${escHtml(item.title)}" style="${iStyle}" autocomplete="off" enterkeyhint="done" />
+      </div>
+      <div style="padding:10px 20px 4px;">
+        <button class="ics-import-confirm" id="todo-edit-save" style="width:100%;">Speichern</button>
+      </div>
+    </div>
+  </div>`;
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = html;
+  const sheet = wrapper.firstElementChild as HTMLElement;
+  document.body.appendChild(sheet);
+  const input = sheet.querySelector("#todo-edit-input") as HTMLInputElement;
+
+  const save = () => {
+    const val = input.value.trim();
+    if (!val) { input.focus(); return; }
+    item.title = val;
+    item.category = categorizeTodoItem(val);
+    saveTodoItems(state.todos);
+    sheet.remove();
+    render();
+  };
+  sheet.addEventListener("click", (e) => { if ((e.target as HTMLElement) === sheet) sheet.remove(); });
+  sheet.querySelector<HTMLElement>("[data-stop-propagation]")!.addEventListener("click", (e) => e.stopPropagation());
+  sheet.querySelector<HTMLElement>("#todo-edit-close")!.addEventListener("click", () => sheet.remove());
+  sheet.querySelector<HTMLElement>("#todo-edit-save")!.addEventListener("click", save);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); save(); } });
+  setTimeout(() => { input.focus(); input.select(); }, 50);
 }
 
 // ── Event detail sheet ─────────────────────────────────────────────────────
