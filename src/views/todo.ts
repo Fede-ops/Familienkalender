@@ -907,15 +907,17 @@ function haConfig(): HAConfig | null {
 export function loadTodoItems(): TodoItem[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
+    // Vorhandener (auch leerer) Zustand ist gültig — sonst macht das Backup
+    // eine bewusste Leerung wieder rückgängig. Backup nur, wenn nie ein
+    // Zustand existierte.
+    if (raw !== null) {
       const items = JSON.parse(raw) as TodoItem[];
-      if (items.length > 0) return items;
+      if (Array.isArray(items)) return items;
     }
-    // Primary key empty — try backup
     const backup = localStorage.getItem(BACKUP_KEY);
     if (backup) {
       const items = JSON.parse(backup) as TodoItem[];
-      if (items.length > 0) {
+      if (Array.isArray(items) && items.length > 0) {
         localStorage.setItem(STORAGE_KEY, backup);
         return items;
       }
@@ -935,8 +937,8 @@ export function saveTodoItems(items: TodoItem[]): void {
   }
   const cfg = haConfig();
   if (!cfg) return;
-  // Never overwrite HA with an empty list — see shopping.ts for rationale.
-  if (items.length === 0) return;
+  // Auch leere Liste schreiben (mit ts) — sonst käme eine bewusste Leerung nie
+  // bei HA an. Konflikte löst der Sync über den Zeitstempel.
   haWriteState(cfg.baseUrl, cfg.token, HA_ENTITY, new Date(ts).toISOString(), { items, ts });
 }
 
@@ -956,25 +958,23 @@ export async function syncTodosFromHA(): Promise<TodoItem[] | null> {
     }
     const data = (await res.json()) as { attributes?: { items?: TodoItem[]; ts?: number } };
     const haTs = data.attributes?.ts ?? 0;
-    const haItems = data.attributes?.items;
-    // HA empty → push local
-    if (!haItems || haItems.length === 0) {
-      if (localItems.length > 0) saveTodoItems(localItems);
-      return null;
-    }
-    // Local empty but HA has data → always pull
-    if (localItems.length === 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(haItems));
-      localStorage.setItem(TS_KEY, String(haTs || Date.now()));
-      return haItems;
-    }
-    // Both have data — compare timestamps
+    const haItems = data.attributes?.items ?? [];
+    // Rein zeitstempel-basiert: neuerer Stand gewinnt (auch bewusste Leerung).
     if (haTs > localTs) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(haItems));
       localStorage.setItem(TS_KEY, String(haTs));
       return haItems;
     }
-    if (localTs > haTs) saveTodoItems(localItems);
+    if (localTs > haTs) {
+      saveTodoItems(localItems);
+      return null;
+    }
+    // Legacy-Fall (beide ohne ts): frisches Gerät übernimmt HA-Daten.
+    if (localTs === 0 && localItems.length === 0 && haItems.length > 0) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(haItems));
+      localStorage.setItem(TS_KEY, String(Date.now()));
+      return haItems;
+    }
     return null;
   } catch { return null; }
 }

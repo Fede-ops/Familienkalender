@@ -700,15 +700,17 @@ function haConfig(): HAConfig | null {
 export function loadShoppingItems(): ShoppingItem[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
+    // Eine vorhandene (auch LEERE) Liste ist ein gültiger Zustand und wird
+    // respektiert — sonst würde eine bewusste Leerung durch das Backup wieder
+    // rückgängig gemacht. Das Backup greift nur, wenn nie ein Zustand existierte.
+    if (raw !== null) {
       const items = JSON.parse(raw) as ShoppingItem[];
-      if (items.length > 0) return items;
+      if (Array.isArray(items)) return items;
     }
-    // Primary key empty — try backup
     const backup = localStorage.getItem(BACKUP_KEY);
     if (backup) {
       const items = JSON.parse(backup) as ShoppingItem[];
-      if (items.length > 0) {
+      if (Array.isArray(items) && items.length > 0) {
         localStorage.setItem(STORAGE_KEY, backup);
         return items;
       }
@@ -728,13 +730,10 @@ export function saveShoppingItems(items: ShoppingItem[]): void {
   }
   const cfg = haConfig();
   if (!cfg) return;
-  // Never overwrite the HA sensor with an empty list. Empty writes are almost
-  // always a side effect of stale local state or a race condition, not a
-  // deliberate user action — and they would wipe the canonical copy that other
-  // devices rely on. If a user explicitly clears the list, the local empty
-  // state still survives on this device; on next sync HA's items will be
-  // pulled back (which is the desired "soft delete" UX).
-  if (items.length === 0) return;
+  // Auch eine LEERE Liste wird geschrieben (mit Zeitstempel) — sonst käme eine
+  // bewusste Leerung nie bei HA/anderen Geräten an. Konflikte löst der Sync
+  // rein über den Zeitstempel (neuerer Stand gewinnt), sodass ein frisches,
+  // noch nicht synchronisiertes Gerät HA nicht versehentlich leert.
   haWriteState(cfg.baseUrl, cfg.token, HA_ENTITY, new Date(ts).toISOString(), { items, ts });
 }
 
@@ -754,25 +753,26 @@ export async function syncShoppingFromHA(): Promise<ShoppingItem[] | null> {
     }
     const data = (await res.json()) as { attributes?: { items?: ShoppingItem[]; ts?: number } };
     const haTs = data.attributes?.ts ?? 0;
-    const haItems = data.attributes?.items;
-    // HA empty → push local
-    if (!haItems || haItems.length === 0) {
-      if (localItems.length > 0) saveShoppingItems(localItems);
-      return null;
-    }
-    // Local empty but HA has data → always pull
-    if (localItems.length === 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(haItems));
-      localStorage.setItem(TS_KEY, String(haTs || Date.now()));
-      return haItems;
-    }
-    // Both have data — compare timestamps
+    const haItems = data.attributes?.items ?? [];
+    // Rein zeitstempel-basiert: der neuere Stand gewinnt — auch eine bewusste
+    // Leerung (leere Liste mit neuerem ts) setzt sich durch, ohne dass HA ein
+    // frisches Gerät wieder auffüllt.
     if (haTs > localTs) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(haItems));
       localStorage.setItem(TS_KEY, String(haTs));
       return haItems;
     }
-    if (localTs > haTs) saveShoppingItems(localItems);
+    if (localTs > haTs) {
+      saveShoppingItems(localItems);   // lokaler Stand (auch leer) → zu HA
+      return null;
+    }
+    // Gleicher Zeitstempel: Legacy-Fall (beide ohne ts, =0) — frisches Gerät
+    // ohne lokale Daten übernimmt HA-Daten.
+    if (localTs === 0 && localItems.length === 0 && haItems.length > 0) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(haItems));
+      localStorage.setItem(TS_KEY, String(Date.now()));
+      return haItems;
+    }
     return null;
   } catch { return null; }
 }
