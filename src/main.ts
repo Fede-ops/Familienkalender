@@ -1229,10 +1229,28 @@ function cancelDrag(): void {
   drag = null;
 }
 
+// Findet die echte HA-UID eines Termins über Titel + Startdatum + Kalender.
+// Nötig für frisch angelegte Termine, deren echte UID die App noch nicht kennt
+// (calendar.create_event liefert sie nicht zurück).
+async function resolveHAUid(client: HAClient, memberId: string, summary: string, start: Date): Promise<string | null> {
+  const day = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  try {
+    const items = await client.getEvents(memberId, new Date(day.getTime() - 86_400_000), new Date(day.getTime() + 2 * 86_400_000));
+    const match = items.find((o) =>
+      !o.uid.startsWith("local-") &&
+      o.summary === summary &&
+      o.start.getFullYear() === day.getFullYear() &&
+      o.start.getMonth() === day.getMonth() &&
+      o.start.getDate() === day.getDate());
+    return match?.uid ?? null;
+  } catch { return null; }
+}
+
 async function moveEvent(uid: string, targetDay: Date): Promise<void> {
   const ev = state.events.find((e) => e.uid === uid);
   if (!ev) return;
 
+  const origStart = new Date(ev.start);
   const newStart = new Date(targetDay);
   newStart.setHours(ev.start.getHours(), ev.start.getMinutes(), 0, 0);
   const duration = ev.end.getTime() - ev.start.getTime();
@@ -1246,15 +1264,24 @@ async function moveEvent(uid: string, targetDay: Date): Promise<void> {
   render();
 
   const config = loadConfig();
-  if (config && !uid.startsWith("local-") && navigator.onLine) {
-    try {
-      const client = new HAClient(config);
-      await client.updateEvent(ev.memberId ?? "", uid, ev.summary, newStart, newEnd, ev.allDay, {
-        location: ev.location,
-        description: ev.description,
-      });
-    } catch (err) {
-      console.error("Failed to move event in HA:", err);
+  if (config && navigator.onLine) {
+    const client = new HAClient(config);
+    // Frisch angelegte Termine (local-UID): echte HA-UID erst auflösen, sonst
+    // käme das Verschieben nie bei HA an und der Termin „fällt zurück".
+    const realUid = uid.startsWith("local-")
+      ? await resolveHAUid(client, ev.memberId ?? "", ev.summary, origStart)
+      : uid;
+    if (realUid) {
+      try {
+        await client.updateEvent(ev.memberId ?? "", realUid, ev.summary, newStart, newEnd, ev.allDay, {
+          location: ev.location,
+          description: ev.description,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("Failed to move event in HA:", msg);
+        showTransientBanner(`Verschieben in HA fehlgeschlagen: ${msg}`, true);
+      }
     }
     // No refreshEvents() here — same race condition as delete: HA needs time
     // to process the update before we fetch again. Local state is already correct.
