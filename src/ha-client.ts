@@ -1,4 +1,5 @@
 import type { CalendarEvent } from "./types.ts";
+import { haWsCommand } from "./ha-ws.ts";
 
 interface HAConfig {
   baseUrl: string;
@@ -146,70 +147,52 @@ export class HAClient {
     const fmtDate = (d: Date) =>
       `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-    const body: Record<string, string> = { entity_id: entityId, uid, summary };
+    // Wie beim Löschen: es gibt KEINEN REST-Service calendar.update_event —
+    // Ändern läuft nur über die WebSocket-API (calendar/event/update). Das
+    // "event"-Objekt trägt dtstart/dtend (Datum bzw. zeitzonen-bewusste Zeit).
+    const event: Record<string, unknown> = { summary };
     if (allDay) {
-      body.start_date = fmtDate(start);
-      body.end_date = fmtDate(end);
+      event.dtstart = fmtDate(start);
+      event.dtend = fmtDate(end);
     } else {
-      body.start_date_time = fmtDateTimeTZ(start);
-      body.end_date_time = fmtDateTimeTZ(end);
+      event.dtstart = fmtDateTimeTZ(start);
+      event.dtend = fmtDateTimeTZ(end);
     }
-    if (opts?.location) body.location = opts.location;
-    if (opts?.description) body.description = opts.description;
-    if (opts?.rrule) body.rrule = opts.rrule;
+    if (opts?.location) event.location = opts.location;
+    if (opts?.description) event.description = opts.description;
+    if (opts?.rrule) event.rrule = opts.rrule;
 
-    const res = await fetch(`${this.config.baseUrl}/api/services/calendar/update_event`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.config.token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-    if (res.status === 400) return false; // not supported by this calendar backend
-    if (!res.ok) throw new Error(`HA update_event failed: ${res.status}`);
-    return true;
+    try {
+      await haWsCommand(this.config, { type: "calendar/event/update", entity_id: entityId, uid, event });
+      return true;
+    } catch (err) {
+      console.error("[update_event] WS failed:", err instanceof Error ? err.message : err);
+      return false; // Aufrufer fällt auf „neu anlegen + löschen" zurück
+    }
   }
 
   async deleteEvent(entityId: string, uid: string, recurrenceId?: string): Promise<void> {
-    const body: Record<string, string> = { entity_id: entityId, uid };
-    // Recurring event instances require recurrence_id + range so HA knows
-    // which occurrence to delete — without these, HA returns 400.
+    // WICHTIG: Es gibt KEINEN REST-Service calendar.delete_event. Löschen läuft
+    // in HA nur über die WebSocket-API (calendar/event/delete).
+    const command: Record<string, unknown> = {
+      type: "calendar/event/delete",
+      entity_id: entityId,
+      uid,
+    };
     if (recurrenceId) {
-      body.recurrence_id = recurrenceId;
-      body.range = "this_event";
+      command.recurrence_id = recurrenceId;
+      command.recurrence_range = "THISANDFUTURE";
     }
-    const res = await fetch(`${this.config.baseUrl}/api/services/calendar/delete_event`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.config.token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      // Read once as text so we get whatever HA returned — JSON error body,
-      // HTML error page, or plain text. Then surface it verbatim.
-      let rawBody = "";
-      try { rawBody = (await res.text()).trim(); } catch { /* ignore */ }
-      // Many HA service errors look like {"message":"..."} — extract that
-      // single field if present, otherwise keep the raw body.
-      let detail = rawBody;
-      try {
-        const parsed = JSON.parse(rawBody) as { message?: string };
-        if (parsed && typeof parsed.message === "string") detail = parsed.message;
-      } catch { /* not JSON, keep raw */ }
-      // Log the full details to the browser console for debugging.
-      console.error(
-        `[delete_event] FAILED ${res.status} ${res.statusText}\n` +
-        `  request: ${JSON.stringify(body)}\n` +
-        `  response: ${rawBody || "(empty)"}`,
-      );
-      const err = new Error(
-        `HA delete_event ${res.status}: ${detail || "(leerer Body)"} (entity=${entityId} uid=${uid})`,
-      );
-      (err as Error & { httpStatus: number }).httpStatus = res.status;
-      throw err;
+    try {
+      await haWsCommand(this.config, command);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      // 404-Semantik: „nicht gefunden" heißt schon gelöscht — als httpStatus 404
+      // markieren, damit die Aufrufer es als „bereits weg" behandeln.
+      const alreadyGone = /not found|no event|nicht gefunden/i.test(detail);
+      const e = new Error(`HA delete_event: ${detail} (entity=${entityId} uid=${uid})`);
+      (e as Error & { httpStatus: number }).httpStatus = alreadyGone ? 404 : 0;
+      throw e;
     }
   }
 
