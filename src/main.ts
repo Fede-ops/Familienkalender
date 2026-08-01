@@ -1273,10 +1273,13 @@ async function moveEvent(uid: string, targetDay: Date): Promise<void> {
       : uid;
     if (realUid) {
       try {
-        await client.updateEvent(ev.memberId ?? "", realUid, ev.summary, newStart, newEnd, ev.allDay, {
-          location: ev.location,
-          description: ev.description,
-        });
+        const opts = { location: ev.location, description: ev.description };
+        const ok = await client.updateEvent(ev.memberId ?? "", realUid, ev.summary, newStart, newEnd, ev.allDay, opts);
+        if (!ok) {
+          // update_event vom Backend abgelehnt (400) → neu anlegen + alt löschen.
+          await client.createEvent(ev.memberId ?? "", ev.summary, newStart, newEnd, ev.allDay, opts);
+          await client.deleteEvent(ev.memberId ?? "", realUid);
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error("Failed to move event in HA:", msg);
