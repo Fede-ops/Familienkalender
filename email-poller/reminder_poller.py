@@ -12,13 +12,17 @@ Die Zuordnung Person → Gerät kommt aus dem Sensor
 Setup: siehe ha_setup.yaml im selben Ordner.
 """
 
+import base64
 import json
+import os
 import re
+import socket
 import ssl
 import sys
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 
 # ── Konfiguration ────────────────────────────────────────────────────────────
 # Token und URL werden aus /config/scripts/poller_config.json gelesen,
@@ -171,6 +175,135 @@ def get_hidden_uids():
         return set()
     uids = (st.get("attributes") or {}).get("uids")
     return set(uids) if isinstance(uids, list) else set()
+
+
+def get_restored_uids():
+    """UIDs, die in der App wieder hergestellt wurden — die NICHT löschen."""
+    st = ha_state("sensor.familienkalender_hidden_uids")
+    r = (st.get("attributes") or {}).get("restored") if st else None
+    return set(r) if isinstance(r, list) else set()
+
+
+# ── WebSocket (nur so lassen sich Kalendereinträge löschen) ──────────────────
+# Home Assistant hat KEINEN REST-Service calendar.delete_event — das geht nur
+# über die WebSocket-API. Installierte iOS-PWAs dürfen aber keine WebSocket-
+# Verbindung zu einem fremden Server öffnen ("The operation is insecure").
+# Deshalb übernimmt der Poller (läuft lokal auf HA) das Löschen: Die App merkt
+# sich gelöschte UIDs in sensor.familienkalender_hidden_uids, der Poller löscht
+# sie physisch. Reiner stdlib-Client — keine Zusatz-Abhängigkeit nötig.
+
+def _ws_send(sock, text):
+    payload = text.encode("utf-8")
+    header = bytearray([0x81])            # FIN + Text-Opcode
+    mask = os.urandom(4)
+    n = len(payload)
+    if n < 126:
+        header.append(0x80 | n)
+    elif n < 65536:
+        header.append(0x80 | 126)
+        header += n.to_bytes(2, "big")
+    else:
+        header.append(0x80 | 127)
+        header += n.to_bytes(8, "big")
+    header += mask
+    sock.sendall(bytes(header) + bytes(b ^ mask[i % 4] for i, b in enumerate(payload)))
+
+
+def _ws_recv(sock):
+    def readn(n):
+        data = b""
+        while len(data) < n:
+            chunk = sock.recv(n - len(data))
+            if not chunk:
+                raise ConnectionError("WebSocket geschlossen")
+            data += chunk
+        return data
+    b0, b1 = readn(2)
+    opcode = b0 & 0x0F
+    ln = b1 & 0x7F
+    if ln == 126:
+        ln = int.from_bytes(readn(2), "big")
+    elif ln == 127:
+        ln = int.from_bytes(readn(8), "big")
+    mask = readn(4) if (b1 & 0x80) else b""
+    payload = readn(ln)
+    if mask:
+        payload = bytes(p ^ mask[i % 4] for i, p in enumerate(payload))
+    if opcode == 0x8:
+        raise ConnectionError("WebSocket-Close")
+    return payload.decode("utf-8", "replace")
+
+
+def ws_delete_events(pairs):
+    """pairs: Liste von (entity_id, uid). Gibt Anzahl gelöschter zurück."""
+    u = urlparse(HA_URL)
+    host = u.hostname
+    port = u.port or (443 if u.scheme == "https" else 80)
+    sock = socket.create_connection((host, port), timeout=15)
+    try:
+        if u.scheme == "https":
+            sock = ssl.create_default_context().wrap_socket(sock, server_hostname=host)
+        key = base64.b64encode(os.urandom(16)).decode()
+        sock.sendall((
+            f"GET /api/websocket HTTP/1.1\r\n"
+            f"Host: {host}:{port}\r\n"
+            f"Upgrade: websocket\r\nConnection: Upgrade\r\n"
+            f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n"
+        ).encode())
+        resp = b""
+        while b"\r\n\r\n" not in resp:
+            chunk = sock.recv(1024)
+            if not chunk:
+                raise ConnectionError("Handshake fehlgeschlagen")
+            resp += chunk
+        if b" 101 " not in resp.split(b"\r\n", 1)[0]:
+            raise ConnectionError("Kein 101-Upgrade")
+        _ws_recv(sock)                                             # auth_required
+        _ws_send(sock, json.dumps({"type": "auth", "access_token": HA_TOKEN}))
+        if json.loads(_ws_recv(sock)).get("type") != "auth_ok":
+            raise ConnectionError("WebSocket-Auth fehlgeschlagen")
+        count = 0
+        for i, (entity, uid) in enumerate(pairs, start=1):
+            _ws_send(sock, json.dumps({"id": i, "type": "calendar/event/delete",
+                                       "entity_id": entity, "uid": uid}))
+            while True:
+                msg = json.loads(_ws_recv(sock))
+                if msg.get("type") == "result" and msg.get("id") == i:
+                    if msg.get("success"):
+                        count += 1
+                    break
+        return count
+    finally:
+        try:
+            sock.close()
+        except Exception:
+            pass
+
+
+def process_hidden_calendar_deletes(calendars):
+    """Löscht physisch alle Termine, die die App als gelöscht markiert hat."""
+    hidden = get_hidden_uids() - get_restored_uids()
+    if not hidden:
+        return
+    now = datetime.now()
+    start = (now - timedelta(days=60)).strftime("%Y-%m-%dT%H:%M:%S")
+    end = (now + timedelta(days=400)).strftime("%Y-%m-%dT%H:%M:%S")
+    pairs = []
+    for cal in calendars:
+        try:
+            for ev in ha_get(f"/api/calendars/{cal}?start={start}&end={end}"):
+                if ev.get("uid") in hidden:
+                    pairs.append((cal, ev["uid"]))
+        except Exception:
+            continue
+    if not pairs:
+        return
+    try:
+        n = ws_delete_events(pairs)
+        if n:
+            print(f"  Kalender: {n} verborgene(r) Termin(e) physisch gelöscht.")
+    except Exception as exc:
+        print(f"  Kalender-WS-Löschung fehlgeschlagen: {exc}", file=sys.stderr)
 
 
 def extract_birth_year(description, occ_month, occ_day):
@@ -688,6 +821,10 @@ def main():
                 sent[key] = now.isoformat()
                 fired += 1
                 print(f"  → Erinnerung: {summary} ({cal}, {remaining} Min.)")
+
+    # In der App gelöschte Termine physisch aus dem Kalender entfernen
+    # (geht nur per WebSocket — die iOS-PWA kann das selbst nicht).
+    process_hidden_calendar_deletes(calendars)
 
     # Geburtstags-Benachrichtigungen (täglich um 12:00).
     fired += check_birthday_reminders(now, member_services, sent)
