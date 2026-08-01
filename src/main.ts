@@ -1272,19 +1272,26 @@ async function moveEvent(uid: string, targetDay: Date): Promise<void> {
       ? await resolveHAUid(client, ev.memberId ?? "", ev.summary, origStart)
       : uid;
     if (realUid) {
+      const opts = { location: ev.location, description: ev.description };
       try {
-        const opts = { location: ev.location, description: ev.description };
+        // Schnellweg: per WebSocket am selben Termin verschieben (behält die UID).
         const ok = await client.updateEvent(ev.memberId ?? "", realUid, ev.summary, newStart, newEnd, ev.allDay, opts);
-        if (!ok) {
-          // update_event vom Backend abgelehnt (400) → neu anlegen + alt löschen.
-          await client.createEvent(ev.memberId ?? "", ev.summary, newStart, newEnd, ev.allDay, opts);
-          await client.deleteEvent(ev.memberId ?? "", realUid);
-        }
+        if (ok) return;
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error("Failed to move event in HA:", msg);
-        showTransientBanner(`Verschieben in HA fehlgeschlagen: ${msg}`, true);
+        console.warn("WS-Verschieben fehlgeschlagen — Fallback:", err instanceof Error ? err.message : err);
       }
+      // Fallback (z.B. iOS-PWA ohne WebSocket, oder update nicht möglich):
+      // am Zieltag neu anlegen und die alte UID zum Löschen vormerken. Der
+      // Poller entfernt die alte Kopie serverseitig.
+      try {
+        await client.createEvent(ev.memberId ?? "", ev.summary, newStart, newEnd, ev.allDay, opts);
+      } catch (err) {
+        showTransientBanner(`Verschieben fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`, true);
+        return;
+      }
+      pendingDeletes.set(realUid, PERMANENT);
+      savePendingDeletes(pendingDeletes);
+      try { await client.deleteEvent(ev.memberId ?? "", realUid); } catch { /* Poller übernimmt */ }
     }
     // No refreshEvents() here — same race condition as delete: HA needs time
     // to process the update before we fetch again. Local state is already correct.
@@ -3617,18 +3624,13 @@ async function deleteEvent(ev: CalendarEvent): Promise<void> {
     const isLocal = ev.uid.startsWith("local-");
     if (!isLocal) {
       try {
+        // Schnellweg per WebSocket (funktioniert auf Desktop/Android). Scheitert
+        // er (z.B. installierte iOS-PWA: „operation is insecure"), ist das nicht
+        // schlimm — die UID steht in der Sperrliste (hidden_uids), und der Poller
+        // löscht den Termin serverseitig. Deshalb KEIN Fehlerbanner.
         await client.deleteEvent(ev.memberId ?? "", ev.uid, ev.recurrenceId);
       } catch (err) {
-        const status = (err as Error & { httpStatus?: number }).httpStatus;
-        // Nur 404 heißt „wirklich schon weg". Alles andere (inkl. 400 = von HA
-        // abgelehnt) ist ein echter Fehler und darf NICHT still als erledigt
-        // verbucht werden — sonst blendet die App den Termin aus, während HA
-        // ihn behält (und externe Konsumenten ihn weiter sehen).
-        if (status !== 404) {
-          const msg = err instanceof Error ? err.message : String(err);
-          console.error("Failed to delete event from HA:", msg);
-          showTransientBanner(`Löschen in HA fehlgeschlagen: ${msg}`, true);
-        }
+        console.warn("WS-Löschung fehlgeschlagen — Poller übernimmt:", err instanceof Error ? err.message : err);
       }
     }
     // HA nach Termin(en) mit gleichem Titel + Startdatum + Kalender durchsuchen
