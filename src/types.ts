@@ -37,4 +37,6 @@ export interface TodoItem {
   memberId?: string;
   /** Erinnerungszeitpunkt (Epoch ms) — Push-Benachrichtigung via Poller. */
   remindAt?: number;
+  /** Kategorie wurde per KI (Poller) gesetzt — nicht durch Stichwörter überschreiben. */
+  aiCat?: boolean;
 }

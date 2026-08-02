@@ -34,10 +34,12 @@ try:
         _cfg = json.load(_f)
     HA_URL   = _cfg.get("ha_url",   "http://homeassistant:8123")
     HA_TOKEN = _cfg.get("ha_token", "")
+    ANTHROPIC_API_KEY = _cfg.get("anthropic_api_key", "")
 except Exception:
     # Fallback: direkt im Skript eintragen (nur wenn poller_config.json fehlt)
     HA_URL   = "http://homeassistant:8123"
     HA_TOKEN = "DEIN_HA_LONG_LIVED_TOKEN"
+    ANTHROPIC_API_KEY = ""
 
 if not HA_TOKEN or HA_TOKEN == "DEIN_HA_LONG_LIVED_TOKEN":
     print("FEHLER: Kein HA-Token konfiguriert. Bitte /config/scripts/poller_config.json anlegen.", file=sys.stderr)
@@ -304,6 +306,108 @@ def process_hidden_calendar_deletes(calendars):
             print(f"  Kalender: {n} verborgene(r) Termin(e) physisch gelöscht.")
     except Exception as exc:
         print(f"  Kalender-WS-Löschung fehlgeschlagen: {exc}", file=sys.stderr)
+
+
+# ── KI-Kategorisierung ("Hausverstand") ──────────────────────────────────────
+# To-Dos, die die stichwortbasierte Kategorisierung der App in "sonstiges" legt,
+# ordnet der Poller per Claude einer passenden Kategorie zu. Der API-Key liegt in
+# poller_config.json (bleibt serverseitig). Verarbeitete Items bekommen aiCat=true,
+# damit die App die Kategorie nicht wieder mit Stichwörtern überschreibt.
+
+TODO_CATS = {
+    "medizin": "Klinische/medizinische Fachaufgaben (Krankenhaus, OP, Arztbrief), auch Hebamme/Schwangerschaft/Geburt",
+    "gesundheit": "Persönliche Gesundheit: Arzttermine, Medikamente, Sport, Vorsorge",
+    "smarthome": "Smart Home, Home Assistant, Sensoren, Zigbee, Automationen",
+    "technologie": "Technik, Computer, Software, Elektronik, IT",
+    "vertrieb": "Vertrieb, Verkauf, Angebote, Kunden, Business",
+    "natur": "Garten, Pflanzen, Natur, Draußen-Arbeiten",
+    "freizeit": "Freizeit, Hobby, Ausflug, Reise, Veranstaltung, Kino",
+    "familie": "Familie, Kinder, Freunde; jemanden anrufen/schreiben/fragen, soziale Erledigungen, Geschenke",
+    "finanzen": "Geld, Bank, abheben, Rechnungen, Versicherung, Steuer, Behörde, Amt",
+    "haushalt": "Haushalt: Reinigung, Reparatur, Müll, Dinge fürs Haus besorgen",
+    "mitnehmen": "Etwas mitnehmen/einpacken für unterwegs",
+    "sonstiges": "Passt in keine der anderen Kategorien",
+}
+
+
+def _ha_set_state(entity_id, state, attributes):
+    payload = json.dumps({"state": str(state), "attributes": attributes}).encode()
+    req = urllib.request.Request(
+        f"{HA_URL}/api/states/{entity_id}", data=payload,
+        headers={"Authorization": f"Bearer {HA_TOKEN}", "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        return resp.status in (200, 201)
+
+
+def _claude_categorize(titles, cats):
+    if not ANTHROPIC_API_KEY or not titles:
+        return {}
+    catlist = "\n".join(f"- {k}: {v}" for k, v in cats.items())
+    prompt = (
+        "Ordne jede Aufgabe genau EINER Kategorie zu. Antworte AUSSCHLIESSLICH als "
+        "JSON-Objekt {\"Aufgabentext\": \"kategorie_schluessel\"}, ohne weiteren Text.\n\n"
+        f"Kategorien (Schlüssel: Beschreibung):\n{catlist}\n\n"
+        "Aufgaben:\n" + "\n".join(f"- {t}" for t in titles)
+    )
+    payload = json.dumps({
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 1024,
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages", data=payload,
+        headers={"Content-Type": "application/json", "x-api-key": ANTHROPIC_API_KEY,
+                 "anthropic-version": "2023-06-01"},
+    )
+    try:
+        with urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=30) as resp:
+            raw = json.loads(resp.read())["content"][0]["text"]
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        return json.loads(m.group()) if m else {}
+    except Exception as exc:
+        print(f"  KI-Kategorisierung Fehler: {exc}", file=sys.stderr)
+        return {}
+
+
+def ai_categorize_todos():
+    if not ANTHROPIC_API_KEY:
+        return
+    st = ha_state("sensor.familienkalender_todos")
+    items = (st.get("attributes") or {}).get("items") if st else None
+    if not isinstance(items, list):
+        return
+    pending = [it for it in items
+               if isinstance(it, dict) and it.get("title")
+               and it.get("category") == "sonstiges" and not it.get("aiCat")]
+    if not pending:
+        return
+    mapping = _claude_categorize([it["title"] for it in pending], TODO_CATS)
+    if not mapping:
+        return
+    # Frisch einlesen, um parallele App-Änderungen nicht zu überschreiben.
+    st2 = ha_state("sensor.familienkalender_todos")
+    items2 = (st2.get("attributes") or {}).get("items") if st2 else items
+    if not isinstance(items2, list):
+        items2 = items
+    by_id = {it.get("id"): it for it in items2 if isinstance(it, dict)}
+    changed = 0
+    for it in pending:
+        target = by_id.get(it.get("id"))
+        if not target or target.get("category") != "sonstiges":
+            continue
+        target["aiCat"] = True                       # nicht erneut anfragen
+        key = mapping.get(it["title"])
+        if key in TODO_CATS and key != "sonstiges":
+            target["category"] = key
+            changed += 1
+    ts = int(datetime.now().timestamp() * 1000)
+    try:
+        _ha_set_state("sensor.familienkalender_todos", len(items2), {"items": items2, "ts": ts})
+        if changed:
+            print(f"  KI-Kategorisierung: {changed} To-Do(s) einsortiert.")
+    except Exception as exc:
+        print(f"  KI-Kategorisierung Schreiben fehlgeschlagen: {exc}", file=sys.stderr)
 
 
 def extract_birth_year(description, occ_month, occ_day):
@@ -825,6 +929,9 @@ def main():
     # In der App gelöschte Termine physisch aus dem Kalender entfernen
     # (geht nur per WebSocket — die iOS-PWA kann das selbst nicht).
     process_hidden_calendar_deletes(calendars)
+
+    # Unkategorisierte To-Dos ("Sonstiges") per KI einsortieren ("Hausverstand").
+    ai_categorize_todos()
 
     # Geburtstags-Benachrichtigungen (täglich um 12:00).
     fired += check_birthday_reminders(now, member_services, sent)

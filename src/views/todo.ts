@@ -755,9 +755,9 @@ export const TODO_CATEGORIES = [
       "altpapier", "altglas", "sperrmüll", "sperrgut",
       "restmüll", "biomüll", "gelber sack", "gelbe tonne", "grüne tonne",
       "mistplatz", "wertstoffhof", "altstoffsammelzentrum",
-      // Deutsch – Erinnern & Kommunizieren
-      "erinnern", "erinnerung", "erinnere", "anrufen", "anruf",
-      "schreiben", "nachricht", "email", "sagen", "fragen",
+      // (Generische Verben wie "anrufen/schreiben/fragen" bewusst NICHT hier —
+      // die sind kontextabhängig und werden sonst fälschlich Haushalt. Solche
+      // Todos gehen in Sonstiges und werden per KI einsortiert.)
       // Deutsch – Küche & Haushaltswaren
       "backblech", "kochtopf", "pfanne", "küchenutensilien", "küchenbedarf",
       // Deutsch – Reparatur & Handwerker
