@@ -3918,7 +3918,8 @@ function buildDemoWeek(weekStart: Date): CalendarEvent[] {
     state.shopping = recatShopping;
   }
   const todos = loadTodoItems();
-  const recatTodos = todos.map((i) => ({ ...i, category: categorizeTodoItem(i.title) }));
+  // Per KI gesetzte Kategorien (aiCat) NICHT mit Stichwörtern überschreiben.
+  const recatTodos = todos.map((i) => i.aiCat ? i : { ...i, category: categorizeTodoItem(i.title) });
   if (recatTodos.some((i, idx) => i.category !== todos[idx].category)) {
     saveTodoItems(recatTodos);
     state.todos = recatTodos;
