@@ -236,8 +236,11 @@ def _ws_recv(sock):
     return payload.decode("utf-8", "replace")
 
 
-def ws_delete_events(pairs):
-    """pairs: Liste von (entity_id, uid). Gibt Anzahl gelöschter zurück."""
+def ws_run(commands):
+    """commands: Liste von Befehl-Dicts (ohne 'id'). Gibt Liste von (bool ok)
+    in gleicher Reihenfolge zurück. Öffnet EINE Verbindung für alle Befehle."""
+    if not commands:
+        return []
     u = urlparse(HA_URL)
     host = u.hostname
     port = u.port or (443 if u.scheme == "https" else 80)
@@ -264,17 +267,15 @@ def ws_delete_events(pairs):
         _ws_send(sock, json.dumps({"type": "auth", "access_token": HA_TOKEN}))
         if json.loads(_ws_recv(sock)).get("type") != "auth_ok":
             raise ConnectionError("WebSocket-Auth fehlgeschlagen")
-        count = 0
-        for i, (entity, uid) in enumerate(pairs, start=1):
-            _ws_send(sock, json.dumps({"id": i, "type": "calendar/event/delete",
-                                       "entity_id": entity, "uid": uid}))
+        results = [False] * len(commands)
+        for i, cmd in enumerate(commands, start=1):
+            _ws_send(sock, json.dumps({"id": i, **cmd}))
             while True:
                 msg = json.loads(_ws_recv(sock))
                 if msg.get("type") == "result" and msg.get("id") == i:
-                    if msg.get("success"):
-                        count += 1
+                    results[i - 1] = bool(msg.get("success"))
                     break
-        return count
+        return results
     finally:
         try:
             sock.close()
@@ -301,11 +302,43 @@ def process_hidden_calendar_deletes(calendars):
     if not pairs:
         return
     try:
-        n = ws_delete_events(pairs)
+        n = sum(ws_run([{"type": "calendar/event/delete", "entity_id": e, "uid": u} for e, u in pairs]))
         if n:
             print(f"  Kalender: {n} verborgene(r) Termin(e) physisch gelöscht.")
     except Exception as exc:
         print(f"  Kalender-WS-Löschung fehlgeschlagen: {exc}", file=sys.stderr)
+
+
+def process_calendar_ops():
+    """Wendet in der App bearbeitete Termine an (Update am selben Termin) —
+    die iOS-PWA kann update_event nicht selbst über WebSocket ausführen."""
+    st = ha_state("sensor.familienkalender_calendar_ops")
+    ops = (st.get("attributes") or {}).get("ops") if st else None
+    if not isinstance(ops, list) or not ops:
+        return
+    valid = [o for o in ops if isinstance(o, dict) and o.get("type") == "update"
+             and o.get("entity_id") and o.get("uid") and isinstance(o.get("event"), dict)]
+    if not valid:
+        return
+    try:
+        res = ws_run([{"type": "calendar/event/update", "entity_id": o["entity_id"],
+                       "uid": o["uid"], "event": o["event"]} for o in valid])
+    except Exception as exc:
+        print(f"  Kalender-Update fehlgeschlagen: {exc}", file=sys.stderr)
+        return
+    done_ids = {valid[i].get("id") for i, ok in enumerate(res) if ok}
+    if not done_ids:
+        return
+    # Frisch einlesen, damit parallel neu hinzugekommene Ops erhalten bleiben.
+    st2 = ha_state("sensor.familienkalender_calendar_ops")
+    ops2 = (st2.get("attributes") or {}).get("ops") if st2 else ops
+    remaining = [o for o in ops2 if isinstance(o, dict) and o.get("id") not in done_ids]
+    try:
+        _ha_set_state("sensor.familienkalender_calendar_ops", len(remaining),
+                      {"ops": remaining, "ts": int(datetime.now().timestamp() * 1000)})
+        print(f"  Kalender: {len(done_ids)} Termin(e) aktualisiert.")
+    except Exception as exc:
+        print(f"  Kalender-Ops-Schreiben fehlgeschlagen: {exc}", file=sys.stderr)
 
 
 # ── KI-Kategorisierung ("Hausverstand") ──────────────────────────────────────
@@ -929,6 +962,8 @@ def main():
     # In der App gelöschte Termine physisch aus dem Kalender entfernen
     # (geht nur per WebSocket — die iOS-PWA kann das selbst nicht).
     process_hidden_calendar_deletes(calendars)
+    # In der App bearbeitete Termine anwenden (Update am selben Termin).
+    process_calendar_ops()
 
     # Unkategorisierte To-Dos ("Sonstiges") per KI einsortieren ("Hausverstand").
     ai_categorize_todos()

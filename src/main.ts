@@ -3235,6 +3235,34 @@ async function runBatch<T>(
   return { fulfilled, rejected };
 }
 
+// Bearbeitete Termine für den Poller vormerken: Er führt das update_event per
+// WebSocket aus (die iOS-PWA kann das nicht). Op wird an sensor.
+// familienkalender_calendar_ops angehängt; der Poller wendet es an und entfernt
+// es wieder. Pro UID nur die jüngste Änderung.
+function queueCalendarUpdate(
+  entityId: string, uid: string, summary: string, start: Date, end: Date, allDay: boolean,
+  opts: { location?: string; description?: string; rrule?: string },
+): void {
+  const cfg = loadConfig();
+  if (!cfg) return;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const fmtDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const event: Record<string, unknown> = { summary };
+  if (allDay) { event.dtstart = fmtDate(start); event.dtend = fmtDate(end); }
+  else { event.dtstart = start.toISOString(); event.dtend = end.toISOString(); }
+  if (opts.location) event.location = opts.location;
+  if (opts.description) event.description = opts.description;
+  if (opts.rrule) event.rrule = opts.rrule;
+  const op = { id: `u-${Date.now()}-${uid}`, type: "update", entity_id: entityId, uid, event };
+  void fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_calendar_ops`, {
+    headers: { Authorization: `Bearer ${cfg.token}` },
+  }).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((data) => {
+    const existing = ((data as { attributes?: { ops?: Array<{ uid?: string }> } } | null)?.attributes?.ops) ?? [];
+    const ops = [...existing.filter((o) => o.uid !== uid), op].slice(-50);
+    haWriteState(cfg.baseUrl, cfg.token, "sensor.familienkalender_calendar_ops", String(ops.length), { ops, ts: Date.now() });
+  });
+}
+
 async function saveEvent(): Promise<void> {
   if (!state.modal) return;
   const { summary, startDate, endDate, allDay, memberId, location, seriesId, seriesRrule, reminderMinutes } = state.modal;
@@ -3265,16 +3293,10 @@ async function saveEvent(): Promise<void> {
     const client = new HAClient(config);
     try {
       if (editUid && !editUid.startsWith("local-")) {
-        const originalEvent = state.events.find((e) => e.uid === editUid);
-        // local_calendar's update_event leaves the old .ics entry behind when
-        // the event moves to a different day, producing a duplicate that
-        // keeps firing its own reminder. For same-day edits (time, summary,
-        // location, …) update_event works fine and keeps the UID stable.
-        const dateChanged = !!originalEvent && originalEvent.start.toDateString() !== startDate.toDateString();
-        // Try update_event first (seamless, same UID). Falls back to
-        // create+delete when the calendar backend returns 400 (not supported)
-        // or when the date changed (see above).
-        const updated = dateChanged ? false : await client.updateEvent(
+        // Update am selben Termin (behält die UID, auch bei Datumsänderung —
+        // die WebSocket-API kann das). Scheitert es (z.B. iOS-PWA ohne
+        // WebSocket), übernimmt unten der Poller-Weg.
+        const updated = await client.updateEvent(
           memberId, editUid, summary.trim(), startDate, endDate, allDay, {
             location: location || undefined,
             description: notes || undefined,
@@ -3286,33 +3308,20 @@ async function saveEvent(): Promise<void> {
           setTimeout(() => void refreshEvents(), 8_000);
         }
         if (!updated) {
-          // Backend doesn't support update_event, or the date changed —
-          // recreate in new position and delete the old entry by UID.
-          await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, {
-            location: location || undefined,
-            description: notes || undefined,
-            rrule: rruleStr || undefined,
-          });
-          try {
-            await client.deleteEvent(originalMemberId ?? memberId, editUid, originalEvent?.recurrenceId);
-          } catch { /* best-effort */ }
-          pendingDeletes.set(editUid, PERMANENT);
-          savePendingDeletes(pendingDeletes);
-          const moveFp = `${memberId}|${startDate.getTime()}|${summary.trim().toLowerCase()}`;
-          pendingMoveEvents.set(moveFp, {
-            event: {
-              uid: `local-move-${Date.now()}`,
-              summary: summary.trim(),
-              start: startDate,
-              end: allDay ? new Date(endDate.getTime() - 86_400_000) : endDate,
-              allDay,
-              memberId,
-              location: location || undefined,
-              description: notes || undefined,
-            },
-            expiry: Date.now() + 60_000,
-          });
-          setTimeout(() => void refreshEvents(), 10_000);
+          const opts = { location: location || undefined, description: notes || undefined, rrule: rruleStr || undefined };
+          const memberChanged = !!originalMemberId && originalMemberId !== memberId;
+          if (memberChanged) {
+            // Kalender/Person gewechselt → auf neuem anlegen, alten löschen
+            // (Löschen erledigt der Poller über hidden_uids).
+            await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, opts);
+            pendingDeletes.set(editUid, PERMANENT);
+            savePendingDeletes(pendingDeletes);
+          } else {
+            // WS-Update ging nicht (z.B. iOS-PWA) → Update über den Poller am
+            // SELBEN Termin (gleiche UID) — KEINE Neuanlage, keine Dublette.
+            queueCalendarUpdate(memberId, editUid, summary.trim(), startDate, endDate, allDay, opts);
+          }
+          setTimeout(() => void refreshEvents(), 65_000);
         }
       } else {
         await client.createEvent(memberId, summary.trim(), startDate, endDate, allDay, {
