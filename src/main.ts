@@ -3329,6 +3329,24 @@ async function saveEvent(): Promise<void> {
           description: notes || undefined,
           rrule: rruleStr || undefined,
         });
+        if (editUid) {
+          // Bearbeitung eines frisch angelegten Termins (local-UID): der ECHTE
+          // HA-Termin existiert noch unter den ALTEN Werten (evtl. anderer
+          // Person). Die Neuanlage oben erzeugt eine zweite Kopie → alten
+          // Termin auflösen und über den Poller löschen. Ohne das gäbe es zwei
+          // Termine und damit zwei Benachrichtigungen (eine je Person).
+          const orig = state.events.find((e) => e.uid === editUid);
+          if (orig) {
+            const oldMember = originalMemberId ?? orig.memberId ?? memberId;
+            const realOld = await resolveHAUid(client, oldMember, orig.summary, orig.start);
+            if (realOld) {
+              pendingDeletes.set(realOld, PERMANENT);
+              savePendingDeletes(pendingDeletes);
+              void client.deleteEvent(oldMember, realOld).catch(() => {});
+            }
+          }
+          setTimeout(() => void refreshEvents(), 65_000);
+        }
       }
     } catch (err) {
       // When HA rejects the RRULE, expand and create each occurrence individually.
