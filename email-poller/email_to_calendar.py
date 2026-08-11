@@ -18,7 +18,13 @@ import ssl
 import sys
 import base64
 from email.header import decode_header
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
+
+try:
+    from zoneinfo import ZoneInfo
+    _LOCAL_TZ = ZoneInfo("Europe/Vienna")
+except Exception:
+    _LOCAL_TZ = None  # Fallback: OS-Zeitzone via astimezone()
 
 # ── Konfiguration ────────────────────────────────────────────────────────────
 # Zugangsdaten werden aus /config/scripts/poller_config.json gelesen, damit sie
@@ -108,6 +114,12 @@ def parse_ics(text):
             try:
                 dt  = datetime.strptime(dtstart[:15].rstrip("Z"), "%Y%m%dT%H%M%S")
                 dte = datetime.strptime(dtend[:15].rstrip("Z"), "%Y%m%dT%H%M%S") if dtend else dt + timedelta(hours=1)
+                # DTSTART/DTEND mit "Z" sind UTC — explizit markieren, sonst
+                # würden sie später fälschlich als lokale Zeit behandelt.
+                if dtstart.endswith("Z"):
+                    dt = dt.replace(tzinfo=timezone.utc)
+                if dtend.endswith("Z"):
+                    dte = dte.replace(tzinfo=timezone.utc)
             except ValueError:
                 dt  = datetime.now().replace(minute=0, second=0, microsecond=0)
                 dte = dt + timedelta(hours=1)
@@ -188,6 +200,23 @@ def parse_with_claude(text, pdf_bytes=None, image_parts=None):
         return None
 
 
+def _to_local_iso(s):
+    """Zeitangabe ohne Zeitzone (von Claude/floating ICS) explizit auf die
+    lokale HA-Zeitzone setzen. Sonst legt HA eine zeitzonenlose Angabe als UTC
+    aus und der Termin landet um den Offset verschoben (z.B. 14:40 → 16:40).
+    Bereits zeitzonenbehaftete Angaben (z.B. UTC aus ICS) bleiben unangetastet."""
+    try:
+        dt = datetime.fromisoformat(s)
+    except (ValueError, TypeError):
+        return s
+    if dt.tzinfo is None:
+        # Naiv → als lokale Wanduhrzeit (Europe/Vienna) interpretieren und den
+        # für dieses Datum korrekten Offset anhängen (DST-bewusst). Fällt auf die
+        # OS-Zeitzone zurück, falls zoneinfo nicht verfügbar ist.
+        dt = dt.replace(tzinfo=_LOCAL_TZ) if _LOCAL_TZ else dt.astimezone()
+    return dt.isoformat()
+
+
 def create_ha_event(ev):
     """Legt einen Termin in Home Assistant an."""
     start, end, all_day = ev["start"], ev["end"], ev.get("all_day", False)
@@ -204,8 +233,17 @@ def create_ha_event(ev):
         payload["start_date"] = s.isoformat()
         payload["end_date"]   = e.isoformat()
     else:
-        payload["start_date_time"] = start
-        payload["end_date_time"]   = end
+        start_iso = _to_local_iso(start)
+        end_iso   = _to_local_iso(end)
+        # Endzeit muss nach der Startzeit liegen — fehlt/deckt sie sich (Claude
+        # liefert bei Terminen ohne Endzeit oft end == start), sonst lehnt HA ab.
+        try:
+            if datetime.fromisoformat(end_iso) <= datetime.fromisoformat(start_iso):
+                end_iso = (datetime.fromisoformat(start_iso) + timedelta(hours=1)).isoformat()
+        except (ValueError, TypeError):
+            pass
+        payload["start_date_time"] = start_iso
+        payload["end_date_time"]   = end_iso
     if ev.get("location"):
         payload["location"] = ev["location"]
     if ev.get("description"):
