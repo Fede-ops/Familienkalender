@@ -263,7 +263,10 @@ def create_ha_event(ev):
         with urllib.request.urlopen(req, context=ctx, timeout=10) as resp:
             ok = resp.status in (200, 201)
         if ok:
-            print(f"  ✓ Event erstellt: {ev['summary']}")
+            # Roh-Zeit (wie geparst) → tatsächlich gesendete Zeit protokollieren,
+            # damit Zeitzonen-Verschiebungen im HA-Log sofort sichtbar sind.
+            when = payload.get("start_date_time") or payload.get("start_date")
+            print(f"  ✓ Event erstellt: {ev['summary']} | roh={ev['start']} → gesendet={when}")
         return ok
     except urllib.error.HTTPError as exc:
         print(f"  HA API error {exc.code}: {exc.read()}", file=sys.stderr)
