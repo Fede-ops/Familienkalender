@@ -21,6 +21,22 @@ if [ ! -f "$CFG" ]; then
   exit 1
 fi
 
+# update.sh zieht sich selbst mit — sonst fehlen neu hinzugefügte Downloads
+# (z.B. diag.py), weil die alte lokale update.sh sie nicht kennt. Nach dem
+# Selbst-Update einmal neu ausführen und hier beenden.
+SELF="/config/scripts/update.sh"
+SURL="https://raw.githubusercontent.com/fede-ops/familienkalender/main/email-poller/update.sh"
+if [ -z "$FK_SELF_UPDATED" ]; then
+  STMP="/tmp/update_new.sh"
+  if curl -fsSL "$SURL" -o "$STMP" && ! cmp -s "$STMP" "$SELF"; then
+    cp "$STMP" "$SELF"
+    rm -f "$STMP"
+    echo "✓ update.sh selbst aktualisiert — starte neu…"
+    FK_SELF_UPDATED=1 exec sh "$SELF"
+  fi
+  rm -f "$STMP" 2>/dev/null || true
+fi
+
 SCRIPT="/config/scripts/email_to_calendar.py"
 TMP="/tmp/email_to_calendar_new.py"
 URL="https://raw.githubusercontent.com/fede-ops/familienkalender/main/email-poller/email_to_calendar.py"
