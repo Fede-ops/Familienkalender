@@ -62,6 +62,11 @@ BIRTHDAY_DATA_FILE = "/config/scripts/birthday_data.json"
 DELETED_BIRTHDAYS_FILE = "/config/scripts/deleted_birthdays.json"
 TODO_DATA_FILE     = "/config/scripts/todo_data.json"
 SHOPPING_DATA_FILE = "/config/scripts/shopping_data.json"
+# Dauerhafte Lösch-Merkliste: der hidden_uids-Sensor ist in der App auf 300
+# UIDs gedeckelt; bei mehreren Geräten kann eine frisch vorgemerkte UID daraus
+# verdrängt werden, bevor der Poller sie löscht. Diese Datei hält jede einmal
+# gesehene Lösch-UID fest, bis der Termin wirklich weg ist.
+HIDDEN_PENDING_FILE = "/config/scripts/hidden_uids_pending.json"
 ctx = ssl.create_default_context()
 
 REMIND_RE = re.compile(r"\[remind:(\d+)\]")
@@ -283,30 +288,96 @@ def ws_run(commands):
             pass
 
 
+def _load_pending_hidden():
+    try:
+        with open(HIDDEN_PENDING_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        p = data.get("pending") if isinstance(data, dict) else data
+        return set(p) if isinstance(p, list) else set()
+    except Exception:
+        return set()
+
+
+def _save_pending_hidden(pending):
+    try:
+        with open(HIDDEN_PENDING_FILE, "w", encoding="utf-8") as f:
+            json.dump({"pending": sorted(pending)}, f)
+    except Exception as exc:
+        print(f"  Konnte {HIDDEN_PENDING_FILE} nicht schreiben: {exc}", file=sys.stderr)
+
+
 def process_hidden_calendar_deletes(calendars):
-    """Löscht physisch alle Termine, die die App als gelöscht markiert hat."""
-    hidden = get_hidden_uids() - get_restored_uids()
-    if not hidden:
+    """Löscht physisch alle Termine, die die App als gelöscht markiert hat.
+
+    Robust gegen das 300er-Cap und Multi-Device-Überschreiben des
+    hidden_uids-Sensors: Jede einmal gesehene Lösch-UID wird auf Disk gemerkt
+    (HIDDEN_PENDING_FILE) und so lange erneut versucht, bis der zugehörige
+    Termin wirklich verschwunden ist. So kann eine frisch vorgemerkte UID nicht
+    mehr verloren gehen, bevor der Poller sie löscht."""
+    restored = get_restored_uids()
+    # Sensor ∪ Disk-Merkliste — Vereinigung, damit nichts verloren geht.
+    pending = (get_hidden_uids() | _load_pending_hidden()) - restored
+    if not pending:
         return
     now = datetime.now()
     start = (now - timedelta(days=60)).strftime("%Y-%m-%dT%H:%M:%S")
     end = (now + timedelta(days=400)).strftime("%Y-%m-%dT%H:%M:%S")
+    present = {}          # uid -> entity_id  (Termin existiert noch)
+    fetch_failed = False  # bei Abruf-Fehlern nichts vorschnell als „erledigt" werfen
+    for cal in calendars:
+        try:
+            for ev in ha_get(f"/api/calendars/{cal}?start={start}&end={end}"):
+                u = ev.get("uid")
+                if u in pending:
+                    present.setdefault(u, cal)
+        except Exception:
+            fetch_failed = True
+            continue
+    deleted_ok = set()
+    if present:
+        pairs = list(present.items())  # (uid, entity_id)
+        try:
+            res = ws_run([{"type": "calendar/event/delete", "entity_id": e, "uid": u}
+                          for u, e in pairs])
+            deleted_ok = {pairs[i][0] for i, ok in enumerate(res) if ok}
+            if deleted_ok:
+                print(f"  Kalender: {len(deleted_ok)} verborgene(r) Termin(e) physisch gelöscht.")
+        except Exception as exc:
+            print(f"  Kalender-WS-Löschung fehlgeschlagen: {exc}", file=sys.stderr)
+    # Merkliste fortschreiben. Konnte ein Kalender nicht abgerufen werden, gelten
+    # dort „fehlende" UIDs NICHT als erledigt (sonst würden sie fälschlich
+    # verworfen) — dann nur bestätigte Löschungen entfernen.
+    if fetch_failed:
+        new_pending = pending - deleted_ok
+    else:
+        # Nur noch existierende, nicht gelöschte UIDs weiter merken. UIDs, die in
+        # keinem Kalender mehr auftauchen, sind erledigt und werden verworfen.
+        new_pending = set(present.keys()) - deleted_ok
+    _save_pending_hidden(new_pending)
+
+
+def delete_uids_cli(uids):
+    """Einmalig: bestimmte UID(s) in allen Kalendern suchen und physisch löschen.
+    Aufruf: python3 reminder_poller.py --delete <uid> [<uid> ...]"""
+    wanted = set(uids)
+    calendars = get_calendars()
+    now = datetime.now()
+    start = (now - timedelta(days=400)).strftime("%Y-%m-%dT%H:%M:%S")
+    end = (now + timedelta(days=800)).strftime("%Y-%m-%dT%H:%M:%S")
     pairs = []
     for cal in calendars:
         try:
             for ev in ha_get(f"/api/calendars/{cal}?start={start}&end={end}"):
-                if ev.get("uid") in hidden:
-                    pairs.append((cal, ev["uid"]))
-        except Exception:
-            continue
+                if ev.get("uid") in wanted:
+                    pairs.append((cal, ev["uid"], ev.get("summary", "?")))
+        except Exception as exc:
+            print(f"  {cal}: Abruf fehlgeschlagen: {exc}", file=sys.stderr)
     if not pairs:
+        print("Keine passenden Termine gefunden (evtl. bereits gelöscht).")
         return
-    try:
-        n = sum(ws_run([{"type": "calendar/event/delete", "entity_id": e, "uid": u} for e, u in pairs]))
-        if n:
-            print(f"  Kalender: {n} verborgene(r) Termin(e) physisch gelöscht.")
-    except Exception as exc:
-        print(f"  Kalender-WS-Löschung fehlgeschlagen: {exc}", file=sys.stderr)
+    res = ws_run([{"type": "calendar/event/delete", "entity_id": e, "uid": u} for e, u, _ in pairs])
+    for (cal, u, summ), ok in zip(pairs, res):
+        print(f"  {'✓ gelöscht' if ok else '✗ FEHLER'}: {summ} [{cal} / {u}]")
 
 
 def process_calendar_ops():
@@ -999,4 +1070,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 2 and sys.argv[1] == "--delete":
+        delete_uids_cli(sys.argv[2:])
+    else:
+        main()
