@@ -41,6 +41,17 @@ cp "$RTMP" "$REMINDER"
 rm "$RTMP"
 echo "✓ reminder_poller.py aktualisiert."
 
+# Diagnose-Skript (Duplikate/Löschungen) — zum manuellen Ausführen.
+DIAG="/config/scripts/diag.py"
+DTMP="/tmp/diag_new.py"
+DURL="https://raw.githubusercontent.com/fede-ops/familienkalender/main/email-poller/diag.py"
+
+curl -fsSL "$DURL" -o "$DTMP"
+python3 -m py_compile "$DTMP"
+cp "$DTMP" "$DIAG"
+rm "$DTMP"
+echo "✓ diag.py aktualisiert (Ausführen: python3 /config/scripts/diag.py)."
+
 # python_script: erlaubt der PWA (Nicht-Admin-Benutzer) das Schreiben der
 # Familienkalender-Sensoren über einen Service-Aufruf mit Allowlist.
 PYS="/config/python_scripts/familienkalender_set_state.py"
