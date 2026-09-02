@@ -142,11 +142,12 @@ def parse_with_claude(text, pdf_bytes=None, image_parts=None):
         "summary (string), start (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS), "
         "end (same format), all_day (true/false), location (string or null), "
         "description (string or null). "
-        "IMPORTANT: If the SAME appointment is shown in more than one language "
-        "(e.g. a confirmation printed in both German and English), return it "
-        "only ONCE. Never output translated duplicates of the same event. "
-        "Prefer German for the summary. Only return separate events when they "
-        "are genuinely different appointments (different date, time or purpose). "
+        "IMPORTANT: Return each appointment only ONCE. Write the summary in the "
+        "SAME language as the source text — do NOT translate it, and do NOT "
+        "create additional language variants of the same event. Even if the "
+        "source shows an appointment in two languages, return it a single time. "
+        "Return separate events ONLY when they are genuinely different "
+        "appointments (different date, time or purpose). "
         'If no events are found return [{"error":"no event"}].'
     )
 
