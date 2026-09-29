@@ -139,6 +139,87 @@ def main():
         print("       lief nicht über den Lösch-Pfad).")
     print("=" * 70)
 
+    birthday_diag()
+
+
+def birthday_diag():
+    """Zeigt, warum (keine) Geburtstags-Erinnerungen kommen."""
+    from datetime import datetime
+    print("\n" + "=" * 70)
+    print("[5] GEBURTSTAGE")
+    now = datetime.now()
+    print(f"    Jetzt: {now.isoformat(timespec='minutes')}  "
+          f"(Erinnerungen feuern erst ab 12:00 — aktuelle Stunde: {now.hour})")
+
+    # 5a. member_services — leer ⇒ main() bricht GANZ AM ANFANG ab (keine
+    # Erinnerungen jeglicher Art).
+    nc = ha_state("sensor.familienkalender_notif_config")
+    ms = ((nc.get("attributes") if nc else {}) or {}).get("memberServices")
+    if isinstance(ms, dict) and ms:
+        svcs = sorted({s for v in ms.values() if isinstance(v, list) for s in v})
+        print(f"    memberServices: {len(ms)} Zuordnung(en), Dienste: {', '.join(svcs) or '—'}")
+        if not svcs:
+            print("      ⚠️  KEINE notify-Dienste hinterlegt → es kann niemand benachrichtigt werden!")
+    else:
+        print("    ⚠️  memberServices LEER/fehlt → main() bricht sofort ab, es kommen")
+        print("        GAR KEINE Erinnerungen (Geburtstag, To-Do, Termin).")
+        print("        Ursache meist: HA-Neustart, notif_config-Sensor weg, App hat")
+        print("        die Konfiguration noch nicht neu gepusht. Fix: App öffnen (pusht")
+        print("        die Zuordnung neu) ODER Cache /config/scripts/notif_config_cache.json.")
+
+    # 5b. Geburtstagsdaten
+    bd_st = ha_state("sensor.familienkalender_birthdays")
+    birthdays = ((bd_st.get("attributes") if bd_st else {}) or {}).get("birthdays")
+    src = "Sensor"
+    if not isinstance(birthdays, list) or not birthdays:
+        try:
+            with open("/config/scripts/birthday_data.json", encoding="utf-8") as f:
+                birthdays = json.load(f)
+            src = "Disk-Backup"
+        except Exception:
+            birthdays = []
+    print(f"    Geburtstage geladen: {len(birthdays)} (Quelle: {src})")
+
+    # 5c. Blockliste
+    del_st = ha_state("sensor.familienkalender_deleted_birthdays")
+    blocked = ((del_st.get("attributes") if del_st else {}) or {}).get("keys") or []
+    blocked_set = set(blocked)
+    print(f"    Blockliste (gelöschte Geburtstage): {len(blocked_set)}")
+
+    # 5d. Heutige Geburtstage (Monat 0-indexiert!)
+    tm, td = now.month - 1, now.day
+    todays = [b for b in birthdays if isinstance(b, dict)
+              and b.get("month") == tm and b.get("day") == td]
+    print(f"    Heute ({now.strftime('%d.%m.')}): {len(todays)} Geburtstag(e)")
+    for b in todays:
+        key = f"{b.get('name')}|{b.get('month')}|{b.get('day')}"
+        state = "BLOCKIERT (gelöscht)" if key in blocked_set else "würde feuern"
+        print(f"        {b.get('name')}  → {state}")
+
+    # 5e. Nächste 14 Tage (zur Kontrolle, dass überhaupt welche kommen)
+    from datetime import timedelta
+    upcoming = []
+    for i in range(1, 15):
+        d = now + timedelta(days=i)
+        for b in birthdays:
+            if isinstance(b, dict) and b.get("month") == d.month - 1 and b.get("day") == d.day:
+                key = f"{b.get('name')}|{b.get('month')}|{b.get('day')}"
+                if key not in blocked_set:
+                    upcoming.append(f"{d.strftime('%d.%m.')} {b.get('name')}")
+    print(f"    Nächste 14 Tage: {', '.join(upcoming) if upcoming else 'keine'}")
+
+    # 5f. Bereits gesendete Geburtstags-Keys (zeigt, ob schon mal gefeuert wurde)
+    try:
+        with open("/config/scripts/reminder_sent.json", encoding="utf-8") as f:
+            sent = json.load(f)
+        bkeys = [k for k in sent if k.startswith("birthday-")]
+        print(f"    Bereits gesendet (reminder_sent.json): {len(bkeys)} Geburtstags-Key(s)")
+        for k in bkeys[-6:]:
+            print(f"        {k}")
+    except Exception:
+        print("    reminder_sent.json nicht lesbar (Poller lief evtl. noch nie durch).")
+    print("=" * 70)
+
 
 if __name__ == "__main__":
     main()
