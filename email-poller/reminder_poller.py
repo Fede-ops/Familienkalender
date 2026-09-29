@@ -1030,14 +1030,25 @@ def main():
                 fired += 1
                 print(f"  → Erinnerung: {summary} ({cal}, {remaining} Min.)")
 
+    # Wartungsschritte einzeln absichern: Ein Fehler hier darf NIEMALS die
+    # Geburtstags-/To-Do-Erinnerungen weiter unten verhindern.
     # In der App gelöschte Termine physisch aus dem Kalender entfernen
     # (geht nur per WebSocket — die iOS-PWA kann das selbst nicht).
-    process_hidden_calendar_deletes(calendars)
+    try:
+        process_hidden_calendar_deletes(calendars)
+    except Exception as exc:
+        print(f"  process_hidden_calendar_deletes Fehler: {exc}", file=sys.stderr)
     # In der App bearbeitete Termine anwenden (Update am selben Termin).
-    process_calendar_ops()
+    try:
+        process_calendar_ops()
+    except Exception as exc:
+        print(f"  process_calendar_ops Fehler: {exc}", file=sys.stderr)
 
     # Unkategorisierte To-Dos ("Sonstiges") per KI einsortieren ("Hausverstand").
-    ai_categorize_todos()
+    try:
+        ai_categorize_todos()
+    except Exception as exc:
+        print(f"  ai_categorize_todos Fehler: {exc}", file=sys.stderr)
 
     # Geburtstags-Benachrichtigungen (täglich um 12:00).
     fired += check_birthday_reminders(now, member_services, sent)
