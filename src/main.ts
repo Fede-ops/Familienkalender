@@ -24,10 +24,22 @@ window.addEventListener("ha-write-denied", () => {
   );
 });
 
-// Reload when a new service worker takes over — ensures fresh JS is executed.
+// Reload when a NEW service worker takes over so fresh JS runs — but guarded:
+// fire at most ONCE per page life, and NOT on first install. An unguarded
+// reload here reset the active tab (and could ping-pong) every time the SW
+// update check found a newer deploy, e.g. on a device with a stale cache.
+let _swReloading = false;
+function reloadForSWUpdate(): void {
+  if (_swReloading) return;
+  _swReloading = true;
+  window.location.reload();
+}
 if ("serviceWorker" in navigator) {
+  // Captured now: on first install there is no controller yet, so the
+  // null→SW controllerchange must NOT trigger a reload.
+  const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    window.location.reload();
+    if (hadController) reloadForSWUpdate();
   });
   // Proactively check for a SW update on every page load.
   navigator.serviceWorker.ready.then((reg) => reg.update()).catch(() => {});
@@ -702,8 +714,25 @@ function syncAppBottom(): void {
 syncAppBottom();
 new ResizeObserver(syncAppBottom).observe(persistentTabBar);
 
+// Aktiven Tab über Reloads hinweg merken. Ein SW-Update löst ein
+// location.reload() aus; ohne das würde die App dabei immer auf den
+// Default-Tab „Kalender" zurückspringen (sichtbar beim Tab-Wechsel, wenn
+// gerade ein Reload fällig ist). sessionStorage = nur innerhalb der Sitzung,
+// ein frischer App-Start beginnt wieder beim Kalender.
+const ACTIVE_TAB_KEY = "fk-active-tab";
+function readActiveTab(): TabKey {
+  try {
+    const t = sessionStorage.getItem(ACTIVE_TAB_KEY);
+    if (t === "todo" || t === "einkauf" || t === "kalender") return t;
+  } catch { /* ignore */ }
+  return "kalender";
+}
+function saveActiveTab(tab: TabKey): void {
+  try { sessionStorage.setItem(ACTIVE_TAB_KEY, tab); } catch { /* ignore */ }
+}
+
 const state: AppState = {
-  activeTab: "kalender",
+  activeTab: readActiveTab(),
   viewMode: "week",
   weekStart: startOfWeek(new Date()),
   monthStart: startOfMonth(new Date()),
@@ -889,6 +918,7 @@ function render(): void {
   // appending a ghost and adding a non-passive touchmove listener to
   // document that calls e.preventDefault() — permanently blocking swipes.
   if (drag) cancelDrag();
+  saveActiveTab(state.activeTab);
   let html = "";
   if (state.activeTab === "einkauf") {
     html = renderShoppingView(state.shopping);
@@ -4269,7 +4299,7 @@ window.addEventListener("online", () => void refreshEvents());
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.addEventListener("message", (evt) => {
     if ((evt.data as { type?: string })?.type === "sw-reload") {
-      window.location.reload();
+      reloadForSWUpdate();
     }
   });
 }
