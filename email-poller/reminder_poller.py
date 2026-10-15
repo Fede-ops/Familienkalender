@@ -67,6 +67,10 @@ SHOPPING_DATA_FILE = "/config/scripts/shopping_data.json"
 # verdrängt werden, bevor der Poller sie löscht. Diese Datei hält jede einmal
 # gesehene Lösch-UID fest, bis der Termin wirklich weg ist.
 HIDDEN_PENDING_FILE = "/config/scripts/hidden_uids_pending.json"
+# Bereits abgearbeitete (gelöschte/nicht mehr vorhandene) Lösch-UIDs — damit der
+# dauerhaft ~300 UIDs enthaltende Sensor nicht jeden Lauf einen teuren
+# Kalender-Vollabruf auslöst.
+HIDDEN_DONE_FILE = "/config/scripts/hidden_uids_done.json"
 ctx = ssl.create_default_context()
 
 REMIND_RE = re.compile(r"\[remind:(\d+)\]")
@@ -306,19 +310,47 @@ def _save_pending_hidden(pending):
         print(f"  Konnte {HIDDEN_PENDING_FILE} nicht schreiben: {exc}", file=sys.stderr)
 
 
+def _load_done_hidden():
+    """UIDs, die bereits gelöscht ODER bestätigt nicht mehr vorhanden sind.
+    Werden NICHT erneut gegen alle Kalender geprüft — spart den teuren
+    460-Tage-Abruf bei jedem Lauf (der hidden_uids-Sensor wird von der App
+    dauerhaft mit ~300 längst erledigten UIDs neu befüllt)."""
+    try:
+        with open(HIDDEN_DONE_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        d = data.get("done") if isinstance(data, dict) else data
+        return set(d) if isinstance(d, list) else set()
+    except Exception:
+        return set()
+
+
+def _save_done_hidden(done):
+    try:
+        with open(HIDDEN_DONE_FILE, "w", encoding="utf-8") as f:
+            # Nur die jüngsten 2000 behalten — bleibt klein, reicht als Filter.
+            json.dump({"done": sorted(done)[-2000:]}, f)
+    except Exception as exc:
+        print(f"  Konnte {HIDDEN_DONE_FILE} nicht schreiben: {exc}", file=sys.stderr)
+
+
 def process_hidden_calendar_deletes(calendars):
     """Löscht physisch alle Termine, die die App als gelöscht markiert hat.
 
     Robust gegen das 300er-Cap und Multi-Device-Überschreiben des
     hidden_uids-Sensors: Jede einmal gesehene Lösch-UID wird auf Disk gemerkt
     (HIDDEN_PENDING_FILE) und so lange erneut versucht, bis der zugehörige
-    Termin wirklich verschwunden ist. So kann eine frisch vorgemerkte UID nicht
-    mehr verloren gehen, bevor der Poller sie löscht."""
+    Termin wirklich verschwunden ist.
+
+    Performance: Bereits erledigte UIDs (HIDDEN_DONE_FILE) werden übersprungen.
+    Der hidden_uids-Sensor enthält dauerhaft ~300 längst gelöschte UIDs; ohne
+    diesen Filter würde JEDER Minutenlauf alle Kalender über 460 Tage abrufen
+    und könnte den Poller in den HA-Timeout treiben (→ keine Erinnerungen)."""
     restored = get_restored_uids()
-    # Sensor ∪ Disk-Merkliste — Vereinigung, damit nichts verloren geht.
-    pending = (get_hidden_uids() | _load_pending_hidden()) - restored
+    done = _load_done_hidden()
+    # Sensor ∪ Disk-Merkliste, ohne wiederhergestellte und bereits erledigte.
+    pending = (get_hidden_uids() | _load_pending_hidden()) - restored - done
     if not pending:
-        return
+        return  # nichts Neues → KEIN teurer Kalenderabruf
     now = datetime.now()
     start = (now - timedelta(days=60)).strftime("%Y-%m-%dT%H:%M:%S")
     end = (now + timedelta(days=400)).strftime("%Y-%m-%dT%H:%M:%S")
@@ -344,16 +376,18 @@ def process_hidden_calendar_deletes(calendars):
                 print(f"  Kalender: {len(deleted_ok)} verborgene(r) Termin(e) physisch gelöscht.")
         except Exception as exc:
             print(f"  Kalender-WS-Löschung fehlgeschlagen: {exc}", file=sys.stderr)
-    # Merkliste fortschreiben. Konnte ein Kalender nicht abgerufen werden, gelten
-    # dort „fehlende" UIDs NICHT als erledigt (sonst würden sie fälschlich
-    # verworfen) — dann nur bestätigte Löschungen entfernen.
     if fetch_failed:
+        # Nichts vorschnell als erledigt werfen — nur bestätigte Löschungen.
+        done |= deleted_ok
         new_pending = pending - deleted_ok
     else:
-        # Nur noch existierende, nicht gelöschte UIDs weiter merken. UIDs, die in
-        # keinem Kalender mehr auftauchen, sind erledigt und werden verworfen.
+        # Gelöschte UND nicht mehr auffindbare UIDs gelten als erledigt und
+        # werden künftig übersprungen (kein erneuter Kalenderabruf).
+        gone = pending - set(present.keys())
+        done |= deleted_ok | gone
         new_pending = set(present.keys()) - deleted_ok
     _save_pending_hidden(new_pending)
+    _save_done_hidden(done)
 
 
 def delete_uids_cli(uids):
@@ -1030,8 +1064,26 @@ def main():
                 fired += 1
                 print(f"  → Erinnerung: {summary} ({cal}, {remaining} Min.)")
 
-    # Wartungsschritte einzeln absichern: Ein Fehler hier darf NIEMALS die
-    # Geburtstags-/To-Do-Erinnerungen weiter unten verhindern.
+    # ── Zeitkritische Benachrichtigungen ZUERST ─────────────────────────────
+    # Geburtstags- und To-Do-Erinnerungen laufen VOR den schweren
+    # Wartungsschritten (Kalender-Löschungen, Updates, KI-Kategorisierung mit
+    # Claude-API-Aufruf). Sonst könnte der HA-shell_command-Timeout den Poller
+    # abbrechen, bevor die Erinnerungen überhaupt dran sind.
+    # Geburtstags-Benachrichtigungen (täglich ab 12:00).
+    fired += check_birthday_reminders(now, member_services, sent)
+    # To-Do-Erinnerungen (remindAt aus der App).
+    fired += check_todo_reminders(now, member_services, sent)
+
+    # Gesendete Erinnerungen SOFORT sichern (alte > 2 Tage aufräumen) — damit
+    # nichts doppelt feuert, selbst wenn ein Wartungsschritt unten abbricht.
+    cutoff = now - timedelta(days=2)
+    sent = {k: v for k, v in sent.items() if (parse_dt(v) or now) > cutoff}
+    save_sent(sent)
+
+    if fired:
+        print(f"Familienkalender Reminder: {fired} Benachrichtigung(en) gesendet.")
+
+    # ── Wartungsschritte DANACH, einzeln abgesichert ────────────────────────
     # In der App gelöschte Termine physisch aus dem Kalender entfernen
     # (geht nur per WebSocket — die iOS-PWA kann das selbst nicht).
     try:
@@ -1043,29 +1095,11 @@ def main():
         process_calendar_ops()
     except Exception as exc:
         print(f"  process_calendar_ops Fehler: {exc}", file=sys.stderr)
-
     # Unkategorisierte To-Dos ("Sonstiges") per KI einsortieren ("Hausverstand").
     try:
         ai_categorize_todos()
     except Exception as exc:
         print(f"  ai_categorize_todos Fehler: {exc}", file=sys.stderr)
-
-    # Geburtstags-Benachrichtigungen (täglich um 12:00).
-    fired += check_birthday_reminders(now, member_services, sent)
-
-    # To-Do-Erinnerungen (remindAt aus der App).
-    fired += check_todo_reminders(now, member_services, sent)
-
-    # Alte Einträge (> 2 Tage) aufräumen.
-    cutoff = now - timedelta(days=2)
-    sent = {
-        k: v for k, v in sent.items()
-        if (parse_dt(v) or now) > cutoff
-    }
-    save_sent(sent)
-
-    if fired:
-        print(f"Familienkalender Reminder: {fired} Benachrichtigung(en) gesendet.")
 
     # Geburtstage: Persistenz sichern/wiederherstellen (Daten + Lösch-Blockliste).
     sync_birthday_persistence()
