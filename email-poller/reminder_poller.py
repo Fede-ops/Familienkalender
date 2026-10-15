@@ -426,6 +426,23 @@ def delete_uids_cli(uids):
         print(f"  {'✓ gelöscht' if ok else '✗ FEHLER'}: {summ} [{cal} / {u}]")
 
 
+def test_notify_cli():
+    """Sendet an jedes konfigurierte Gerät eine Test-Benachrichtigung und zeigt,
+    ob HA sie annimmt. Trennt 'Logik/Dienstname' von 'Zustellung aufs Gerät':
+    ✓ = HA akzeptiert (kommt sie trotzdem nicht an → Geräte-/App-Einstellung);
+    ✗ = Dienstname stimmt nicht (in der App unter Benachrichtigungen prüfen)."""
+    ms = get_member_services()
+    svcs = sorted({s for v in ms.values() if isinstance(v, list) for s in v})
+    if not svcs:
+        print("Keine notify-Dienste in memberServices gefunden.")
+        return
+    print(f"Teste {len(svcs)} Dienst(e) — jetzt auf den Geräten schauen:")
+    for svc in svcs:
+        ok = notify(svc, "🎂 Test Familienkalender",
+                    "Wenn du das siehst, funktioniert der Versand.")
+        print(f"  {'✓ HA akzeptiert' if ok else '✗ FEHLER (Dienstname?)'}: notify.{svc}")
+
+
 def process_calendar_ops():
     """Wendet in der App bearbeitete Termine an (Update am selben Termin) —
     die iOS-PWA kann update_event nicht selbst über WebSocket ausführen."""
@@ -1186,5 +1203,7 @@ def main():
 if __name__ == "__main__":
     if len(sys.argv) > 2 and sys.argv[1] == "--delete":
         delete_uids_cli(sys.argv[2:])
+    elif len(sys.argv) > 1 and sys.argv[1] == "--test-notify":
+        test_notify_cli()
     else:
         main()
