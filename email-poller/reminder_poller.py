@@ -71,6 +71,18 @@ HIDDEN_PENDING_FILE = "/config/scripts/hidden_uids_pending.json"
 # dauerhaft ~300 UIDs enthaltende Sensor nicht jeden Lauf einen teuren
 # Kalender-Vollabruf auslöst.
 HIDDEN_DONE_FILE = "/config/scripts/hidden_uids_done.json"
+# Selbst-Update: der Poller aktualisiert seine Skripte einmal täglich von
+# GitHub, damit kein manuelles update.sh mehr nötig ist.
+SELFUPDATE_STAMP = "/config/scripts/.last_selfupdate"
+GITHUB_RAW = "https://raw.githubusercontent.com/fede-ops/familienkalender/main/email-poller"
+SELFUPDATE_FILES = {
+    # Nur Dateien, die beim nächsten Minutenlauf SOFORT greifen (kein Reload
+    # nötig). familienkalender_set_state.py bleibt bewusst bei update.sh, da es
+    # einen python_script-Reload bräuchte.
+    "reminder_poller.py": "/config/scripts/reminder_poller.py",
+    "email_to_calendar.py": "/config/scripts/email_to_calendar.py",
+    "diag.py": "/config/scripts/diag.py",
+}
 ctx = ssl.create_default_context()
 
 REMIND_RE = re.compile(r"\[remind:(\d+)\]")
@@ -994,7 +1006,64 @@ def check_todo_reminders(now, member_services, sent):
     return fired
 
 
+def self_update():
+    """Aktualisiert die Poller-Skripte höchstens einmal täglich selbst von
+    GitHub (main). Jede Datei wird vor dem Ersetzen mit py_compile auf Syntax
+    geprüft und nur bei Erfolg atomar übernommen — eine kaputte Datei kann den
+    Poller also nicht lahmlegen. Die neue Version greift beim NÄCHSTEN
+    Minutenlauf (HA startet python3 jedes Mal neu)."""
+    try:
+        if (datetime.now().timestamp() - os.path.getmtime(SELFUPDATE_STAMP)) < 20 * 3600:
+            return  # heute schon versucht
+    except Exception:
+        pass
+    import py_compile
+    changed = 0
+    for name, dest in SELFUPDATE_FILES.items():
+        try:
+            req = urllib.request.Request(f"{GITHUB_RAW}/{name}",
+                                         headers={"User-Agent": "familienkalender-poller"})
+            with urllib.request.urlopen(req, context=ctx, timeout=20) as resp:
+                data = resp.read()
+            if not data:
+                continue
+            try:
+                with open(dest, "rb") as f:
+                    if f.read() == data:
+                        continue  # unverändert
+            except Exception:
+                pass
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            tmp = dest + ".new"
+            with open(tmp, "wb") as f:
+                f.write(data)
+            py_compile.compile(tmp, doraise=True)  # Syntax prüfen
+            os.replace(tmp, dest)                   # atomar ersetzen (gleiche FS)
+            changed += 1
+        except Exception as exc:
+            print(f"  Selbst-Update {name} fehlgeschlagen: {exc}", file=sys.stderr)
+            try:
+                os.remove(dest + ".new")
+            except Exception:
+                pass
+    # Zeitstempel immer setzen, damit nicht jede Minute ein Netzabruf läuft.
+    try:
+        with open(SELFUPDATE_STAMP, "w") as f:
+            f.write(datetime.now().isoformat())
+    except Exception:
+        pass
+    if changed:
+        print(f"  Selbst-Update: {changed} Datei(en) aktualisiert (aktiv ab nächstem Lauf).")
+
+
 def main():
+    # Selbst-Update ZUERST (höchstens 1×/Tag) — läuft auch, wenn weiter unten
+    # wegen fehlender memberServices abgebrochen würde, damit ein Fix sicher
+    # ankommt. Darf den Lauf niemals sprengen.
+    try:
+        self_update()
+    except Exception as exc:
+        print(f"  self_update Fehler: {exc}", file=sys.stderr)
     now = datetime.now()
     member_services = get_member_services()
     if not member_services:
