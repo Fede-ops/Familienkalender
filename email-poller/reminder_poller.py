@@ -443,6 +443,41 @@ def test_notify_cli():
         print(f"  {'✓ HA akzeptiert' if ok else '✗ FEHLER (Dienstname?)'}: notify.{svc}")
 
 
+def test_all_notify_cli():
+    """Listet ALLE in HA registrierten mobile_app-notify-Dienste und schickt an
+    jeden eine Test-Nachricht, in der der Dienstname steht. So lässt sich der
+    richtige (aktuelle) Gerätename finden, falls der konfigurierte veraltet ist:
+    Der Dienst, dessen Nachricht auf dem Handy ankommt, ist der richtige."""
+    try:
+        domains = ha_get("/api/services")
+    except Exception as exc:
+        print(f"Konnte Dienste nicht laden: {exc}", file=sys.stderr)
+        return
+    notify_svcs = {}
+    for dom in domains:
+        if dom.get("domain") == "notify":
+            notify_svcs = dom.get("services") or {}
+            break
+    mobile = sorted(s for s in notify_svcs if s.startswith("mobile_app_"))
+    if not mobile:
+        print("KEINE mobile_app-Dienste in HA gefunden — es ist kein Gerät mit")
+        print("der Home-Assistant-App registriert. In der HA-App auf dem iPhone")
+        print("anmelden/Benachrichtigungen aktivieren, dann erneut testen.")
+        return
+    configured = sorted({s for v in get_member_services().values()
+                         if isinstance(v, list) for s in v})
+    print(f"In HA registrierte Handy-Dienste ({len(mobile)}):")
+    for s in mobile:
+        tag = "  ← aktuell konfiguriert" if s in configured else ""
+        print(f"  - notify.{s}{tag}")
+    print("\nSende an JEDEN eine Test-Nachricht (Dienstname steht in der Nachricht):")
+    for s in mobile:
+        ok = notify(s, "🎂 Familienkalender Test", f"von notify.{s}")
+        print(f"  {'✓' if ok else '✗'} notify.{s}")
+    print("\n→ Schau aufs Handy: Welche Test-Nachricht kommt an? Dieser Dienst")
+    print("  ist der richtige — den dann in der App (Benachrichtigungen) zuordnen.")
+
+
 def process_calendar_ops():
     """Wendet in der App bearbeitete Termine an (Update am selben Termin) —
     die iOS-PWA kann update_event nicht selbst über WebSocket ausführen."""
@@ -1205,5 +1240,7 @@ if __name__ == "__main__":
         delete_uids_cli(sys.argv[2:])
     elif len(sys.argv) > 1 and sys.argv[1] == "--test-notify":
         test_notify_cli()
+    elif len(sys.argv) > 1 and sys.argv[1] == "--test-all":
+        test_all_notify_cli()
     else:
         main()
