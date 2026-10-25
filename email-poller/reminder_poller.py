@@ -58,6 +58,10 @@ DEFAULT_CALENDARS = [
 
 SENT_FILE         = "/config/scripts/reminder_sent.json"
 NOTIF_CACHE       = "/config/scripts/notif_config_cache.json"
+# Server-seitiger Override der Benachrichtigungs-Geräte. Ist diese Datei
+# vorhanden, nutzt der Poller IMMER diese notify-Dienste — unabhängig vom
+# clobber-anfälligen App-Sensor. Setzen: --set-device, entfernen: --clear-device.
+NOTIFY_OVERRIDE_FILE = "/config/scripts/notify_override.json"
 BIRTHDAY_DATA_FILE = "/config/scripts/birthday_data.json"
 DELETED_BIRTHDAYS_FILE = "/config/scripts/deleted_birthdays.json"
 TODO_DATA_FILE     = "/config/scripts/todo_data.json"
@@ -168,7 +172,19 @@ def get_calendars():
     return DEFAULT_CALENDARS
 
 
-def get_member_services():
+def _load_notify_override():
+    """Liste der notify-Dienste aus dem Override (oder None)."""
+    try:
+        with open(NOTIFY_OVERRIDE_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        svcs = data.get("services") if isinstance(data, dict) else data
+        svcs = [s for s in svcs if isinstance(s, str)] if isinstance(svcs, list) else []
+        return svcs or None
+    except Exception:
+        return None
+
+
+def _raw_member_services():
     st = ha_state("sensor.familienkalender_notif_config")
     if st:
         ms = (st.get("attributes") or {}).get("memberServices")
@@ -190,6 +206,18 @@ def get_member_services():
     except Exception:
         pass
     return {}
+
+
+def get_member_services():
+    """Person→Geräte-Zuordnung. Ist ein Override gesetzt (--set-device), gehen
+    ALLE Benachrichtigungen an die Override-Dienste — unabhängig vom App-Sensor,
+    der von mehreren Geräten überschrieben werden kann."""
+    ms = _raw_member_services()
+    override = _load_notify_override()
+    if override:
+        keys = list(ms.keys()) if ms else list(get_calendars())
+        return {k: list(override) for k in keys}
+    return ms
 
 
 def get_hidden_uids():
@@ -476,6 +504,42 @@ def test_all_notify_cli():
         print(f"  {'✓' if ok else '✗'} notify.{s}")
     print("\n→ Schau aufs Handy: Welche Test-Nachricht kommt an? Dieser Dienst")
     print("  ist der richtige — den dann in der App (Benachrichtigungen) zuordnen.")
+
+
+def set_device_cli(services):
+    """Setzt den server-seitigen Geräte-Override. ALLE Benachrichtigungen
+    (Geburtstage, Termine, To-Dos) gehen danach an diese notify-Dienste —
+    unabhängig von der App. Beendet das Überschreiben durch andere Geräte."""
+    svcs = [s.replace("notify.", "").strip() for s in services if s.strip()]
+    if not svcs:
+        print("Kein Dienst angegeben. Beispiel:")
+        print("  python3 reminder_poller.py --set-device mobile_app_iphone_17_pro_max")
+        return
+    try:
+        with open(NOTIFY_OVERRIDE_FILE, "w", encoding="utf-8") as f:
+            json.dump({"services": svcs}, f)
+    except Exception as exc:
+        print(f"Schreiben fehlgeschlagen: {exc}", file=sys.stderr)
+        return
+    print(f"✓ Override gesetzt. ALLE Benachrichtigungen gehen jetzt an: "
+          f"{', '.join('notify.' + s for s in svcs)}")
+    print("  (Überschreibt die App-Konfiguration server-seitig — kein Clobbering mehr.)")
+    print("Sende jetzt eine Test-Nachricht:")
+    for s in svcs:
+        ok = notify(s, "🎂 Familienkalender",
+                    f"Override aktiv — Benachrichtigungen kommen ab jetzt hier an (notify.{s}).")
+        print(f"  {'✓ gesendet' if ok else '✗ FEHLER (Dienstname?)'}: notify.{s}")
+    print("Rückgängig machen: python3 reminder_poller.py --clear-device")
+
+
+def clear_device_cli():
+    try:
+        os.remove(NOTIFY_OVERRIDE_FILE)
+        print("✓ Override entfernt — es gilt wieder die App-Konfiguration.")
+    except FileNotFoundError:
+        print("Kein Override gesetzt (nichts zu tun).")
+    except Exception as exc:
+        print(f"Fehler: {exc}", file=sys.stderr)
 
 
 def process_calendar_ops():
@@ -1242,5 +1306,9 @@ if __name__ == "__main__":
         test_notify_cli()
     elif len(sys.argv) > 1 and sys.argv[1] == "--test-all":
         test_all_notify_cli()
+    elif len(sys.argv) > 2 and sys.argv[1] == "--set-device":
+        set_device_cli(sys.argv[2:])
+    elif len(sys.argv) > 1 and sys.argv[1] == "--clear-device":
+        clear_device_cli()
     else:
         main()
