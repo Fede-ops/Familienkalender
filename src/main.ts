@@ -854,9 +854,10 @@ const MOTOGP_RACES: Record<number, Array<[number, number, string]>> = {
     [10, 11, "Mandalika"],    // Indonesien
     [10, 25, "Phillip Island"], // Australien
     [11, 1,  "Sepang"],       // Malaysia
-    [11, 8,  "Lusail"],       // Katar
-    [11, 15, "Portimão"],     // Portugal
-    [11, 22, "Valencia"],     // Saisonfinale
+    [11, 8,  "Lusail"],       // Katar (aus dem Frühjahr verschoben)
+    // Nach der Katar-Verschiebung je eine Woche später; 15.11. ist frei.
+    [11, 22, "Portimão"],     // Portugal
+    [11, 29, "Valencia"],     // Saisonfinale
   ],
 };
 
