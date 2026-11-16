@@ -1025,8 +1025,9 @@ def check_birthday_reminders(now, member_services, sent):
     - ab 12:00 die Haupt-Erinnerung,
     - ab 18:00 eine Nachfass-Erinnerung, solange in der App nicht
       „✓ Gratuliert" gesetzt ist.
-    Beide sind zeitkritisch (kommen durch den Fokus-Modus) und tragen denselben
-    tag, sodass die 18-Uhr-Nachricht die von 12:00 ersetzt statt sich zu stapeln.
+    Beide tragen denselben tag, sodass die 18-Uhr-Nachricht die von 12:00
+    ersetzt statt sich zu stapeln. Bewusst NICHT zeitkritisch: Fokus/„Nicht
+    stören" soll Geburtstags-Erinnerungen weiterhin stummschalten.
     Ist bereits abgehakt, kommt gar nichts (mehr)."""
     if now.hour < BIRTHDAY_MAIN_HOUR:
         return 0
@@ -1095,8 +1096,6 @@ def check_birthday_reminders(now, member_services, sent):
         data = {
             # Gleicher tag → 18:00 ersetzt 12:00 auf dem Gerät (kein Stapeln).
             "tag": f"bday-{re.sub(r'[^A-Za-z0-9]+', '_', name)}-{today_str}",
-            # Durch Fokus/„Nicht stören" und länger prominent am Sperrbildschirm.
-            "push": {"interruption-level": "time-sensitive"},
         }
         ok_any = False
         for svc in all_services:
