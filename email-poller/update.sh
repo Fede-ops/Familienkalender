@@ -2,11 +2,11 @@
 # Aktualisiert email_to_calendar.py und reminder_poller.py von GitHub.
 #
 # HINWEIS: Der Poller aktualisiert sich ab sofort EINMAL TÄGLICH SELBST
-# (reminder_poller.py, email_to_calendar.py, diag.py) von GitHub. update.sh
-# wird daher im Normalbetrieb nicht mehr gebraucht — nur noch für die
-# Erst-Einrichtung oder um familienkalender_set_state.py zu aktualisieren
-# (das braucht einen python_script-Reload und läuft daher NICHT über das
-# Selbst-Update).
+# (reminder_poller.py, email_to_calendar.py, diag.py und
+# familienkalender_set_state.py inkl. python_script-Reload) von GitHub.
+# update.sh wird daher im Normalbetrieb nicht mehr gebraucht — nur noch für
+# die Erst-Einrichtung oder um ein Update sofort statt erst beim nächsten
+# täglichen Selbst-Update einzuspielen.
 #
 # Zugangsdaten liegen NICHT im Skript, sondern in
 # /config/scripts/poller_config.json — daher ist dieses Update jetzt ein

@@ -190,10 +190,18 @@ def birthday_diag():
     tm, td = now.month - 1, now.day
     todays = [b for b in birthdays if isinstance(b, dict)
               and b.get("month") == tm and b.get("day") == td]
+    done_st = ha_state("sensor.familienkalender_birthday_done")
+    done = set(((done_st.get("attributes") if done_st else {}) or {}).get("keys") or [])
+    today_iso = now.strftime("%Y-%m-%d")
     print(f"    Heute ({now.strftime('%d.%m.')}): {len(todays)} Geburtstag(e)")
     for b in todays:
         key = f"{b.get('name')}|{b.get('month')}|{b.get('day')}"
-        state = "BLOCKIERT (gelöscht)" if key in blocked_set else "würde feuern"
+        if key in blocked_set:
+            state = "BLOCKIERT (gelöscht)"
+        elif f"{b.get('name')}|{today_iso}" in done:
+            state = "✓ gratuliert (keine weitere Erinnerung)"
+        else:
+            state = "würde feuern (12:00, Nachfass 18:00)"
         print(f"        {b.get('name')}  → {state}")
 
     # 5e. Nächste 14 Tage (zur Kontrolle, dass überhaupt welche kommen)

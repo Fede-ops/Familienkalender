@@ -24,6 +24,7 @@ ALLOWED = [
     "sensor.familienkalender_entities",
     "sensor.familienkalender_notif_config",
     "sensor.familienkalender_calendar_ops",
+    "sensor.familienkalender_birthday_done",
 ]
 
 entity_id = data.get("entity_id")
