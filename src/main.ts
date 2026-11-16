@@ -324,6 +324,77 @@ async function syncDeletedBirthdaysFromHA(): Promise<void> {
   } catch { /* ignore */ }
 }
 
+// ── „Gratuliert ✓" ─────────────────────────────────────────────────────────
+// Pro Person und Tag merkt sich die App, ob schon gratuliert wurde. Der Poller
+// liest sensor.familienkalender_birthday_done und schickt die 18-Uhr-
+// Nachfass-Erinnerung nur für noch nicht abgehakte Geburtstage. Schlüssel:
+// `Rohname|YYYY-MM-DD` (Rohname wie im Geburtstags-Sensor, identisch zum Poller).
+const BIRTHDAY_DONE_KEY = "fk_birthday_done_v1";
+
+function birthdayDoneKey(rawName: string, d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${rawName}|${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+// Nur die letzten Tage behalten — ältere Häkchen sind bedeutungslos.
+function pruneBirthdayDone(keys: Set<string>): Set<string> {
+  const cutoff = Date.now() - 3 * 86_400_000;
+  return new Set([...keys].filter((k) => {
+    const iso = k.split("|").pop() ?? "";
+    const t = new Date(`${iso}T12:00:00`).getTime();
+    return Number.isFinite(t) && t >= cutoff;
+  }));
+}
+
+function loadBirthdayDone(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(BIRTHDAY_DONE_KEY) ?? "[]") as string[]); }
+  catch { return new Set(); }
+}
+
+function saveBirthdayDone(keys: Set<string>, publish = true): void {
+  const pruned = pruneBirthdayDone(keys);
+  try { localStorage.setItem(BIRTHDAY_DONE_KEY, JSON.stringify([...pruned])); } catch { /* ignore */ }
+  if (!publish) return;
+  const cfg = loadConfig();
+  if (!cfg) return;
+  haWriteState(cfg.baseUrl, cfg.token, "sensor.familienkalender_birthday_done",
+    String(pruned.size), { keys: [...pruned], ts: Date.now() });
+}
+
+// Vereinigen statt überschreiben: ein Häkchen von einem Gerät geht nie durch
+// den Stand eines anderen Geräts verloren. Danach immer zurückschreiben, damit
+// der Sensor (auch nach HA-Neustart) den vollständigen Stand hat.
+async function syncBirthdayDoneFromHA(): Promise<void> {
+  const cfg = loadConfig();
+  if (!cfg) return;
+  const local = loadBirthdayDone();
+  let remote: string[] = [];
+  try {
+    const res = await fetch(`${cfg.baseUrl}/api/states/sensor.familienkalender_birthday_done`, {
+      headers: { Authorization: `Bearer ${cfg.token}` },
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { attributes?: { keys?: string[] } };
+      if (Array.isArray(data.attributes?.keys)) remote = data.attributes!.keys!;
+    }
+  } catch { return; }
+  const merged = pruneBirthdayDone(new Set([...local, ...remote]));
+  const changedLocal = merged.size !== local.size || [...merged].some((k) => !local.has(k));
+  const remoteSet = new Set(remote);
+  const changedRemote = merged.size !== remoteSet.size || [...merged].some((k) => !remoteSet.has(k));
+  if (changedLocal) saveBirthdayDone(merged, false);
+  if (changedRemote && merged.size > 0) saveBirthdayDone(merged, true);
+  if (changedLocal && state.activeTab === "kalender") render();
+}
+
+// Rohdaten zum (generierten) Geburtstags-Termin finden — die uid kodiert den
+// bereinigten Namen sowie Monat/Tag.
+function birthdayEntryForEvent(ev: CalendarEvent): BirthdayEntry | null {
+  if (ev.memberId !== BIRTHDAY_MEMBER_ID) return null;
+  return loadBirthdayData().find((bd) =>
+    ev.uid === `__birthday__${bd.name.replace(/[^a-zA-Z0-9]/g, "_")}__${bd.month}_${bd.day}`) ?? null;
+}
+
 function cleanBirthdayName(name: string): string {
   return name
     .replace(/\s*\([^)]*\)/g, "")
@@ -808,6 +879,7 @@ function birthdayEvents(): CalendarEvent[] {
   const data = loadBirthdayData();
   if (!data.length) return [];
   const blocked = loadDeletedBirthdays();
+  const done = loadBirthdayDone();
   const base = state.viewMode === "week" ? state.weekStart : state.monthStart;
   const year = base.getFullYear();
   const events: CalendarEvent[] = [];
@@ -816,9 +888,10 @@ function birthdayEvents(): CalendarEvent[] {
     for (const y of [year - 1, year, year + 1]) {
       const age = (bd.year && bd.year >= 1900 && (y - bd.year) > 0) ? y - bd.year : null;
       const displayName = cleanBirthdayName(bd.name);
+      const doneMark = done.has(birthdayDoneKey(bd.name, new Date(y, bd.month, bd.day))) ? " ✓" : "";
       events.push({
         uid: `__birthday__${bd.name.replace(/[^a-zA-Z0-9]/g, "_")}__${bd.month}_${bd.day}`,
-        summary: age !== null ? `🎂 ${displayName} → ${age}` : `🎂 ${displayName}`,
+        summary: (age !== null ? `🎂 ${displayName} → ${age}` : `🎂 ${displayName}`) + doneMark,
         start: new Date(y, bd.month, bd.day),
         end:   new Date(y, bd.month, bd.day),
         allDay: true,
@@ -2716,6 +2789,22 @@ function showEventDetail(ev: CalendarEvent): void {
       </div>
       <p class="detail-ics-hint">Speichert in Downloads → Signal: + → Datei → Downloads → anhängen</p>`;
 
+  // Geburtstag heute → „Gratuliert ✓"-Knopf. Ist er gesetzt, entfällt die
+  // 18-Uhr-Nachfass-Erinnerung des Pollers für diese Person.
+  const bdEntry = birthdayEntryForEvent(ev);
+  const evDay = new Date(ev.start.getFullYear(), ev.start.getMonth(), ev.start.getDate());
+  const todayMid = new Date(); todayMid.setHours(0, 0, 0, 0);
+  const showCongrats = !!bdEntry && evDay.getTime() === todayMid.getTime();
+  const congratsKey = bdEntry ? birthdayDoneKey(bdEntry.name, evDay) : "";
+  const congratsDone = showCongrats && loadBirthdayDone().has(congratsKey);
+  const congratsHtml = showCongrats
+    ? `<div class="detail-actions">
+        <button class="detail-congrats${congratsDone ? " detail-congrats--done" : ""}" data-action="toggle-congrats">
+          ${congratsDone ? "✓ Gratuliert — rückgängig" : "✓ Gratuliert"}
+        </button>
+      </div>`
+    : "";
+
   const html = `<div id="event-detail-sheet" class="detail-backdrop" data-action="close-detail">
     <div class="detail-sheet" data-stop-propagation>
       <div class="detail-handle"></div>
@@ -2727,6 +2816,7 @@ function showEventDetail(ev: CalendarEvent): void {
         ${ev.location ? `<p class="detail-location">📍 ${escHtml(ev.location)}</p>` : ""}
         ${stripMetaTags(ev.description) ? `<p class="detail-notes">${escHtml(stripMetaTags(ev.description)).replace(/\n/g, "<br>")}</p>` : ""}
       </div>
+      ${congratsHtml}
       ${actions}
     </div>
   </div>`;
@@ -2738,6 +2828,17 @@ function showEventDetail(ev: CalendarEvent): void {
 
   sheet.querySelector<HTMLElement>("[data-action='close-detail']")
     ?.addEventListener("click", () => sheet.remove());
+  sheet.querySelector<HTMLElement>("[data-action='toggle-congrats']")
+    ?.addEventListener("click", () => {
+      const keys = loadBirthdayDone();
+      if (keys.has(congratsKey)) keys.delete(congratsKey); else keys.add(congratsKey);
+      saveBirthdayDone(keys);
+      sheet.remove();
+      render();
+      showTransientBanner(keys.has(congratsKey)
+        ? "Gratuliert ✓ — keine weitere Erinnerung heute"
+        : "Häkchen entfernt — Erinnerung um 18:00 bleibt aktiv");
+    });
   sheet.querySelector<HTMLElement>("[data-stop-propagation]")
     ?.addEventListener("click", (e) => e.stopPropagation());
   if (!isReadOnly) {
@@ -4078,7 +4179,8 @@ if (demoMode) {
   setTimeout(() => { pullShopping(); pullTodos(); }, 5_000);
   // Periodic re-sync so changes made on other devices show up without a
   // full app restart. 60s is a reasonable balance between freshness and load.
-  setInterval(() => { pullShopping(); pullTodos(); }, 60_000);
+  void syncBirthdayDoneFromHA();
+  setInterval(() => { pullShopping(); pullTodos(); void syncBirthdayDoneFromHA(); }, 60_000);
   // Sync hidden UIDs + calendar events every 5 minutes so deletions made on
   // other devices appear without requiring an app restart.
   setInterval(() => {
@@ -4089,6 +4191,7 @@ if (demoMode) {
     if (document.visibilityState === "visible") {
       pullShopping();
       pullTodos();
+      void syncBirthdayDoneFromHA();
       void syncHiddenUidsFromHA().then(() => void refreshEvents());
     }
   });

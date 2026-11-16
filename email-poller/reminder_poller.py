@@ -79,14 +79,23 @@ HIDDEN_DONE_FILE = "/config/scripts/hidden_uids_done.json"
 # GitHub, damit kein manuelles update.sh mehr nötig ist.
 SELFUPDATE_STAMP = "/config/scripts/.last_selfupdate"
 GITHUB_RAW = "https://raw.githubusercontent.com/fede-ops/familienkalender/main/email-poller"
+SET_STATE_SCRIPT = "/config/python_scripts/familienkalender_set_state.py"
 SELFUPDATE_FILES = {
-    # Nur Dateien, die beim nächsten Minutenlauf SOFORT greifen (kein Reload
-    # nötig). familienkalender_set_state.py bleibt bewusst bei update.sh, da es
-    # einen python_script-Reload bräuchte.
     "reminder_poller.py": "/config/scripts/reminder_poller.py",
     "email_to_calendar.py": "/config/scripts/email_to_calendar.py",
     "diag.py": "/config/scripts/diag.py",
+    # Allowlist der App-Schreibzugriffe. Nach einer Änderung lädt der Poller
+    # die python_scripts in HA neu (python_script.reload) — kein Terminal nötig.
+    "familienkalender_set_state.py": SET_STATE_SCRIPT,
 }
+# Sensor, den die neueste Allowlist enthalten muss. Fehlt er in der Datei auf
+# der Box, holt der Poller sie sofort (statt erst beim täglichen Update).
+SET_STATE_REQUIRED = "sensor.familienkalender_birthday_done"
+# „Gratuliert ✓"-Häkchen aus der App: Schlüssel `Rohname|YYYY-MM-DD`.
+BIRTHDAY_DONE_SENSOR = "sensor.familienkalender_birthday_done"
+# Nachfass-Erinnerung für noch nicht abgehakte Geburtstage.
+BIRTHDAY_MAIN_HOUR = 12
+BIRTHDAY_FOLLOWUP_HOUR = 18
 ctx = ssl.create_default_context()
 
 REMIND_RE = re.compile(r"\[remind:(\d+)\]")
@@ -111,8 +120,12 @@ def ha_state(entity_id):
         return None
 
 
-def notify(service, title, message):
-    payload = json.dumps({"title": title, "message": message}).encode()
+def notify(service, title, message, data=None):
+    """data: optionale Companion-App-Optionen (z.B. tag, push.interruption-level)."""
+    body = {"title": title, "message": message}
+    if data:
+        body["data"] = data
+    payload = json.dumps(body).encode()
     req = urllib.request.Request(
         f"{HA_URL}/api/services/notify/{service}",
         data=payload,
@@ -1000,9 +1013,22 @@ def sync_birthdays():
         pass
 
 
+def get_birthday_done():
+    """„Gratuliert ✓"-Häkchen aus der App (Schlüssel `Rohname|YYYY-MM-DD`)."""
+    st = ha_state(BIRTHDAY_DONE_SENSOR)
+    keys = (st.get("attributes") or {}).get("keys") if st else None
+    return set(keys) if isinstance(keys, list) else set()
+
+
 def check_birthday_reminders(now, member_services, sent):
-    """Prüft ob heute jemand Geburtstag hat und schickt um 12:00 eine Push-Benachrichtigung."""
-    if now.hour < 12:
+    """Geburtstags-Erinnerungen nach dem Prinzip „erinnern, bis abgehakt":
+    - ab 12:00 die Haupt-Erinnerung,
+    - ab 18:00 eine Nachfass-Erinnerung, solange in der App nicht
+      „✓ Gratuliert" gesetzt ist.
+    Beide sind zeitkritisch (kommen durch den Fokus-Modus) und tragen denselben
+    tag, sodass die 18-Uhr-Nachricht die von 12:00 ersetzt statt sich zu stapeln.
+    Ist bereits abgehakt, kommt gar nichts (mehr)."""
+    if now.hour < BIRTHDAY_MAIN_HOUR:
         return 0
 
     birthdays = None
@@ -1025,12 +1051,16 @@ def check_birthday_reminders(now, member_services, sent):
         return 0
 
     blocked = get_deleted_birthdays()
+    done = get_birthday_done()
     today_month = now.month - 1  # birthday data uses 0-indexed months
     today_day = now.day
     today_str = now.strftime("%Y-%m-%d")
+    followup_due = now.hour >= BIRTHDAY_FOLLOWUP_HOUR
     fired = 0
 
     for bd in birthdays:
+        if not isinstance(bd, dict):
+            continue
         if bd.get("month") != today_month or bd.get("day") != today_day:
             continue
         # Gelöschte (blockierte) Geburtstage lösen keine Benachrichtigung aus.
@@ -1038,26 +1068,45 @@ def check_birthday_reminders(now, member_services, sent):
             continue
 
         name = bd.get("name", "?")
-        key = f"birthday-{name}-{today_str}"
-        if key in sent:
+        # Schon gratuliert → für heute Ruhe.
+        if f"{name}|{today_str}" in done:
             continue
 
+        main_key = f"birthday-{name}-{today_str}"
+        follow_key = f"birthday18-{name}-{today_str}"
         year = bd.get("year")
-        if year:
-            age = now.year - year
-            title = f"🎂 {name} wird heute {age}!"
-        else:
-            title = f"🎂 {name} hat heute Geburtstag!"
-        message = "Alles Gute zum Geburtstag!"
+        age = (now.year - year) if isinstance(year, int) and year >= 1900 else None
 
+        if followup_due:
+            if follow_key in sent:
+                continue
+            title = f"🎂 Noch nicht gratuliert: {name}" + (f" ({age})" if age else "")
+            message = "Erinnerung · In der App mit „✓ Gratuliert“ abhaken, dann ist Ruhe."
+            keys = (follow_key, main_key)  # Haupt-Erinnerung danach nicht mehr nachholen
+            label = "Geburtstag (Nachfass 18:00)"
+        else:
+            if main_key in sent:
+                continue
+            title = f"🎂 {name} wird heute {age}!" if age else f"🎂 {name} hat heute Geburtstag!"
+            message = "Alles Gute zum Geburtstag! Nach dem Gratulieren in der App „✓ Gratuliert“ tippen."
+            keys = (main_key,)
+            label = "Geburtstag"
+
+        data = {
+            # Gleicher tag → 18:00 ersetzt 12:00 auf dem Gerät (kein Stapeln).
+            "tag": f"bday-{re.sub(r'[^A-Za-z0-9]+', '_', name)}-{today_str}",
+            # Durch Fokus/„Nicht stören" und länger prominent am Sperrbildschirm.
+            "push": {"interruption-level": "time-sensitive"},
+        }
         ok_any = False
         for svc in all_services:
-            if notify(svc, title, message):
+            if notify(svc, title, message, data):
                 ok_any = True
         if ok_any:
-            sent[key] = now.isoformat()
+            for k in keys:
+                sent[k] = now.isoformat()
             fired += 1
-            print(f"  → Geburtstag: {name}")
+            print(f"  → {label}: {name}")
 
     return fired
 
@@ -1122,19 +1171,48 @@ def check_todo_reminders(now, member_services, sent):
     return fired
 
 
-def self_update():
+def _set_state_outdated():
+    """True, wenn die Allowlist auf der Box den neuesten Sensor noch nicht kennt."""
+    try:
+        with open(SET_STATE_SCRIPT, encoding="utf-8") as f:
+            return SET_STATE_REQUIRED not in f.read()
+    except Exception:
+        return True
+
+
+def _reload_python_scripts():
+    """python_script.reload — sonst greift eine geänderte Allowlist erst nach
+    einem HA-Neustart. Braucht den Admin-Token des Pollers."""
+    req = urllib.request.Request(
+        f"{HA_URL}/api/services/python_script/reload", data=b"{}",
+        headers={"Authorization": f"Bearer {HA_TOKEN}", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            ok = resp.status in (200, 201)
+        print(f"  python_script neu geladen: {'ok' if ok else resp.status}")
+    except Exception as exc:
+        print(f"  python_script-Reload fehlgeschlagen: {exc}", file=sys.stderr)
+
+
+def self_update(force=False):
     """Aktualisiert die Poller-Skripte höchstens einmal täglich selbst von
     GitHub (main). Jede Datei wird vor dem Ersetzen mit py_compile auf Syntax
     geprüft und nur bei Erfolg atomar übernommen — eine kaputte Datei kann den
     Poller also nicht lahmlegen. Die neue Version greift beim NÄCHSTEN
-    Minutenlauf (HA startet python3 jedes Mal neu)."""
+    Minutenlauf (HA startet python3 jedes Mal neu). force=True ignoriert die
+    Tagessperre (z.B. wenn die Allowlist veraltet ist)."""
+    # Normal höchstens 1×/Tag; erzwungen höchstens 1×/Stunde (falls GitHub mal
+    # nicht erreichbar ist, nicht jede Minute erneut versuchen).
+    min_age = 3600 if force else 20 * 3600
     try:
-        if (datetime.now().timestamp() - os.path.getmtime(SELFUPDATE_STAMP)) < 20 * 3600:
-            return  # heute schon versucht
+        if (datetime.now().timestamp() - os.path.getmtime(SELFUPDATE_STAMP)) < min_age:
+            return
     except Exception:
         pass
     import py_compile
     changed = 0
+    set_state_changed = False
     for name, dest in SELFUPDATE_FILES.items():
         try:
             req = urllib.request.Request(f"{GITHUB_RAW}/{name}",
@@ -1156,6 +1234,8 @@ def self_update():
             py_compile.compile(tmp, doraise=True)  # Syntax prüfen
             os.replace(tmp, dest)                   # atomar ersetzen (gleiche FS)
             changed += 1
+            if dest == SET_STATE_SCRIPT:
+                set_state_changed = True
         except Exception as exc:
             print(f"  Selbst-Update {name} fehlgeschlagen: {exc}", file=sys.stderr)
             try:
@@ -1170,6 +1250,8 @@ def self_update():
         pass
     if changed:
         print(f"  Selbst-Update: {changed} Datei(en) aktualisiert (aktiv ab nächstem Lauf).")
+    if set_state_changed:
+        _reload_python_scripts()
 
 
 def main():
@@ -1177,7 +1259,9 @@ def main():
     # wegen fehlender memberServices abgebrochen würde, damit ein Fix sicher
     # ankommt. Darf den Lauf niemals sprengen.
     try:
-        self_update()
+        # Veraltete Allowlist (neuer Sensor fehlt) → sofort aktualisieren statt
+        # bis zu einen Tag auf das reguläre Selbst-Update zu warten.
+        self_update(force=_set_state_outdated())
     except Exception as exc:
         print(f"  self_update Fehler: {exc}", file=sys.stderr)
     now = datetime.now()

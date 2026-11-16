@@ -1928,6 +1928,26 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   padding-top: 0;
 }
 
+/* „Gratuliert ✓" am Geburtstag — grün, volle Breite, klar als Hauptaktion. */
+.detail-congrats {
+  flex: 1;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 14px 10px;
+  cursor: pointer;
+  font-family: inherit;
+  background: #30d158;
+  color: #fff;
+}
+.detail-congrats--done {
+  background: rgba(48, 209, 88, 0.15);
+  color: #30d158;
+  font-weight: 600;
+}
+.detail-congrats:active { opacity: 0.8; }
+
 .detail-ics {
   flex: 1;
   border: none;
