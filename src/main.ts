@@ -392,7 +392,7 @@ async function syncBirthdayDoneFromHA(): Promise<void> {
 function birthdayEntryForEvent(ev: CalendarEvent): BirthdayEntry | null {
   if (ev.memberId !== BIRTHDAY_MEMBER_ID) return null;
   return loadBirthdayData().find((bd) =>
-    ev.uid === `__birthday__${bd.name.replace(/[^a-zA-Z0-9]/g, "_")}__${bd.month}_${bd.day}`) ?? null;
+    ev.uid.startsWith(`__birthday__${bd.name.replace(/[^a-zA-Z0-9]/g, "_")}__${bd.month}_${bd.day}__`)) ?? null;
 }
 
 function cleanBirthdayName(name: string): string {
@@ -890,7 +890,9 @@ function birthdayEvents(): CalendarEvent[] {
       const displayName = cleanBirthdayName(bd.name);
       const doneMark = done.has(birthdayDoneKey(bd.name, new Date(y, bd.month, bd.day))) ? " ✓" : "";
       events.push({
-        uid: `__birthday__${bd.name.replace(/[^a-zA-Z0-9]/g, "_")}__${bd.month}_${bd.day}`,
+        // Jahr in der uid: sonst teilen sich Vorjahr/aktuelles Jahr/Folgejahr
+        // dieselbe Kennung und das Antippen fände das falsche Jahr.
+        uid: `__birthday__${bd.name.replace(/[^a-zA-Z0-9]/g, "_")}__${bd.month}_${bd.day}__${y}`,
         summary: (age !== null ? `🎂 ${displayName} → ${age}` : `🎂 ${displayName}`) + doneMark,
         start: new Date(y, bd.month, bd.day),
         end:   new Date(y, bd.month, bd.day),
@@ -1550,7 +1552,10 @@ function bindEvents(): void {
         render();
       } else if (action === "event-detail") {
         const uid = el.dataset.uid;
-        const ev = state.events.find((x) => x.uid === uid);
+        // Erzeugte Einträge (Geburtstage, Feiertage, MotoGP) stehen nicht in
+        // state.events — daher auch in den sichtbaren Einträgen suchen.
+        const ev = state.events.find((x) => x.uid === uid)
+          ?? visibleEvents().find((x) => x.uid === uid);
         if (ev) showEventDetail(ev);
 
       } else if (action === "close-detail") {
@@ -2773,8 +2778,10 @@ function showEventDetail(ev: CalendarEvent): void {
     ? (diffDays > 1 ? `${fmtDate(ev.start)} – ${fmtDate(ev.end)}` : fmtDate(ev.start))
     : `${fmtDate(ev.start)}, ${fmtTime(ev.start)} – ${fmtTime(ev.end)}`;
 
-  // Generierte Termine (Feiertage, MotoGP) sind schreibgeschützt — nur teilen.
-  const isReadOnly = ev.memberId === HOLIDAY_MEMBER_ID || ev.memberId === MOTOGP_MEMBER_ID;
+  // Generierte Termine (Feiertage, MotoGP, Geburtstage) sind schreibgeschützt —
+  // nur teilen. Geburtstage werden in der Geburtstags-Verwaltung gelöscht.
+  const isReadOnly = ev.memberId === HOLIDAY_MEMBER_ID || ev.memberId === MOTOGP_MEMBER_ID
+    || ev.memberId === BIRTHDAY_MEMBER_ID;
   const actions = isReadOnly
     ? `<div class="detail-actions">
         <button class="detail-share" data-action="share-event-from-detail">Teilen</button>
